@@ -40,7 +40,7 @@
 ```sh
 sh tests/reset_local.sh && python3 tests/rls_test.py      # права доступа, заявки, показатели и удаление сотрудников, учреждения, области видимости, махалли и бригады, рассылки и задания, график визитов по приказу №180 (записей о беременных на сервере нет), 304 проверки
 node --experimental-strip-types tests/telegram_test.ts     # подпись Telegram, 12 проверок
-python3 tests/ui_test.py                                   # интерфейс на тестовых данных, 259 проверок
+python3 tests/ui_test.py                                   # интерфейс на тестовых данных, 260 проверок
 python3 offline/tests/test_offline.py; python3 offline/tests/test_cases.py; python3 offline/tests/test_anc.py   # офлайн-программа: 46 + 36 + 20 проверок
 ```
 

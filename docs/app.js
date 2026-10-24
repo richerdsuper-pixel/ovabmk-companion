@@ -1708,6 +1708,24 @@
       h("p", { class: "mute small", style: "margin-top:8px", text: t("pg_schedule_hint") }),
       h("div", { class: "tbl" }, h("table", null, h("thead", null, h("tr", null, [t("pg_visit_no"), t("pg_window_col"), t("pg_need"), t("pg_notes")].map(function (x) { return h("th", { text: x }); }))), h("tbody", null, rows))));
   }
+  // календарный файл: только номер визита и окно — ни имени, ни номера карты, ни даты менструации; создаётся в браузере и никуда не отправляется
+  function pgIcs(lmpIso, rows) {
+    var today = pgToday(), ymd = function (iso) { return iso.replace(/-/g, ""); };
+    var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OvaBMK Companion//RU", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+    rows.forEach(function (r) {
+      var start = addDays(lmpIso, r.from_week * 7), end = addDays(lmpIso, r.until_week * 7 + 7);
+      if (start < today) start = today;
+      if (end <= start) end = addDays(start, 1);
+      L.push("BEGIN:VEVENT", "UID:ovabmk-anc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + "-" + r.visit_no + "@companion", "DTSTAMP:" + ymd(today) + "T000000Z",
+        "DTSTART;VALUE=DATE:" + ymd(start), "DTEND;VALUE=DATE:" + ymd(end),
+        "SUMMARY:" + (t("pg_ics_sum") + ": " + ancLabel(r)).replace(/[,;\\]/g, " "), "DESCRIPTION:" + t("pg_ics_desc", { a: r.from_week, b: r.until_week }).replace(/[,;\\]/g, " "),
+        "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + t("pg_ics_sum"), "TRIGGER;RELATED=START:PT9H", "END:VALARM", "END:VEVENT");
+    });
+    L.push("END:VCALENDAR");
+    var blob = new Blob([L.join("\r\n")], { type: "text/calendar;charset=utf-8" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "Vizitlar_" + today + ".ics"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
   function pgResult(lmpIso) {
     var out = h("div", { class: "stack" });
     if (!lmpIso) { out.appendChild(h("p", { class: "mute", text: t("pg_enter_lmp") })); return out; }
@@ -1717,6 +1735,12 @@
     out.appendChild(h("div", { class: "row", style: "align-items:center;gap:10px;flex-wrap:wrap" },
       h("span", { class: "chip ok", text: t("pg_calc_weeks", { w: w, d: d }) }), h("span", { class: "mute small", text: t("pg_edd", { d: fmtDate(addDays(lmpIso, 280)) }) })));
     if (w > 42) out.appendChild(h("div", { class: "notice warn", text: t("pg_check_hint") }));
+    var upcoming = rows.filter(function (r) { return r.until_week >= w; });
+    if (upcoming.length) {
+      var ics = h("button", { class: "btn", type: "button", id: "pg_ics", text: t("pg_ics") });
+      ics.addEventListener("click", function () { pgIcs(lmpIso, upcoming); });
+      out.appendChild(h("div", { class: "stack", style: "gap:4px" }, ics, h("p", { class: "mute small", text: t("pg_ics_hint") })));
+    }
     var cur = rows.filter(function (r) { return w >= r.from_week && w <= r.until_week; });
     var past = rows.filter(function (r) { return r.until_week < w; });
     var next = rows.filter(function (r) { return r.from_week > w; })[0];

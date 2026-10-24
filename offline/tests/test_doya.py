@@ -97,16 +97,17 @@ with sync_playwright() as p:
     # выгрузка «только изменения» — 1-я
     pg.click("nav button[data-tab=report]"); pg.click("#deltaExp"); pg.fill("#ex1", XP); pg.fill("#ex2", XP)
     with pg.expect_download() as d1: pg.click(".modal button.pri")
+    check("отправка 2-го и следующих раз — без вопроса о коде", True)
     exp1 = d1.value.path(); check("выгрузка 1: имя файла с бригадой", "brigada2" in d1.value.suggested_filename or "бригада2" in d1.value.suggested_filename, d1.value.suggested_filename)
     check("выгрузка 1: файл зашифрован", "B-1" not in open(exp1, encoding="utf-8").read())
-    check("выгрузка 1: дата прошлой выгрузки показана", "Прошлая выгрузка" in pg.inner_text("#main"))
+    check("выгрузка 1: дата прошлой отправки показана", "Прошлая отправка" in pg.inner_text("#main"))
     # меняем: Ф.И.О. внесено, затем визит
     pg.click("nav button[data-tab=cases]")
     pg.wait_for_timeout(200); pg.locator(".case", has_text="B-1").locator("button.pri").click(); pg.wait_for_selector("#v_items")
     check("визит: отмечен пропущенный 1-й визит по №180", pg.is_checked("input.v_item[value='anc:1']"))
     pg.fill("#v_note", "АД 110/70"); save_modal(pg)
-    pg.click("nav button[data-tab=report]"); pg.click("#deltaExp"); pg.fill("#ex1", XP); pg.fill("#ex2", XP)
-    with pg.expect_download() as d2: pg.click(".modal button.pri")
+    pg.click("nav button[data-tab=report]")
+    with pg.expect_download() as d2: pg.click("#deltaExp")
     exp2 = d2.value.path()
     check("выгрузка 2: только изменённая запись", "записей: 1" in pg.inner_text("#toasts"), pg.inner_text("#toasts"))
     ICS = None
@@ -119,19 +120,21 @@ with sync_playwright() as p:
     pg.click("nav button[data-tab=cases]")
     pg.wait_for_timeout(200); pg.locator(".case", has_text="B-1").locator("button:not(.pri)").click(); pg.click(".modal >> text=Изменить"); pg.wait_for_selector("#c_card")
     pg.click("details.opt summary"); pg.fill("#c_name", "Азимова Нилуфар"); save_modal(pg)
-    pg.click("nav button[data-tab=report]"); pg.click("#deltaExp"); pg.fill("#ex1", XP); pg.fill("#ex2", XP)
-    with pg.expect_download() as d4: pg.click(".modal button.pri")
+    pg.click("nav button[data-tab=report]")
+    with pg.expect_download() as d4: pg.click("#deltaExp")
     exp3 = d4.value.path()
     pg.click("nav button[data-tab=cases]")
     pg.wait_for_timeout(200); pg.locator(".case", has_text="B-1").locator("button.pri").click(); pg.wait_for_selector("#v_note"); pg.fill("#v_note", "Повторный"); save_modal(pg)
-    pg.click("nav button[data-tab=report]"); pg.click("#deltaExp"); pg.fill("#ex1", XP); pg.fill("#ex2", XP)
-    with pg.expect_download() as d5: pg.click(".modal button.pri")
+    pg.click("nav button[data-tab=report]")
+    with pg.expect_download() as d5: pg.click("#deltaExp")
     exp4 = d5.value.path()
 
     # ---------- координатор принимает выгрузки по порядку ----------
     cx, pc, rc, ec = ctx_page(br, "coord", mobile=False); pc.wait_for_selector("#app:not(.hidden)")
     def imp(path, expect):
-        pc.click("nav button[data-tab=set]"); pc.set_input_files("#casesIn", path); pc.wait_for_selector("#ipw"); pc.fill("#ipw", XP); pc.click(".modal button.pri"); pc.wait_for_selector("text=" + expect)
+        pc.click("nav button[data-tab=set]"); pc.set_input_files("#casesIn", path)
+        if path == exp1: pc.wait_for_selector("#ipw"); pc.fill("#ipw", XP); pc.click(".modal button.pri")   # первый файл: код вводится один раз и запоминается
+        pc.wait_for_selector("text=" + expect)
     imp(exp1, "новых 2"); imp(exp2, "обновлено 1"); imp(exp3, "обновлено 1"); imp(exp4, "обновлено 1")
     pc.click("nav button[data-tab=cases]")
     pc.wait_for_timeout(300); c = pc.locator(".case", has_text="B-1")

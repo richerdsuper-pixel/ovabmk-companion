@@ -5,7 +5,7 @@ var TABS = {
   pat: ["today", "cases", "report", "set"],
   coord: ["home", "cases", "senders", "files", "data", "search", "ind", "report", "set"]
 };
-var UI = { lockTimer: null, minutes: 10, sel: null };
+var UI = { lockTimer: null, minutes: 30, sel: null };
 function tabs() { return (TABS[PROF.role] || TABS.cab).map(function (k) { return [k, L("nav_" + k)]; }); }
 
 function $(id) { return document.getElementById(id); }
@@ -352,7 +352,7 @@ function setView() {
   root.appendChild(casesSettings());
   if (PROF.role !== "coord") root.appendChild(profPanel());
   var ml = h("input", { type: "number", min: "1", max: "240", value: UI.minutes, style: "width:5em" });
-  ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 10)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast(L("saved")); };
+  ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 30)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast(L("saved")); };
   root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("sec_title") }),
     h("label", { class: "inl" }, [L("sec_lock_a") + " ", ml, " " + L("sec_lock_b")]),
     h("div", { class: "bar" }, [h("button", { type: "button", onclick: lockNow }, L("sec_lock_now")), h("button", { type: "button", onclick: changePw }, L("sec_pw")),

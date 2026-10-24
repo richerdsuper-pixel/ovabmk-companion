@@ -98,13 +98,12 @@ function computeNumbers() {
 var NUM_ROWS = { cab: ["preg_total", "preg_t1", "preg_t2", "preg_t3", "preg_lt18", "preg_35plus", "preg_risk", "anc_missed", "anc_due_now", "anc_done_month", "women_total", "scr_annual_need", "scr_cerv_need", "scr_breast_need", "scr_done_month", "visits_month"],
   pat: ["preg_total", "preg_lt18", "preg_35plus", "preg_risk", "pat_preg_missed", "pat_preg_due", "pp_total", "pp_missed", "pp_due", "nb_total", "nb_missed", "nb_due", "pat_done_month", "visits_month"] };
 function numRows() { return PROF.role === "pat" ? NUM_ROWS.pat : PROF.role === "cab" ? NUM_ROWS.cab : NUM_ROWS.cab.concat(NUM_ROWS.pat.filter(function (k) { return NUM_ROWS.cab.indexOf(k) < 0; })); }
-function exportNumbers() {
+async function exportNumbers() {
   var p = S.prof || {};
   if (!p.inst) { toast(L("e_prof"), true); return; }
   var all = computeNumbers(), keep = {}; numRows().forEach(function (k) { keep[k] = all[k]; });
   var t = todayStr(), out = { fmt: "ovabmk-numbers", v: 1, role: PROF.role, inst: p.inst, unit: p.unit || "", date: t, month: t.slice(0, 7), numbers: keep };
-  download("Raqamlar_" + (norm(p.unit || p.inst).slice(0, 20) || "doya") + "_" + t + ".json", new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }));
-  toast(L("num_saved"));
+  shareOrSave("Raqamlar_" + (norm(p.unit || p.inst).slice(0, 20) || "doya") + "_" + t + ".json", new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }), "application/json").then(function (how) { if (how !== "cancel") toast(L(how === "shared" ? "num_shared" : "num_saved")); });
 }
 function profPanel() {
   var p = S.prof || {};
@@ -115,17 +114,19 @@ function profPanel() {
 }
 function reportView() {
   var root = h("div"), n = computeNumbers(), p = S.prof || {};
+  if (!p.inst) root.appendChild(h("div", { class: "alert warn" }, [h("b", { text: L("rep_need_prof") })]));
+  // главное — две большие кнопки: отправить координатору и числа для сайта
+  root.appendChild(h("div", { class: "panel bigacts" }, [
+    h("button", { class: "pri big wide", type: "button", id: "deltaExp", onclick: function () { exportCasesUi(true); } }, "📤 " + L("delta_btn")),
+    h("p", { class: "small muted", text: L("delta_hint") + (p.lastExport ? " " + L("delta_last", { d: fmtDT(p.lastExport) }) : "") }),
+    h("button", { class: "big wide", type: "button", id: "numExp", onclick: exportNumbers }, "📊 " + L("num_btn")),
+    h("p", { class: "small muted", text: L("num_hint") }),
+    h("button", { class: "big wide", type: "button", id: "icsCases2", onclick: exportCasesIcs }, "📅 " + L("ics_btn")),
+    h("p", { class: "small muted", text: L("ics_hint") })]));
   root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("rep_title", { m: todayStr().slice(0, 7) }) }), h("p", { class: "small muted", text: L("rep_hint") }),
-    table([L("rep_ind"), L("rep_val")], numRows().map(function (k) { return [L("n_" + k), String(n[k])]; }), "ind"),
-    h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "numExp", onclick: exportNumbers }, L("num_btn"))]),
-    h("p", { class: "small muted", text: L("num_hint") })]));
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("delta_title") }), h("p", { class: "small muted", text: L("delta_hint") }),
-    p.lastExport ? h("p", { class: "small", text: L("delta_last", { d: fmtDT(p.lastExport) }) }) : null,
-    h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "deltaExp", onclick: function () { exportCasesUi(true); } }, L("delta_btn")),
-      h("button", { type: "button", id: "fullExp", onclick: function () { exportCasesUi(false); } }, L("exp_full"))])]));
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("ics_title") }), h("p", { class: "small muted", text: L("ics_hint") }),
-    h("div", { class: "bar" }, [h("button", { type: "button", id: "icsCases2", onclick: exportCasesIcs }, L("ics_btn"))])]));
+    table([L("rep_ind"), L("rep_val")], numRows().map(function (k) { return [L("n_" + k), String(n[k])]; }), "ind")]));
   root.appendChild(profPanel());
+  root.appendChild(h("div", { class: "bar" }, [h("button", { type: "button", id: "fullExp", class: "sm", onclick: function () { exportCasesUi(false); } }, L("exp_full"))]));
   return root;
 }
 // календарь БЕЗ личных данных: по дням только число визитов («визитов: 3 — откройте OvaBMQ»), на все будущие окна по плану + еженедельная проверка

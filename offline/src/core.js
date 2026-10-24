@@ -135,6 +135,17 @@ var Vault = (function () {
       for (var i = 0; i < ks.length; i++) { var r = await get(ks[i]); out.recs[ks[i]] = { iv: b64(r.iv), ct: b64(r.ct) }; }
       return new Blob([JSON.stringify(out)], { type: "application/octet-stream" });
     },
+    // отдельный зашифрованный файл (выгрузка пациентов): свой пароль, не пароль хранилища
+    seal: async function (pw, obj) {
+      var salt = crypto.getRandomValues(new Uint8Array(16)), k = await derive(pw, salt, ITER), r = await enc(k, obj);
+      return new Blob([JSON.stringify({ v: 1, app: "ovabmk-cases", iter: ITER, salt: b64(salt), iv: b64(r.iv), ct: b64(r.ct) })], { type: "application/octet-stream" });
+    },
+    unseal: async function (text, pw) {
+      var b; try { b = JSON.parse(text); } catch (e) { throw new Error("файл не является выгрузкой"); }
+      if (!b || b.app !== "ovabmk-cases" || !b.ct) throw new Error("файл не является выгрузкой");
+      var k = await derive(pw, unb64(b.salt), b.iter);
+      try { return await dec(k, { iv: unb64(b.iv), ct: unb64(b.ct) }); } catch (e) { return null; }
+    },
     // восстановление: проверяем пароль копии, затем заменяем всё
     importBackup: async function (text, pw) {
       var b; try { b = JSON.parse(text); } catch (e) { throw new Error("файл не является копией"); }
@@ -183,7 +194,7 @@ function isPast(dateStr, hour) {
 }
 
 /* ===== Состояние ===== */
-var S = { senders: {}, subs: {}, cache: {}, tab: "home", warn: [] };
+var S = { senders: {}, subs: {}, cache: {}, cases: {}, tab: "home", warn: [] };
 
 function senderSubs(sid) {
   return Object.keys(S.subs).map(function (k) { return S.subs[k]; }).filter(function (m) { return m.sender === sid; })
@@ -215,12 +226,13 @@ function senderStatus(s) {
 
 async function persistSender(s) { await Vault.save("s:" + s.id, s); S.senders[s.id] = s; }
 async function loadAll() {
-  S.senders = {}; S.subs = {}; S.cache = {};
+  S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {};
   var ks = await Vault.keys();
   for (var i = 0; i < ks.length; i++) {
     var k = ks[i];
     if (k.indexOf("s:") === 0) S.senders[k.slice(2)] = await Vault.load(k);
     else if (k.indexOf("m:") === 0) S.subs[k.slice(2)] = await Vault.load(k);
+    else if (k.indexOf("c:") === 0) S.cases[k.slice(2)] = await Vault.load(k);
   }
 }
 async function removeSub(id) { await Vault.remove("m:" + id); await Vault.remove("d:" + id); delete S.subs[id]; delete S.cache[id]; }
@@ -309,5 +321,62 @@ async function importFile(file) {
   res.ok = true; res.sub = sub; res.sender = sender; res.replaced = replace.length;
   res.msg = roleName(role.no) + " · " + (inst || "без названия") + " · " + fmtD(pStart) + "–" + fmtD(pEnd) + " · строк данных: " + rowsTotal + (ready ? "" : " · файл помечен «не полон»");
   if (!ddl && role.rule.t !== "c") res.warn.push("не удалось привязать к сроку");
+  return res;
+}
+
+/* ===== Пациенты и визиты (только на этом устройстве) ===== */
+function activeCases() { return Object.keys(S.cases).map(function (k) { return S.cases[k]; }).filter(function (c) { return !c.deleted; }); }
+async function persistCase(c) { c.updated = Date.now(); await Vault.save("c:" + c.id, c); S.cases[c.id] = c; }
+// статус визита: late / today / tomorrow / week / later / none / closed
+function caseDue(c) {
+  if (c.closed) return { k: "closed", n: 0 };
+  if (!c.next) return { k: "none", n: 0 };
+  var n = diffDays(c.next, todayStr());
+  return { k: n < 0 ? "late" : n === 0 ? "today" : n === 1 ? "tomorrow" : n <= 7 ? "week" : "later", n: n };
+}
+function dueCounts() {
+  var r = { late: 0, today: 0, tomorrow: 0, week: 0, later: 0, none: 0, closed: 0 };
+  activeCases().forEach(function (c) { r[caseDue(c).k]++; });
+  return r;
+}
+async function deleteCase(c) {
+  for (var i = 0; i < c.visits.length; i++) for (var j = 0; j < (c.visits[i].ph || []).length; j++) await Vault.remove("f:" + c.visits[i].ph[j]);
+  // надгробие без личных данных: чтобы удаление дошло до других устройств при слиянии
+  var t = { id: c.id, created: c.created, deleted: true, visits: [] };
+  await persistCase(t);
+}
+// слияние записи пациента с входящей (с другого устройства): побеждает более новая, визиты объединяются по id
+function mergeCase(local, inc) {
+  if (!local) return inc;
+  var newer = (inc.updated || 0) > (local.updated || 0) ? inc : local, older = newer === inc ? local : inc;
+  var m = JSON.parse(JSON.stringify(newer));
+  if (m.deleted) { m.visits = []; return m; }
+  var byId = {};
+  (older.deleted ? [] : older.visits || []).concat(newer.visits || []).forEach(function (v) { byId[v.id] = v; });
+  m.visits = Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) { return (b.d || "").localeCompare(a.d || "") || (b.t || 0) - (a.t || 0); });
+  return m;
+}
+async function exportCases(pw, withPhotos) {
+  var cases = Object.keys(S.cases).map(function (k) { return S.cases[k]; }), photos = {};
+  if (withPhotos) for (var i = 0; i < cases.length; i++) for (var a = 0; a < cases[i].visits.length; a++) for (var b = 0; b < (cases[i].visits[a].ph || []).length; b++) {
+    var id = cases[i].visits[a].ph[b], f = await Vault.load("f:" + id); if (f) photos[id] = f.data;
+  }
+  return Vault.seal(pw, { fmt: "ovabmk-cases", v: 1, exported: Date.now(), cases: cases, photos: photos });
+}
+async function importCases(text, pw) {
+  var data = await Vault.unseal(text, pw); if (!data) return null;
+  if (data.fmt !== "ovabmk-cases" || !Array.isArray(data.cases)) throw new Error("файл не является выгрузкой");
+  var res = { added: 0, updated: 0, same: 0, photos: 0 };
+  for (var i = 0; i < data.cases.length; i++) {
+    var inc = data.cases[i], loc = S.cases[inc.id];
+    if (!inc || !inc.id) continue;
+    var merged = mergeCase(loc, inc);
+    if (!loc) res.added++; else if (JSON.stringify(merged) === JSON.stringify(mergeCase(loc, loc))) { res.same++; continue; } else res.updated++;
+    await Vault.save("c:" + merged.id, merged); S.cases[merged.id] = merged;
+    for (var a = 0; a < merged.visits.length; a++) for (var b = 0; b < (merged.visits[a].ph || []).length; b++) {
+      var pid = merged.visits[a].ph[b];
+      if (data.photos && data.photos[pid] && !(await Vault.load("f:" + pid))) { await Vault.save("f:" + pid, { id: pid, data: data.photos[pid] }); res.photos++; }
+    }
+  }
   return res;
 }

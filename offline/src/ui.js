@@ -1,6 +1,8 @@
 /* ===== Интерфейс ===== */
-var TABS = [["home", "Сводка"], ["senders", "Отправители"], ["files", "Файлы"], ["data", "Данные"], ["search", "Поиск"], ["ind", "Показатели"], ["set", "Настройки"]];
-var UI = { lockTimer: null, minutes: 10, sel: null };
+var TABS_ALL = [["home", "Сводка"], ["cases", "Визиты"], ["senders", "Отправители"], ["files", "Файлы"], ["data", "Данные"], ["search", "Поиск"], ["ind", "Показатели"], ["set", "Настройки"]];
+var TABS_FIELD = [["cases", "Визиты"], ["set", "Настройки"]];
+var UI = { lockTimer: null, minutes: 10, sel: null, mode: "all" };
+function tabs() { return UI.mode === "field" ? TABS_FIELD : TABS_ALL; }
 
 function $(id) { return document.getElementById(id); }
 function toast(msg, bad) {
@@ -55,7 +57,8 @@ function homeView() {
   var late = all.filter(function (x) { return x.st.st === "late"; }).sort(function (a, b) { return b.st.late - a.st.late; });
   var soon = all.filter(function (x) { return x.st.st === "soon"; });
   var okc = all.filter(function (x) { return x.st.st === "ok"; }).length;
-  var nsub = Object.keys(S.subs).length;
+  var nsub = Object.keys(S.subs).length, dc = dueCounts();
+  if (dc.late || dc.today) root.appendChild(h("div", { class: "alert " + (dc.late ? "bad" : "warn") }, [h("b", { text: "Визиты: сегодня " + dc.today + (dc.late ? ", просрочено " + dc.late : "") + " " }), h("button", { type: "button", class: "sm", onclick: function () { go("cases"); } }, "Открыть")]));
   root.appendChild(h("div", { class: "cards" }, [
     h("div", { class: "card" }, [h("b", { text: String(all.length) }), h("span", { text: "отправителей" })]),
     h("div", { class: "card " + (late.length ? "bad" : "ok") }, [h("b", { text: String(late.length) }), h("span", { text: "просрочили" })]),
@@ -341,6 +344,11 @@ function setView() {
     h("p", { class: "small muted", text: "Копия зашифрована вашим паролем. Сохраняйте её на флешку или в надёжное место: если устройство сломается, данные можно вернуть. Без пароля копия бесполезна." }),
     h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast("Копия сохранена"); } }, "Сохранить копию"),
       h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, "Восстановить из копии")])]));
+  root.appendChild(casesSettings());
+  var md = h("select", { id: "modeSel" }, [h("option", { value: "all", text: "Руководитель: сводка по файлам + визиты" }), h("option", { value: "field", text: "Специалист: только мои пациенты и визиты" })]);
+  md.value = UI.mode;
+  md.onchange = function () { UI.mode = md.value; try { localStorage.setItem("ovabmk_mode", UI.mode); } catch (e) { } S.tab = UI.mode === "field" ? "set" : S.tab; toast("Сохранено"); render(); };
+  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Режим программы" }), md, h("p", { class: "small muted", text: "Специалисту (врач, медсестра патронажа, доя) нужны только пациенты и визиты — остальные вкладки скрываются." })]));
   var ml = h("input", { type: "number", min: "1", max: "240", value: UI.minutes, style: "width:5em" });
   ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 10)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast("Сохранено"); };
   root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Безопасность" }),
@@ -365,27 +373,31 @@ async function changePw() {
 }
 async function wipeAll() {
   if (!(await confirmBox("Стереть ВСЕ данные из программы, включая пароль? Это нельзя отменить. Сначала сделайте резервную копию.", "Стереть"))) return;
-  await Vault.clearAll(); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; showAuth();
+  await Vault.clearAll(); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; showAuth();
 }
 
 /* --- Оболочка --- */
 function go(tab) { S.tab = tab; render(); }
 async function render() {
   var nav = $("nav"); nav.textContent = "";
-  TABS.forEach(function (t) { nav.appendChild(h("button", { type: "button", class: S.tab === t[0] ? "on" : "", onclick: function () { go(t[0]); } }, t[1])); });
+  tabs().forEach(function (t) { nav.appendChild(h("button", { type: "button", class: S.tab === t[0] ? "on" : "", onclick: function () { go(t[0]); } }, t[1])); });
   var main = $("main"); main.textContent = "";
-  var views = { home: homeView, senders: sendersView, files: filesView, data: dataView, search: searchView, ind: indView, set: setView };
+  var views = { home: homeView, cases: casesView, senders: sendersView, files: filesView, data: dataView, search: searchView, ind: indView, set: setView };
   main.appendChild(views[S.tab]()); window.scrollTo(0, 0);
 }
 function armLock() {
   clearTimeout(UI.lockTimer);
   if (Vault.isOpen()) UI.lockTimer = setTimeout(lockNow, UI.minutes * 60000);
 }
-function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; $("app").classList.add("hidden"); $("main").textContent = ""; showAuth(); }
+function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; $("app").classList.add("hidden"); $("main").textContent = ""; showAuth(); }
 ["click", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, function () { if (Vault.isOpen()) armLock(); }, true); });
 
 async function enter() {
-  await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock(); render();
+  await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
+  if (UI.mode === "field" || (!Object.keys(S.senders).length && activeCases().length)) S.tab = "cases";
+  else if (UI.mode === "all" && S.tab === "cases" && !activeCases().length) S.tab = "home";
+  render();
+  var dc = dueCounts(); if (dc.late || dc.today) toast("Визиты: сегодня " + dc.today + (dc.late ? ", просрочено " + dc.late : ""), !!dc.late);
 }
 async function showAuth() {
   var box = $("auth"); box.classList.remove("hidden"); box.textContent = "";
@@ -418,11 +430,12 @@ async function onRestore(file) {
   try {
     var ok = await Vault.importBackup(text, pw.value);
     if (!ok) return toast("Неверный пароль копии", true);
-    toast("Данные восстановлены"); await enter(); S.tab = "home"; render();
+    toast("Данные восстановлены"); await enter(); S.tab = UI.mode === "field" ? "cases" : "home"; render();
   } catch (e) { toast(e.message, true); }
 }
 async function boot() {
-  try { var m = +localStorage.getItem("ovabmk_min"); if (m) UI.minutes = m; } catch (e) { }
+  try { var m = +localStorage.getItem("ovabmk_min"); if (m) UI.minutes = m; if (localStorage.getItem("ovabmk_mode") === "field") UI.mode = "field"; } catch (e) { }
+  $("casesIn").addEventListener("change", function () { onCasesImport(this.files[0]); this.value = ""; });
   $("restoreIn").addEventListener("change", function () { onRestore(this.files[0]); this.value = ""; });
   if (!window.crypto || !crypto.subtle) { $("auth").textContent = "Этот браузер не поддерживает шифрование (нужен современный Chrome, Edge, Safari или Firefox)."; $("auth").classList.remove("hidden"); return; }
   await Vault.init(); showAuth();

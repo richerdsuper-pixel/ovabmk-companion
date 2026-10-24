@@ -6,6 +6,7 @@ parts = {"/*CSS*/": (d/"src/style.css").read_text(encoding="utf-8"),
          "/*ROLES*/": "var ROLES=" + roles + ";",
          "/*XLSX*/": (d/"src/xlsx.js").read_text(encoding="utf-8"),
          "/*CORE*/": (d/"src/core.js").read_text(encoding="utf-8"),
+         "/*CASES*/": (d/"src/cases.js").read_text(encoding="utf-8"),
          "/*UI*/": (d/"src/ui.js").read_text(encoding="utf-8")}
 for k, v in parts.items():
     assert t.count(k) == 1, k

@@ -42,7 +42,9 @@ window.__MOCK.rpc = {
   folder_counts: function(){ return [{folder_id:1, docs:1}]; },
   admin_list_users: function(){ return [
     {user_id:'%s', full_name:'Администратор Тест', user_position:'Заместитель', telegram_username:'admin_t', roles:['admin'], folders:[], created_at:'2026-10-20T08:00:00Z'},
-    {user_id:'%s', full_name:'Сотрудник Тест', user_position:'Доя', telegram_username:'staff_t', roles:['staff'], folders:[1], created_at:'2026-10-21T08:00:00Z'}]; },
+    {user_id:'%s', full_name:'Сотрудник Тест', user_position:'Доя', telegram_username:'staff_t', roles:['staff'], folders:[1], created_at:'2026-10-21T08:00:00Z', institution_id:1, scope_institutions:[], scope_positions:[]}]; },
+  admin_save_institution: function(a){ return a._id || 3; }, admin_add_institutions: function(a){ return a._names.length - 1; },
+  admin_delete_institution: function(){ return null; }, admin_set_institution: function(){ return null; }, admin_set_scopes: function(){ return null; },
   create_invite: function(){ return '0123456789abcdef01234567'; },
   admin_set_role: function(a){ return a._role==='admin' && !a._on ? {error:{message:'last_admin'}} : null; },
   decide_request: function(){ return null; },
@@ -254,7 +256,7 @@ with sync_playwright() as p:
     card1.locator(".fold-picks input[value='13']").uncheck()
     card1.locator("button.pri").click(); pg.wait_for_timeout(300)
     dec = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "decide_request"]
-    ok("заявки: одобрение с ролью и изменёнными папками", dec and dec[0][2] == {"_id": "r1", "_approve": True, "_role": "staff", "_folders": [9, 10, 12]}, dec)
+    ok("заявки: одобрение с ролью и изменёнными папками", dec and dec[0][2] == {"_id": "r1", "_approve": True, "_role": "staff", "_folders": [9, 10, 12], "_institution_id": None}, dec)
     rej = pg.locator(".req").nth(1).locator("button.danger"); rej.click(); pg.wait_for_timeout(100)
     ok("заявки: отказ требует второго нажатия", "Точно" in rej.inner_text())
     ok("ошибок JS нет (заявки)", not errs, errs); b.close()
@@ -412,6 +414,111 @@ with sync_playwright() as p:
         pg.screenshot(path=str(SHOTS / f"c_{tag}_indsum2.png"), full_page=True)
         ok(f"{tag}: нет горизонтальной прокрутки (сводка с графиком)", not hscroll(pg))
         b.close()
+
+    # 9. учреждения и области видимости
+    INSTS = [{"id": 1, "name": "СВП №3", "kind": "svp"}, {"id": 2, "name": "СВП №5", "kind": "svp"}]
+    sc = scenario(); sc["db"]["institutions"] = INSTS
+    b, pg, errs = page_for(p, sc)
+    calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
+    pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
+    ok("заявка: есть выбор учреждения", pg.locator("form select").count() == 2 and pg.locator("form select >> nth=1 >> option").count() == 4, pg.locator("form select >> nth=1 >> option").count())
+    pg.select_option("form select >> nth=0", "doya_qvp")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("заявка: без учреждения — ошибка", "Выберите учреждение" in pg.inner_text("form"))
+    pg.select_option("form select >> nth=1", "other"); pg.wait_for_timeout(50)
+    ok("заявка: «нет в списке» открывает поле", pg.locator("form input[type=text] >> nth=2").is_visible())
+    pg.fill("form input[type=text] >> nth=2", "Частная клиника")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    sent = calls[-1].get("request") or {}
+    ok("заявка: ушло название учреждения вручную", sent.get("institution_id") is None and sent.get("institution_text") == "Частная клиника", sent)
+    ok("ошибок JS нет (заявка с учреждением)", not errs, errs); b.close()
+
+    b, pg, errs = page_for(p, sc)
+    calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
+    pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
+    pg.select_option("form select >> nth=0", "doya_qvp"); pg.select_option("form select >> nth=1", "2")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    sent = calls[-1].get("request") or {}
+    ok("заявка: ушёл id учреждения", sent.get("institution_id") == 2 and sent.get("institution_text") == "", sent); b.close()
+
+    sc = scenario(uid=A, roles=("admin",)); sc["db"]["institutions"] = INSTS
+    sc["db"]["access_requests"][0]["institution_id"] = 2
+    sc["db"]["access_requests"][1]["institution_text"] = "Частная клиника"
+    b, pg, errs = page_for(p, sc)
+    ok("admin: в меню есть «Учреждения»", "Учреждения" in pg.inner_text("nav"))
+    pg.goto(SITE + "#/admin/requests"); pg.wait_for_timeout(400)
+    c1, c2 = pg.locator(".req").nth(0), pg.locator(".req").nth(1)
+    ok("заявки: учреждение из заявки выбрано", c1.locator("select").nth(1).input_value() == "2")
+    ok("заявки: вписанное вручную показано и есть кнопка добавить", "Частная клиника" in c2.inner_text() and c2.locator("text=Добавить в список").count() == 1, c2.inner_text())
+    c2.locator("text=Добавить в список").click(); pg.wait_for_timeout(300)
+    ad = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_save_institution"]
+    ok("заявки: «добавить в список» создаёт учреждение", ad and ad[0][2] == {"_id": None, "_name": "Частная клиника", "_kind": "svp"}, ad)
+    c1.locator("button.pri").click(); pg.wait_for_timeout(300)
+    dec = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "decide_request"]
+    ok("заявки: одобрение передаёт учреждение", dec and dec[0][2]["_institution_id"] == 2, dec)
+    ok("ошибок JS нет (заявки с учреждением)", not errs, errs)
+
+    pg.goto(SITE + "#/admin/institutions"); pg.wait_for_timeout(400)
+    ok("учреждения: 2 строки и число сотрудников", pg.locator("tbody tr").count() == 2 and pg.locator("tbody tr").first.locator("td.num").inner_text() == "1", pg.locator("tbody tr").count())
+    pg.screenshot(path=str(SHOTS / "c_institutions.png"), full_page=True)
+    pg.fill("section form.row input[type=text]", "СВП №7"); pg.click("text=Добавить >> nth=0"); pg.wait_for_timeout(300)
+    ad = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_save_institution"]
+    ok("учреждения: добавление одного", ad and ad[-1][2] == {"_id": None, "_name": "СВП №7", "_kind": "svp"}, ad)
+    pg.locator("details summary").first.click()
+    pg.fill("textarea", "СВП №8\nСВП №9\n\nСВП №8"); pg.click("text=Добавить все"); pg.wait_for_timeout(300)
+    ab = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_add_institutions"]
+    ok("учреждения: список строк без дублей", ab and ab[0][2]["_names"] == ["СВП №8", "СВП №9"], ab)
+    d1 = pg.locator("tbody tr").nth(1).locator("button.danger"); d1.click(); pg.wait_for_timeout(100)
+    ok("учреждения: удаление требует второго нажатия", "Точно" in d1.inner_text()); d1.click(); pg.wait_for_timeout(300)
+    dl = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_delete_institution"]
+    ok("учреждения: удалено", dl and dl[0][2] == {"_id": 2}, dl)
+    ok("ошибок JS нет (учреждения)", not errs, errs)
+
+    pg.goto(SITE + "#/admin/users"); pg.wait_for_timeout(400)
+    row = pg.locator("tbody tr").nth(1)
+    ok("сотрудники: учреждение сотрудника выбрано", row.locator("td").nth(3).locator("select").input_value() == "1")
+    row.locator("td").nth(3).locator("details summary").click()
+    row.locator("text=Акушерская ветка").click()
+    ok("сотрудники: пресет «акушерская ветка» отмечает специальности", row.locator("td").nth(3).locator("input[value=doya_qvp]").is_checked() and not row.locator("td").nth(3).locator("input[value=pediatr]").is_checked())
+    row.locator("td").nth(3).locator("input[type=checkbox][value='2']").check()
+    row.locator("td").nth(3).locator("button.pri").click(); pg.wait_for_timeout(300)
+    sset = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_scopes"]
+    ok("сотрудники: область видимости сохранена", sset and sset[0][2]["_institutions"] == [2] and "doya_qvp" in sset[0][2]["_positions"] and "pediatr" not in sset[0][2]["_positions"], sset)
+    pg.screenshot(path=str(SHOTS / "c_users_scope.png"), full_page=True)
+    row.locator("td").nth(3).locator("select").select_option("2"); pg.wait_for_timeout(200)
+    si = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_institution"]
+    ok("сотрудники: смена учреждения", si and si[0][2] == {"_uid": S_, "_inst": 2}, si)
+    ok("ошибок JS нет (сотрудники)", not errs, errs)
+
+    pg.goto(SITE + "#/admin/invites"); pg.wait_for_timeout(400)
+    pg.select_option("form select >> nth=2", "2") if False else None
+    pg.locator("form label:has-text('Учреждение') select").select_option("1")
+    pg.fill("form input[type=text] >> nth=0", "Новый Сотрудник"); pg.select_option("form select >> nth=0", "doya_qvp")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    ci = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "create_invite"]
+    ok("приглашение: учреждение передано", ci and ci[-1][2].get("_institution_id") == 1, ci)
+    ok("ошибок JS нет (приглашения)", not errs, errs); b.close()
+
+    # заведующий: сотрудник с областью видимости
+    sc = ind_sc(S_, ("staff",), reps); sc["db"]["institutions"] = INSTS
+    sc["db"]["scopes"] = [{"user_id": S_, "kind": "position", "position_code": "doya_qvp"}]
+    b, pg, errs = page_for(p, sc, now=NOW, hash="")
+    pg.wait_for_timeout(400); t = pg.inner_text("#app")
+    ok("заведующий: в меню «Сводка показателей»", "Сводка показателей" in pg.inner_text(".nav"))
+    ok("заведующий: в обзоре есть сравнение по должностям", "по должностям" in t.lower(), t[:400])
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
+    ok("заведующий: сводка открывается, только его специальности", pg.locator("table.indsum").count() == 1 and pg.locator(".grid-f select >> nth=0 >> option").count() == 1, pg.locator(".grid-f select >> nth=0 >> option").count())
+    ok("ошибок JS нет (заведующий)", not errs, errs); b.close()
+
+    sc = ind_sc(S_, ("staff",), reps); sc["db"]["institutions"] = INSTS
+    sc["db"]["profiles"][1]["institution_id"] = 1; sc["db"]["profiles"][2]["institution_id"] = 2
+    sc["db"]["scopes"] = [{"user_id": S_, "kind": "institution", "institution_id": 1}]
+    b, pg, errs = page_for(p, sc, now=NOW, hash="")
+    pg.wait_for_timeout(400); t = pg.inner_text("#app")
+    ok("заведующий по учреждению: сдача считается только по его учреждению (1 из 1)", "1 из 1 сотрудников" in t, t[:500])
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
+    ok("заведующий по учреждению: все должности в списке и чужие не в «не сдали»", pg.locator(".grid-f select >> nth=0 >> option").count() > 5 and "Вторая Доя" not in pg.inner_text(".notice"), pg.inner_text("#app")[:400])
+    b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

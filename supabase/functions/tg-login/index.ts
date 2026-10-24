@@ -66,12 +66,14 @@ Deno.serve(async (req: Request) => {
     const { data: st, error: se } = await admin.rpc("request_state", { _tg_id: tgId });
     if (se) return reply({ error: "lookup_failed" }, 500, origin);
     if (st !== "approved") {
-      const rq = (body as { request?: { full_name?: unknown; position?: unknown; position_code?: unknown } }).request;
+      const rq = (body as { request?: { full_name?: unknown; position?: unknown; position_code?: unknown; institution_id?: unknown; institution_text?: unknown } }).request;
       if (rq && typeof rq.full_name === "string" && typeof rq.position === "string") {
         const { data: ns, error: re } = await admin.rpc("submit_access_request", {
           _tg_id: tgId, _tg_username: username, _tg_name: name,
           _full_name: rq.full_name.slice(0, 200), _position: rq.position.slice(0, 200),
           _position_code: typeof rq.position_code === "string" ? rq.position_code.slice(0, 40) : "",
+          _institution_id: Number.isInteger(rq.institution_id) && (rq.institution_id as number) > 0 ? rq.institution_id : null,
+          _institution_text: typeof rq.institution_text === "string" ? rq.institution_text.slice(0, 120) : "",
         });
         if (re) {
           const code = REQUEST_ERRORS.find((c) => (re.message ?? "").includes(c)) ?? "request_failed";

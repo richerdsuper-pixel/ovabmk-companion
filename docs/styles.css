@@ -195,3 +195,5 @@ a.hb:hover{background:var(--panel2)}
   .ring{width:76px;height:76px} .ring-n{font-size:18px}
   .kpi .big{font-size:38px}
 }
+.fold-picks.wide{grid-template-columns:1fr;max-height:220px;overflow:auto}
+.fold-picks.wide label{font:500 13px var(--sans, inherit)}

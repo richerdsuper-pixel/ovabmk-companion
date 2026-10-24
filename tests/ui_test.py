@@ -44,6 +44,7 @@ window.__MOCK.rpc = {
     {user_id:'%s', full_name:'Администратор Тест', user_position:'Заместитель', telegram_username:'admin_t', roles:['admin'], folders:[], created_at:'2026-10-20T08:00:00Z'},
     {user_id:'%s', full_name:'Сотрудник Тест', user_position:'Доя', telegram_username:'staff_t', roles:['staff'], folders:[1], created_at:'2026-10-21T08:00:00Z', institution_id:1, scope_institutions:[], scope_positions:[]}]; },
   admin_save_institution: function(a){ return a._id || 3; }, admin_add_institutions: function(a){ return a._names.length - 1; },
+  admin_save_mahalla: function(a){ return a._id || 9; }, admin_delete_mahalla: function(){ return window.__mhErr ? {error:{message:'mahalla_has_reports'}} : null; }, admin_set_brigade: function(){ return null; },
   admin_delete_institution: function(){ return null; }, admin_set_institution: function(){ return null; }, admin_set_scopes: function(){ return null; },
   create_invite: function(){ return '0123456789abcdef01234567'; },
   admin_set_role: function(a){ return a._role==='admin' && !a._on ? {error:{message:'last_admin'}} : null; },
@@ -328,7 +329,7 @@ with sync_playwright() as p:
     pg.click("form button[type=submit]"); pg.wait_for_timeout(400)
     ins = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "insert" and x[1] == "indicator_reports"]
     ok("показатели: запись отправлена с числами, автором и должностью", ins and ins[0][2]["vals"] == {"i1": 12, "i2": 10, "i3": 83.3} and ins[0][2]["user_id"] == S_ and ins[0][2]["position_code"] == "doya_qvp" and ins[0][2]["period_end"] == "2026-10-23", ins)
-    ok("показатели: в отправке нет текстовых полей кроме учреждения", ins and set(ins[0][2].keys()) == {"user_id", "position_code", "institution", "period_start", "period_end", "vals"}, ins and ins[0][2].keys())
+    ok("показатели: в отправке нет текстовых полей кроме учреждения", ins and set(ins[0][2].keys()) == {"user_id", "position_code", "institution", "mahalla_id", "period_start", "period_end", "vals"}, ins and ins[0][2].keys())
     # правка существующего отчёта: то же учреждение и период
     pg.fill("form .grid-f input[type=text]", "СВП №3"); pg.press("form .grid-f input[type=text]", "Tab"); pg.wait_for_timeout(150)
     ok("показатели: за этот период отчёт уже есть — значения подставлены", pg.input_value("#ind1") == "12" and "правите" in pg.inner_text("form"), pg.inner_text("form")[:300])
@@ -536,6 +537,68 @@ with sync_playwright() as p:
     pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
     ok("заведующий по учреждению: все должности в списке и чужие не в «не сдали»", pg.locator(".grid-f select >> nth=0 >> option").count() > 5 and "Вторая Доя" not in pg.inner_text(".notice"), pg.inner_text("#app")[:400])
     b.close()
+
+    # 10. махалли и бригады
+    MAHS = [{"id": 1, "name": "Боботог"}, {"id": 2, "name": "Қораариқ"}, {"id": 3, "name": "Пустая"}]
+    LINKS = [{"mahalla_id": 1, "institution_id": 1}, {"mahalla_id": 2, "institution_id": 1}, {"mahalla_id": 2, "institution_id": 2}, {"mahalla_id": 3, "institution_id": 2}]
+    BRIG = [{"id": 1, "mahalla_id": 1, "kind": "doctor", "rate": 1, "user_id": None}, {"id": 2, "mahalla_id": 1, "kind": "patronage", "rate": 1, "user_id": None},
+            {"id": 3, "mahalla_id": 1, "kind": "doya_pat", "rate": 0.5, "user_id": None}, {"id": 4, "mahalla_id": 2, "kind": "doctor", "rate": 0.5, "user_id": None}]
+    mreps = [dict(rep("m1", S_, "СВП №3", "2026-10-23", {"i1": 12, "i3": 80}, "2026-10-19"), mahalla_id=1),
+             dict(rep("m2", X_, "СВП №3", "2026-10-23", {"i1": 8, "i3": 60}, "2026-10-19"), mahalla_id=1),
+             dict(rep("m3", S_, "СВП №3", "2026-09-01", {"i1": 5}, "2026-08-26"), mahalla_id=2)]
+    def mah_sc(uid, roles):
+        sc = ind_sc(uid, roles, mreps); sc["db"]["institutions"] = INSTS
+        sc["db"]["mahallas"] = MAHS; sc["db"]["mahalla_links"] = LINKS; sc["db"]["brigade_posts"] = BRIG
+        return sc
+    b, pg, errs = page_for(p, mah_sc(A, ("admin",)), now=NOW)
+    ok("махалли: пункт меню", "Махалли" in pg.inner_text(".nav"))
+    pg.goto(SITE + "#/mahallas"); pg.wait_for_timeout(500)
+    t = pg.inner_text("#app")
+    ok("махалли: с отчётом 1 из 3 = 33%", "1 из 3 за последние 14 дней" in t and pg.locator(".kpi .ring-n").first.inner_text() == "33%", t[:300])
+    ok("махалли: бригады полные 1 из 3", "1 из 3 махаллей" in t and pg.locator(".kpi .ring-n").nth(1).inner_text() == "33%", t[:400])
+    ok("махалли: Боботог работает, Қораариқ нет отчёта", "Работает" in t and t.count("Нет отчёта") >= 2, t.count("Нет отчёта"))
+    ok("махалли: неполная бригада показывает чего не хватает", "врач 0.5 из 1" in t and "патронаж 0 из 1" in t and "доя 0 из 0.5" in t, t[-900:])
+    ok("махалли: бригада без состава отмечена", "Состав не задан" in t)
+    ok("махалли: общая махалля показана в обоих учреждениях", t.count("Қораариқ") >= 2 and "обслуживают два учреждения" in t)
+    pg.screenshot(path=str(SHOTS / "c_mahallas.png"), full_page=True)
+    row = pg.locator("tbody tr", has_text="Қораариқ").first
+    row.locator("summary").click()
+    row.locator("button:has-text('Добавить ставку')").click()
+    row.locator("button.pri").click(); pg.wait_for_timeout(300)
+    sb_ = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] in ("admin_save_mahalla", "admin_set_brigade")]
+    ok("махалли: сохранение имени, учреждений и состава бригады", len(sb_) == 2 and sb_[0][2]["_id"] == 2 and sb_[0][2]["_institutions"] == [1, 2] and len(sb_[1][2]["_posts"]) == 2, sb_)
+    pg.evaluate("window.__mhErr = true")
+    row = pg.locator("tbody tr", has_text="Боботог").first; row.locator("summary").click()
+    d1 = row.locator("button.danger").last; d1.click(); d1.click(); pg.wait_for_timeout(300)
+    ok("махалли: с отчётами не удаляется — понятная ошибка", "есть отчёты" in pg.locator("#toast").inner_text(), pg.locator("#toast").inner_text())
+    pg.select_option(".ovh select", "2"); pg.wait_for_timeout(400)
+    ok("махалли: фильтр по учреждению", pg.locator("tbody tr").count() == 2, pg.locator("tbody tr").count())
+    ok("ошибок JS нет (махалли)", not errs, errs); b.close()
+
+    b, pg, errs = page_for(p, mah_sc(A, ("admin",)), now=NOW)
+    pg.goto(SITE + "#/indicators"); pg.wait_for_timeout(400)
+    ok("показатели: выбор махалли есть", pg.locator("form label:has-text('Махалля') select option").count() == 4, pg.locator("form label:has-text('Махалля') select option").count())
+    pg.select_option("form label:has-text('Махалля') select", "3")
+    pg.fill("#ind1", "7"); pg.fill("form .grid-f input[type=text]", "СВП №3"); pg.press("form .grid-f input[type=text]", "Tab"); pg.wait_for_timeout(100); pg.click("form button[type=submit]"); pg.wait_for_timeout(400)
+    ins_ = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "insert" and x[1] == "indicator_reports"]
+    ok("показатели: отчёт уходит с махаллей", ins_ and ins_[-1][2].get("mahalla_id") == 3, ins_)
+    ok("показатели: мои отчёты показывают махаллю", "Пустая" in pg.inner_text("#app"))
+    ok("ошибок JS нет (показатели по махалле)", not errs, errs); b.close()
+
+    b, pg, errs = page_for(p, mah_sc(A, ("admin",)), now=NOW)
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
+    pg.select_option("select[aria-label='Группировать']", "mahalla"); pg.wait_for_timeout(500)
+    hd = pg.inner_text("table.indsum thead").lower()
+    ok("сводка: по махаллям — столбец махалли с числом отчётов", "боботог (2)" in hd and "қораариқ (1)" in hd, hd)
+    r1 = pg.locator("table.indsum tbody tr").first.inner_text().split("\t")
+    ok("сводка: по махаллям — показатель 1: 12+8=20 и итого 25", r1[3].strip() == "20" and r1[-1].strip() == "25", r1)
+    r3 = pg.locator("table.indsum tbody tr").nth(2).inner_text().split("\t")
+    ok("сводка: по махаллям — процент усредняется (80 и 60 → 70)", r3[3].strip() == "70%", r3)
+    pg.select_option("select[aria-label='Группировать']", "district"); pg.wait_for_timeout(500)
+    ok("сводка: весь район — один столбец", "весь район (3)" in pg.inner_text("table.indsum thead").lower() and pg.locator("table.indsum thead th").count() == 4, pg.locator("table.indsum thead th").count())
+    pg.select_option("select[aria-label='Группировать']", "inst"); pg.wait_for_timeout(500)
+    ok("сводка: по учреждениям — берётся название отчёта", "свп №3 (3)" in pg.inner_text("table.indsum thead").lower(), pg.inner_text("table.indsum thead"))
+    ok("ошибок JS нет (группировка)", not errs, errs); b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

@@ -286,9 +286,18 @@ with sync_playwright() as p:
         return sc
     NOW = "2026-10-24T10:00:00"
     rep = lambda rid, uid, inst, pe, vals, ps=None: {"id": rid, "user_id": uid, "position_code": "doya_qvp", "institution": inst, "period_start": ps or pe, "period_end": pe, "vals": vals, "updated_at": "2026-10-23T09:00:00Z"}
+    b0, pg0, e0 = page_for(p, ind_sc(S_, ("staff",), []), w=390, h=844, now=NOW, hash="#/overview")
+    ct = pg0.inner_text(".act") if pg0.locator(".act").count() else ""
+    ok("главная: просроченный срок — красная карточка", "Показатели не сданы" in ct and "23.10.2026" in ct and pg0.locator(".act.t-bad").count() == 1, ct)
+    pg0.screenshot(path=str(SHOTS / "c_m_staff_late.png"), full_page=True)
+    ok("главная: ошибок JS нет (просрочка)", not e0, e0); b0.close()
     b, pg, errs = page_for(p, ind_sc(S_, ("staff",), [rep("p1", S_, "СВП №3", "2026-10-23", {"i1": 12, "i2": 10}, "2026-10-19")]), now=NOW)
     t = pg.inner_text("#app")
     ok("показатели: пункт меню у сотрудника", "Показатели" in t and "Сводка показателей" not in t)
+    pg.goto(SITE + "#/overview"); pg.wait_for_timeout(400)
+    ct = pg.inner_text(".act") if pg.locator(".act").count() else ""
+    ok("главная: карточка «сдать до» у сотрудника, сдавшего прошлый срок", "Нужно сдать показатели" in ct and "до 30.10.2026" in ct and pg.locator(".act.t-warn a[href='#/indicators']").count() == 1, ct)
+    pg.screenshot(path=str(SHOTS / "c_staff_overview.png"), full_page=True)
     pg.goto(SITE + "#/indicators"); pg.wait_for_timeout(400)
     t = pg.inner_text("#app")
     ok("показатели: форма должности подставлена из профиля", pg.eval_on_selector(".grid-f select", "s => s.value") == "doya_qvp")
@@ -298,6 +307,14 @@ with sync_playwright() as p:
     ok("показатели: период по умолчанию — неделя пн–пт", pg.eval_on_selector_all("form input[type=date]", "x => x.map(i => i.value)") == ["2026-10-19", "2026-10-23"])
     ok("показатели: мои отчёты показывают сохранённый", "СВП №3" in t and "заполнено 2 из 27" in t, t[-500:])
     pg.screenshot(path=str(SHOTS / "c_ind_form.png"), full_page=True)
+    v0 = pg.input_value("#ind1")
+    pg.fill("#ind1", "5")
+    pg.click(".indrow >> nth=0 >> .stp.plus"); pg.click(".indrow >> nth=0 >> .stp.plus"); pg.click(".indrow >> nth=0 >> .stp:not(.plus)")
+    ok("показатели: кнопки + и − меняют число", pg.input_value("#ind1") == "6", pg.input_value("#ind1"))
+    pg.fill("#ind1", "")
+    pg.click(".indrow >> nth=0 >> .stp:not(.plus)"); pg.click(".indrow >> nth=0 >> .stp:not(.plus)")
+    ok("показатели: − не уходит ниже нуля", pg.input_value("#ind1") == "0", pg.input_value("#ind1"))
+    pg.fill("#ind1", v0)
     pg.fill("form .grid-f input[type=text]", " ")
     pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
     ok("показатели: пустое учреждение — ошибка", "Укажите учреждение" in pg.inner_text("form"))

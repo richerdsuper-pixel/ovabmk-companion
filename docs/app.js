@@ -422,6 +422,26 @@
     var p = indPositions().filter(function (x) { return x.ru === pos; })[0];
     return p ? p.code : "";
   }
+  // крупные кнопки − / + рядом с полем числа
+  function stepBtn(inp, d, unit) {
+    return h("button", { type: "button", class: "stp" + (d > 0 ? " plus" : ""), "aria-label": t(d > 0 ? "step_plus" : "step_minus"),
+      onclick: function () {
+        var v = parseFloat(inp.value.trim().replace(/\s/g, "").replace(",", "."));
+        if (!isFinite(v)) v = 0;
+        v = Math.max(0, Math.round((v + d) * 100) / 100);
+        if (unit === "%" && v > 100) v = 100;
+        inp.value = String(v); inp.removeAttribute("aria-invalid");
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+      } }, svgIcon(d > 0 ? "M12 5v14M5 12h14" : "M5 12h14"));
+  }
+  function svgIcon(d) {
+    var ns = "http://www.w3.org/2000/svg", s = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path");
+    s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); s.appendChild(p); return s;
+  }
+  function nextDeadline(rule) {
+    var n = nowDate(), t0 = todayS();
+    return deadlinesBetween(rule, t0, addDays(t0, 130)).filter(function (d) { return d > t0 || n.getHours() < rule.h; })[0] || "";
+  }
   function valText(v, unit) { return v === undefined || v === null || v === "" ? "" : unit === "%" ? String(v) + "%" : String(v); }
 
   async function indicatorsView() {
@@ -462,7 +482,7 @@
         inputs[i.n] = inp;
         grid.appendChild(h("div", { class: "indrow" },
           h("label", { class: "indlab", for: "ind" + i.n }, h("span", { class: "no", text: i.n + "." }), h("span", null, h("b", { text: i.ru }), h("span", { class: "sub", text: i.uz }))),
-          h("div", { class: "indval" }, inp, h("span", { class: "unit", text: unitLabel(i.unit) }))));
+          h("div", { class: "indval" }, stepBtn(inp, -1, i.unit), inp, stepBtn(inp, 1, i.unit), h("span", { class: "unit", text: unitLabel(i.unit) }))));
       });
     }
     posSel.addEventListener("change", function () {
@@ -635,6 +655,17 @@
   function kpi(label, body, foot) {
     return h("div", { class: "kpi" }, h("p", { class: "kpi-l", text: label }), h("div", { class: "kpi-b" }, body), foot ? h("p", { class: "kpi-f small mute" }, foot) : null);
   }
+  // большая карточка «что сделать сейчас» на главной
+  function actionCard(tone, title, sub, chip, btnText, href, primary, pct) {
+    return h("section", { class: "act t-" + tone },
+      h("div", { class: "act-txt" },
+        chip ? h("span", { class: "act-chip" }, svgIcon("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"), chip) : null,
+        h("h2", { text: title }),
+        h("p", { text: sub }),
+        typeof pct === "number" ? h("div", { class: "meter act-m t-" + tone }, h("i", { style: "width:" + pct + "%" })) : null),
+      h("a", { class: "btn " + (primary ? "pri big" : "big"), href: href },
+        h("span", { class: "act-plus" }, svgIcon(href === "#/indicators" && primary ? "M12 5v14M5 12h14" : "M5 12h14M13 6l6 6-6 6")), btnText));
+  }
   async function overviewView() {
     var my = renderToken, mgr = canSummary();
     shell("overview", loadingBox());
@@ -657,7 +688,7 @@
     var last30 = docs.filter(function (x) { return String(x.created_at).slice(0, 10) >= since; }).length;
 
     // показатели: сданы ли за последний срок
-    var reports = ir.data || [], people = (pr.data || []).filter(inMyScope), comp = [], gotAll = 0, expAll = 0, mine = null;
+    var reports = ir.data || [], people = (pr.data || []).filter(inMyScope), comp = [], gotAll = 0, expAll = 0, mine = null, heroCard = null;
     if (mgr) {
       indPositions().forEach(function (p) {
         var rule = INDS[p.code].rule, ld = rule.t === "c" ? "" : lastDeadline(rule);
@@ -674,6 +705,18 @@
     } else {
       var code = myIndPos(), rule = code ? INDS[code].rule : null, ld = rule && rule.t !== "c" ? lastDeadline(rule) : "";
       if (ld) mine = { done: reports.some(function (x) { return x.position_code === code && dueFor(rule, x.period_end) === ld; }), d: ld };
+      var nd = rule && rule.t !== "c" ? nextDeadline(rule) : "";
+      if (nd) {
+        var doneNext = reports.some(function (x) { return x.position_code === code && dueFor(rule, x.period_end) === nd; });
+        if (doneNext) heroCard = actionCard("ok", t("hb_done"), t("hb_next", { d: fmtDate(nd) }), null, t("hb_open"), "#/indicators");
+        else if (mine && !mine.done) heroCard = actionCard("bad", t("hb_late"), t("hb_late_d", { d: fmtDate(mine.d) }), t("hb_due", { d: fmtDate(nd) }), t("hb_go"), "#/indicators", true);
+        else heroCard = actionCard("warn", t("hb_todo"), t("ind_deadline", { rule: ruleText(rule) }), t("hb_due", { d: fmtDate(nd) }), t("hb_go"), "#/indicators", true);
+      }
+    }
+    if (mgr && expAll) {
+      var miss = expAll - gotAll;
+      heroCard = actionCard(miss ? (miss * 2 > expAll ? "bad" : "warn") : "ok", miss ? t("hb_mgr", { n: miss, m: expAll }) : t("hb_mgr_ok"), t("hb_mgr_sub"), null,
+        t("hb_mgr_go"), "#/indicators/summary", !!miss, pctOf(gotAll, expAll));
     }
     var indTile;
     if (mgr) {
@@ -715,7 +758,7 @@
 
     shell("overview", h("div", { class: "stack" },
       h("div", { class: "ovh" }, h("h2", { text: t("ov_title") }), h("span", { class: "small mute", text: t("ov_updated", { d: fmtDate(t0) }) })),
-      kpis, h("div", { class: "ovgrid" }, foldersPanel, h("div", { class: "stack" }, compPanel, weeksPanel))));
+      heroCard, kpis, h("div", { class: "ovgrid" }, foldersPanel, h("div", { class: "stack" }, compPanel, weeksPanel))));
   }
 
   // --- папки

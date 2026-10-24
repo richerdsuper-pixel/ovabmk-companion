@@ -40,5 +40,5 @@
 ```sh
 sh tests/reset_local.sh && python3 tests/rls_test.py      # права доступа, заявки, показатели и удаление сотрудников, 150 проверок
 node --experimental-strip-types tests/telegram_test.ts     # подпись Telegram, 12 проверок
-python3 tests/ui_test.py                                   # интерфейс на тестовых данных, 114 проверок
+python3 tests/ui_test.py                                   # интерфейс на тестовых данных, 146 проверок
 ```

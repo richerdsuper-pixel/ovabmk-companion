@@ -206,7 +206,7 @@
       }));
   }
   function nav(cur) {
-    var items = [["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"]];
+    var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"]];
     if (isManager()) items.push(["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
@@ -218,7 +218,7 @@
   var renderToken = 0;
   function render() {
     renderToken++;
-    var route = (location.hash || "#/folders").slice(1);
+    var route = (location.hash || "#/overview").slice(1);
     if (!S.session) return mount(h("div", null, header(), loginView()));
     if (S.roleState === "loading" || S.roleState === "idle") return mount(h("div", null, header(), h("p", { class: "boot", text: t("loading") })));
     if (S.roleState === "error") return mount(h("div", null, header(), h("div", { class: "notice bad" }, t("roles_error"),
@@ -228,13 +228,14 @@
 
     var m;
     if ((m = /^\/folder\/(\d{1,2})$/.exec(route))) return folderView(+m[1]);
+    if (route === "/folders") return foldersView();
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return isManager() ? indSummaryView() : forbidden("indsum");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
     if (route === "/admin/users") return isAdmin() ? usersView() : forbidden("users");
     if (route === "/admin/invites") return isAdmin() ? invitesView() : forbidden("invites");
     if (route === "/admin/log") return isAdmin() ? logView() : forbidden("log");
-    return foldersView();
+    return overviewView();
   }
   function shell(cur, body) { mount(h("div", null, header(), nav(cur), body)); }
   function forbidden(cur) { shell(cur, h("div", { class: "notice warn", text: t("forbidden") })); }
@@ -480,7 +481,7 @@
   }
 
   // Сводка для руководителей: показатели одной должности по всем сотрудникам.
-  var SUM = { pos: "", mode: "latest" };
+  var SUM = { pos: "", mode: "latest", ind: 0 };
   async function indSummaryView() {
     var my = renderToken;
     shell("indsum", loadingBox());
@@ -505,7 +506,7 @@
 
     var posSel = h("select", { "aria-label": t("ind_sum_pos") }, plist.map(function (x) { return h("option", { value: x.code, text: posTitle(x) }); }));
     posSel.value = SUM.pos;
-    posSel.addEventListener("change", function () { SUM.pos = posSel.value; SUM.mode = "latest"; indSummaryView(); });
+    posSel.addEventListener("change", function () { SUM.pos = posSel.value; SUM.mode = "latest"; SUM.ind = 0; indSummaryView(); });
     var modeSel = h("select", { "aria-label": t("ind_sum_mode") }, h("option", { value: "latest", text: t("ind_sum_latest") }),
       ends.map(function (d) { return h("option", { value: d, text: t("ind_sum_period", { d: fmtDate(d) }) }); }));
     modeSel.value = SUM.mode;
@@ -538,9 +539,121 @@
         h("b", { text: t("ind_missing_title", { d: fmtDate(ld) }) }), " · ",
         !expected.length ? t("ind_missing_unknown") : miss.length ? t("ind_missing_list", { n: miss.length }) + " " + miss.map(function (x) { return x.full_name; }).join(", ") : t("ind_missing_none"));
     }
-    shell("indsum", h("div", { class: "stack" }, h("section", { class: "panel stack" }, h("h2", { text: t("ind_sum_title") }),
+    // динамика одного показателя по периодам: сумма или среднее по учреждениям
+    var trend = null;
+    if (all.length) {
+      var ni = def.ind.some(function (i) { return i.n === SUM.ind; }) ? SUM.ind : def.ind[0].n;
+      var idef = def.ind.filter(function (i) { return i.n === ni; })[0], isPct = idef.unit === "%", byEnd = {};
+      all.forEach(function (x) { var v = x.vals["i" + ni]; if (typeof v === "number") (byEnd[x.period_end] = byEnd[x.period_end] || []).push(v); });
+      var keys = Object.keys(byEnd).sort().slice(-12);
+      var pts = keys.map(function (k) {
+        var a = byEnd[k], sm = a.reduce(function (x, y) { return x + y; }, 0), v = sumable(idef.unit) ? sm : sm / a.length;
+        v = Math.round(v * 100) / 100;
+        return { x: shortDate(k), y: v, tip: valText(v, idef.unit) + " " + (isPct ? "" : unitLabel(idef.unit)) + " · " + fmtDate(k) };
+      });
+      var indSel = h("select", { "aria-label": t("ind_trend_pick") }, def.ind.map(function (i) { return h("option", { value: i.n, text: i.n + ". " + i.ru }); }));
+      indSel.value = ni;
+      indSel.addEventListener("change", function () { SUM.ind = +indSel.value; indSummaryView(); });
+      trend = h("section", { class: "panel stack" }, panelHead(t("ind_trend_title"), sumable(idef.unit) ? t("ind_trend_sum") : t("ind_trend_avg")),
+        h("label", { class: "f" }, t("ind_trend_pick"), indSel),
+        pts.length < 2 ? h("p", { class: "mute", text: t("ind_trend_empty") }) :
+          CH.line(pts, { aria: t("ind_trend_title") + ": " + idef.ru, caption: idef.ru, yMax: isPct ? 100 : undefined, yFmt: isPct ? function (v) { return Math.round(v) + "%"; } : undefined }));
+    }
+    shell("indsum", h("div", { class: "stack" }, trend, h("section", { class: "panel stack" }, h("h2", { text: t("ind_sum_title") }),
       h("div", { class: "grid-f" }, h("label", { class: "f" }, t("ind_sum_pos"), posSel), h("label", { class: "f" }, t("ind_sum_mode"), modeSel)),
       h("p", { class: "small mute", text: t("ind_deadline", { rule: ruleText(def.rule) }) }), missBox, exp, table)));
+  }
+
+
+  // --- обзор: проценты и графики
+  function shortDate(s) { return s.slice(8, 10) + "." + s.slice(5, 7); }
+  function weekStart(s) { return addDays(s, -((dowOf(s) + 6) % 7)); }
+  function pctOf(a, b) { return b ? Math.round(a * 100 / b) : null; }
+  function panelHead(title, sub) { return h("div", { class: "ph" }, h("h3", { text: title }), sub ? h("p", { class: "small mute", text: sub }) : null); }
+  function kpi(label, body, foot) {
+    return h("div", { class: "kpi" }, h("p", { class: "kpi-l", text: label }), h("div", { class: "kpi-b" }, body), foot ? h("p", { class: "kpi-f small mute" }, foot) : null);
+  }
+  async function overviewView() {
+    var my = renderToken, mgr = isManager();
+    shell("overview", loadingBox());
+    var rs = await Promise.all([
+      sb.from("folders").select("id, title_ru, title_uz, hint_ru, restricted").order("id"),
+      sb.rpc("folder_counts"),
+      sb.from("documents").select("created_at").order("created_at", { ascending: false }).limit(5000),
+      sb.from("indicator_reports").select("user_id, position_code, period_end").order("period_end", { ascending: false }).limit(5000),
+      mgr ? sb.from("profiles").select("id, full_name, position, removed_at") : Promise.resolve({ data: [] })
+    ]);
+    if (my !== renderToken) return;
+    var f = rs[0], c = rs[1], d = rs[2], ir = rs[3], pr = rs[4];
+    if (f.error) return shell("overview", failBox(f.error));
+    var counts = {}; (c.data || []).forEach(function (x) { counts[x.folder_id] = x.docs; });
+    var open = f.data.filter(canOpenFolder);
+    var filled = open.filter(function (x) { return (counts[x.id] || 0) > 0; }).length;
+    var total = open.reduce(function (a, x) { return a + (counts[x.id] || 0); }, 0);
+    var t0 = todayS(), since = addDays(t0, -30);
+    var docs = d.data || [];
+    var last30 = docs.filter(function (x) { return String(x.created_at).slice(0, 10) >= since; }).length;
+
+    // показатели: сданы ли за последний срок
+    var reports = ir.data || [], people = pr.data || [], comp = [], gotAll = 0, expAll = 0, mine = null;
+    if (mgr) {
+      indPositions().forEach(function (p) {
+        var rule = INDS[p.code].rule, ld = rule.t === "c" ? "" : lastDeadline(rule);
+        if (!ld) return;
+        var exp = people.filter(function (x) { return x.position === p.ru && !x.removed_at; });
+        if (!exp.length) return;
+        var ids = {}; exp.forEach(function (x) { ids[x.id] = 1; });
+        var got = {}; reports.forEach(function (x) { if (x.position_code === p.code && ids[x.user_id] && dueFor(rule, x.period_end) === ld) got[x.user_id] = 1; });
+        var n = Object.keys(got).length;
+        gotAll += n; expAll += exp.length;
+        comp.push({ label: posTitle(p), sub: n + " / " + exp.length, pct: pctOf(n, exp.length), text: pctOf(n, exp.length) + "%", tone: CH.tone(pctOf(n, exp.length)) });
+      });
+      comp.sort(function (a, b) { return a.pct - b.pct || a.label.localeCompare(b.label); });
+    } else {
+      var code = myIndPos(), rule = code ? INDS[code].rule : null, ld = rule && rule.t !== "c" ? lastDeadline(rule) : "";
+      if (ld) mine = { done: reports.some(function (x) { return x.position_code === code && dueFor(rule, x.period_end) === ld; }), d: ld };
+    }
+    var indTile;
+    if (mgr) {
+      var ip = pctOf(gotAll, expAll);
+      indTile = kpi(t("ov_ind_title"), CH.ring(ip, { label: ip === null ? "" : ip + "%" }), ip === null ? t("ov_empty_comp") : t("ov_ind_of", { n: gotAll, m: expAll }));
+    } else {
+      indTile = kpi(t("ov_ind_title"), mine ? CH.ring(mine.done ? 100 : 0, { tone: mine.done ? "ok" : "bad" }) : CH.ring(null),
+        mine ? [h("b", { text: mine.done ? t("ov_ind_mine_done") : t("ov_ind_mine_miss") }), " · ", t("ov_ind_mine_for", { d: fmtDate(mine.d) })] : t("ov_ind_mine_none"));
+    }
+    var fp = pctOf(filled, open.length);
+    var kpis = h("div", { class: "kpis" },
+      kpi(t("ov_folders_filled"), CH.ring(fp, { label: fp === null ? "" : fp + "%" }), open.length ? t("ov_folders_of", { n: filled, m: open.length }) : t("ov_none_folders")),
+      kpi(t("ov_docs_total"), h("span", { class: "big", text: String(total) }), t("ov_docs_30", { n: last30 })),
+      indTile);
+
+    // документы по папкам
+    var mx = Math.max.apply(null, open.map(function (x) { return counts[x.id] || 0; }).concat([1]));
+    var fb = open.slice().sort(function (a, b) { return (counts[b.id] || 0) - (counts[a.id] || 0) || a.id - b.id; }).map(function (x) {
+      return { label: folderTitle(x), sub: t("folder_no", { n: x.id }), pct: (counts[x.id] || 0) * 100 / mx, text: String(counts[x.id] || 0),
+        tone: (counts[x.id] || 0) ? "acc" : "mute", href: "#/folder/" + x.id, title: folderTitle(x) + " — " + t("ov_docs_word", { n: counts[x.id] || 0 }) };
+    });
+    var foldersPanel = h("section", { class: "panel" }, panelHead(t("ov_chart_folders"), t("ov_chart_folders_sub")),
+      fb.length ? CH.hbars(fb, { aria: t("ov_chart_folders") }) : h("p", { class: "mute", text: t("ov_none_folders") }));
+
+    // по неделям
+    var ws0 = weekStart(t0), weeks = [];
+    for (var i = 0; i < 12; i++) weeks.push(addDays(ws0, -7 * (11 - i)));
+    var wc = weeks.map(function () { return 0; });
+    docs.forEach(function (x) {
+      var day = String(x.created_at).slice(0, 10), k = dayDiff(weekStart(day), weeks[0]) / 7;
+      if (k >= 0 && k < 12 && k === Math.floor(k)) wc[k]++;
+    });
+    var wpts = weeks.map(function (w, i) { return { x: shortDate(w), y: wc[i], tip: t("ov_week_tip", { a: shortDate(w), b: shortDate(addDays(w, 6)), n: wc[i] }) }; });
+    var weeksPanel = h("section", { class: "panel" }, panelHead(t("ov_chart_weeks"), t("ov_chart_weeks_sub")),
+      CH.line(wpts, { aria: t("ov_chart_weeks"), caption: t("ov_chart_weeks"), minMax: 4 }));
+
+    var compPanel = !mgr ? null : h("section", { class: "panel" }, panelHead(t("ov_chart_comp"), t("ov_chart_comp_sub")),
+      comp.length ? CH.hbars(comp, { aria: t("ov_chart_comp") }) : h("p", { class: "mute", text: t("ov_empty_comp") }));
+
+    shell("overview", h("div", { class: "stack" },
+      h("div", { class: "ovh" }, h("h2", { text: t("ov_title") }), h("span", { class: "small mute", text: t("ov_updated", { d: fmtDate(t0) }) })),
+      kpis, h("div", { class: "ovgrid" }, foldersPanel, h("div", { class: "stack" }, compPanel, weeksPanel))));
   }
 
   // --- папки
@@ -552,6 +665,7 @@
     if (my !== renderToken) return;
     if (f.error) return shell("folders", failBox(f.error));
     var counts = {}; (c.data || []).forEach(function (x) { counts[x.folder_id] = x.docs; });
+    var mxc = Math.max.apply(null, f.data.filter(canOpenFolder).map(function (x) { return counts[x.id] || 0; }).concat([1]));
     shell("folders", h("div", { class: "folders" }, f.data.map(function (fd) {
       var open = canOpenFolder(fd);
       var inner = [
@@ -561,7 +675,8 @@
         h("div", { class: "ft" },
           fd.restricted ? h("span", { class: "chip bad", text: "🔒 " + t("locked") })
             : open ? h("span", { class: "chip", text: t("docs_count", { n: counts[fd.id] || 0 }) })
-            : h("span", { class: "chip", text: t("no_access") }))
+            : h("span", { class: "chip", text: t("no_access") })),
+        open && !fd.restricted ? h("div", { class: "fc-m", "aria-hidden": "true" }, CH.meter((counts[fd.id] || 0) * 100 / mxc, { tone: (counts[fd.id] || 0) ? "acc" : "mute" })) : null
       ];
       if (fd.restricted) return h("div", { class: "fcard locked", title: t("locked_long") }, inner);
       if (!open) return h("div", { class: "fcard dim" }, inner);

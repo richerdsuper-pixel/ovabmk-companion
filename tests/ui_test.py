@@ -50,7 +50,7 @@ window.__MOCK.rpc = {
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
 };""" % (A, S_, A)
 
-def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None):
+def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None, hash="#/folders"):
     b = p.chromium.launch()
     ctx = b.new_context(viewport={"width": w, "height": h}, color_scheme=scheme, accept_downloads=True)
     if now: ctx.add_init_script("window.__NOW=" + json.dumps(now))
@@ -60,7 +60,7 @@ def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None):
     ctx.route("**/fonts.g*/**", lambda r: r.abort())
     pg = ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(SITE + search); pg.wait_for_timeout(400)
+    pg.goto(SITE + search + hash); pg.wait_for_timeout(400)
     return b, pg, errs
 
 def hscroll(pg): return pg.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth + 1")
@@ -343,7 +343,7 @@ with sync_playwright() as p:
     import openpyxl
     wsx = openpyxl.load_workbook("/tmp/ui_ind.xlsx").active
     ok("сводка: Excel — 27 строк + шапка и итого", wsx.max_row == 28 and wsx.cell(2, 2).value == "Число беременных на учёте" and wsx.cell(2, wsx.max_column).value == 20, (wsx.max_row, wsx.cell(2, wsx.max_column).value))
-    pg.select_option("section select >> nth=1", "2026-10-16"); pg.wait_for_timeout(400)
+    pg.select_option("section:not(:has(.chart)) select >> nth=1", "2026-10-16"); pg.wait_for_timeout(400)
     ok("сводка: период — только отчёты за него", pg.locator("table.indsum thead th").count() == 5 and "СВП №5" in pg.inner_text("table.indsum thead"), pg.locator("table.indsum thead th").count())
     pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(300)
     ok("сводка: узбекский", "Жами" in pg.inner_text("table.indsum thead") or "Кўрсаткичлар" in pg.inner_text("#app"))
@@ -357,6 +357,60 @@ with sync_playwright() as p:
         pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(400)
         pg.screenshot(path=str(SHOTS / f"c_{tag}_indsum.png"), full_page=True)
         ok(f"{tag}: нет горизонтальной прокрутки страницы (сводка)", not hscroll(pg))
+        b.close()
+
+    # 8. обзор: проценты и графики
+    b, pg, errs = page_for(p, ind_sc(A, ("admin",), reps), now=NOW, hash="")
+    pg.wait_for_timeout(400)
+    ok("обзор: открывается по умолчанию и пункт меню активен", pg.locator("nav a[aria-current=page]").inner_text() == "Обзор")
+    t = pg.inner_text("#app")
+    ok("обзор: заполнение папок 1 из 19 = 5%", "1 из 19 папок" in t and pg.locator(".kpi .ring-n").first.inner_text() == "5%", t[:300])
+    ok("обзор: сдача показателей 1 из 2 = 50%", pg.locator(".kpi .ring-n").nth(1).inner_text() == "50%" and "1 из 2 сотрудников" in t, t[:400])
+    ok("обзор: документов всего 1 и за 30 дней 1", pg.locator(".kpi .big").inner_text() == "1" and "за 30 дней: 1" in t)
+    ok("обзор: строки по папкам (19 открытых)", pg.locator(".panel .hb[href^='#/folder/']").count() == 19, pg.locator(".panel .hb").count())
+    ok("обзор: по должностям — Доя 1 / 2 и 50%", "1 / 2" in t and "50%" in pg.locator(".hb:not([href])").first.inner_text(), pg.locator(".hb:not([href])").count())
+    ok("обзор: график по неделям — 12 точек и линия", pg.locator(".chart svg .ch-dot").count() == 12 and pg.locator(".chart svg path.ch-line").count() == 1, pg.locator(".chart svg .ch-dot").count())
+    pg.locator(".chart svg rect").last.scroll_into_view_if_needed()
+    box = pg.locator(".chart svg rect").last.bounding_box()
+    pg.mouse.move(box["x"] + box["width"] - 8, box["y"] + 40); pg.wait_for_timeout(150)
+    ok("обзор: подсказка на графике показывает неделю и число", "19.10–25.10: 1" in pg.locator(".ch-tip").inner_text(), pg.locator(".ch-tip").inner_text())
+    ok("обзор: таблица данных для скринридера есть", pg.locator(".chart table.sr tr").count() == 12)
+    ok("обзор: график не шире панели", pg.evaluate("(()=>{const s=document.querySelector('.chart svg'),p=s.closest('.panel');return s.getBoundingClientRect().width<=p.getBoundingClientRect().width+1})()"))
+    pg.screenshot(path=str(SHOTS / "c_overview.png"), full_page=True)
+    pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(250)
+    ok("обзор: узбекский", "Умумий кўриниш" in pg.inner_text("#app") and "Жилдлар" in pg.inner_text("#app"))
+    ok("ошибок JS нет (обзор)", not errs, errs); b.close()
+
+    sc_st = ind_sc(S_, ("staff",), reps); sc_st["db"]["folder_members"] = [{"user_id": S_, "folder_id": 1}]
+    b, pg, errs = page_for(p, sc_st, now=NOW, hash="")
+    pg.wait_for_timeout(300); t = pg.inner_text("#app")
+    ok("обзор сотрудника: показатели сданы, срок 23.10.2026", "Сдано" in t and "23.10.2026" in t, t[:300])
+    ok("обзор сотрудника: нет сравнения по должностям", "по должностям" not in t)
+    ok("обзор сотрудника: только его папка (1 из 1)", "1 из 1 папок" in t, t[:200])
+    ok("ошибок JS нет (обзор сотрудника)", not errs, errs); b.close()
+
+    b, pg, errs = page_for(p, ind_sc(X_, ("staff",), []), now=NOW, hash="")
+    pg.wait_for_timeout(300); t = pg.inner_text("#app")
+    ok("обзор сотрудника без отчёта: не сдано", "Не сдано" in t and pg.locator(".ring.t-bad").count() == 1, t[:300]); b.close()
+
+    b, pg, errs = page_for(p, ind_sc(A, ("admin",), reps), now=NOW)
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
+    ok("сводка: график динамики — 3 периода", pg.locator(".chart svg .ch-dot").count() == 3 and "Динамика показателя" in pg.inner_text("#app"), (pg.locator(".chart svg .ch-dot").count(), errs, pg.inner_text("#app")[:300]))
+    pg.select_option("section:has(.chart) select", "3"); pg.wait_for_timeout(400)
+    ok("сводка: для % — среднее и шкала до 100%", "Среднее по учреждениям" in pg.inner_text("#app") or "Сумма" in pg.inner_text("#app"))
+    ok("ошибок JS нет (динамика)", not errs, errs); b.close()
+
+    for tag, (w, h_, sch) in {"m": (390, 800, "light"), "d": (1280, 900, "light"), "dk": (1280, 900, "dark"), "mdk": (390, 800, "dark")}.items():
+        b, pg, errs = page_for(p, ind_sc(A, ("admin",), reps), w, h_, scheme=sch, now=NOW, hash="")
+        pg.wait_for_timeout(300)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_overview.png"), full_page=True)
+        ok(f"{tag}: нет горизонтальной прокрутки (обзор)", not hscroll(pg))
+        ok(f"{tag}: ошибок JS нет (обзор)", not errs, errs)
+        pg.goto(SITE + "#/folders"); pg.wait_for_timeout(300)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_folders2.png"), full_page=True)
+        pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(400)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_indsum2.png"), full_page=True)
+        ok(f"{tag}: нет горизонтальной прокрутки (сводка с графиком)", not hscroll(pg))
         b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")

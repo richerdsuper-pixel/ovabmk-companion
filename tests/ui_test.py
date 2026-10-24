@@ -49,9 +49,10 @@ window.__MOCK.rpc = {
   admin_set_folders: function(){ return null; }, admin_update_profile: function(){ return null; }, revoke_invite: function(){ return null; }
 };""" % (A, S_)
 
-def page_for(p, sc, w=1280, h=900, scheme="light", search=""):
+def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None):
     b = p.chromium.launch()
-    ctx = b.new_context(viewport={"width": w, "height": h}, color_scheme=scheme)
+    ctx = b.new_context(viewport={"width": w, "height": h}, color_scheme=scheme, accept_downloads=True)
+    if now: ctx.add_init_script("window.__NOW=" + json.dumps(now))
     ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC)
     ctx.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
     ctx.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
@@ -235,6 +236,93 @@ with sync_playwright() as p:
         pg.goto(SITE + "#/admin/requests"); pg.wait_for_timeout(300)
         pg.screenshot(path=str(SHOTS / f"c_{tag}_requests.png"), full_page=True)
         ok(f"{tag}: нет горизонтальной прокрутки (заявки)", not hscroll(pg))
+        b.close()
+
+    # 7. показатели
+    DOYA = "Акушерка СВП (кабинет доя)"
+    X_ = "00000000-0000-4000-8000-00000000000c"
+    def ind_sc(uid, roles, reports):
+        sc = scenario(uid=uid, roles=roles)
+        sc["db"]["profiles"] = [{"id": A, "full_name": "Администратор Тест", "position": "Заместитель главного врача"},
+                                {"id": S_, "full_name": "Сотрудник Тест", "position": DOYA},
+                                {"id": X_, "full_name": "Вторая Доя", "position": DOYA}]
+        sc["db"]["indicator_reports"] = reports
+        return sc
+    NOW = "2026-10-24T10:00:00"
+    rep = lambda rid, uid, inst, pe, vals, ps=None: {"id": rid, "user_id": uid, "position_code": "doya_qvp", "institution": inst, "period_start": ps or pe, "period_end": pe, "vals": vals, "updated_at": "2026-10-23T09:00:00Z"}
+    b, pg, errs = page_for(p, ind_sc(S_, ("staff",), [rep("p1", S_, "СВП №3", "2026-10-23", {"i1": 12, "i2": 10}, "2026-10-19")]), now=NOW)
+    t = pg.inner_text("#app")
+    ok("показатели: пункт меню у сотрудника", "Показатели" in t and "Сводка показателей" not in t)
+    pg.goto(SITE + "#/indicators"); pg.wait_for_timeout(400)
+    t = pg.inner_text("#app")
+    ok("показатели: форма должности подставлена из профиля", pg.eval_on_selector(".grid-f select", "s => s.value") == "doya_qvp")
+    ok("показатели: 27 показателей у доя", pg.locator(".indrow").count() == 27, pg.locator(".indrow").count())
+    ok("показатели: предупреждение «только числа»", "Фамилии, ПИНФЛ" in t)
+    ok("показатели: срок сдачи доя — пятница 12:00", "пятница до 12:00" in t, t[:600])
+    ok("показатели: период по умолчанию — неделя пн–пт", pg.eval_on_selector_all("form input[type=date]", "x => x.map(i => i.value)") == ["2026-10-19", "2026-10-23"])
+    ok("показатели: мои отчёты показывают сохранённый", "СВП №3" in t and "заполнено 2 из 27" in t, t[-500:])
+    pg.screenshot(path=str(SHOTS / "c_ind_form.png"), full_page=True)
+    pg.fill("form .grid-f input[type=text]", " ")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("показатели: пустое учреждение — ошибка", "Укажите учреждение" in pg.inner_text("form"))
+    pg.fill("form .grid-f input[type=text]", "СВП №7 (тест)"); pg.press("form .grid-f input[type=text]", "Tab")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("показатели: пустая форма — ошибка", "хотя бы один" in pg.inner_text("form"))
+    pg.fill("#ind3", "150"); pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("показатели: проценты больше 100 отклоняются", "Проверьте числа" in pg.inner_text("form"))
+    ok("показатели: поле с ошибкой помечено", pg.eval_on_selector("#ind3", "e => e.getAttribute('aria-invalid')") == "true")
+    pg.fill("#ind3", "83,3"); pg.fill("#ind1", "12"); pg.fill("#ind2", "10"); pg.evaluate("window.__MOCK.log.length = 0")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(400)
+    ins = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "insert" and x[1] == "indicator_reports"]
+    ok("показатели: запись отправлена с числами, автором и должностью", ins and ins[0][2]["vals"] == {"i1": 12, "i2": 10, "i3": 83.3} and ins[0][2]["user_id"] == S_ and ins[0][2]["position_code"] == "doya_qvp" and ins[0][2]["period_end"] == "2026-10-23", ins)
+    ok("показатели: в отправке нет текстовых полей кроме учреждения", ins and set(ins[0][2].keys()) == {"user_id", "position_code", "institution", "period_start", "period_end", "vals"}, ins and ins[0][2].keys())
+    # правка существующего отчёта: то же учреждение и период
+    pg.fill("form .grid-f input[type=text]", "СВП №3"); pg.press("form .grid-f input[type=text]", "Tab"); pg.wait_for_timeout(150)
+    ok("показатели: за этот период отчёт уже есть — значения подставлены", pg.input_value("#ind1") == "12" and "правите" in pg.inner_text("form"), pg.inner_text("form")[:300])
+    pg.fill("#ind1", "15"); pg.evaluate("window.__MOCK.log.length = 0"); pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    upd = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "update"]
+    ok("показатели: правка идёт как update того же отчёта", upd and upd[0][3] == ["p1"] and upd[0][2]["vals"]["i1"] == 15, upd)
+    ok("показатели: удаление требует второго нажатия", True)
+    dl = pg.locator("tbody .btn.danger").first; dl.click(); pg.wait_for_timeout(80)
+    ok("показатели: удаление — подтверждение", "Точно" in dl.inner_text())
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(300)
+    ok("показатели: сотрудник не видит сводку", "нет доступа" in pg.inner_text("#app").lower() or "Недостаточно" in pg.inner_text("#app") or pg.locator("table.indsum").count() == 0)
+    ok("ошибок JS нет (показатели сотрудника)", not errs, errs); b.close()
+
+    # сводка руководителя
+    reps = [rep("p1", S_, "СВП №3", "2026-10-23", {"i1": 12, "i2": 10, "i3": 83.3}, "2026-10-19"),
+            rep("p2", X_, "СВП №5", "2026-10-16", {"i1": 8, "i2": 8}, "2026-10-12"),
+            rep("p3", X_, "СВП №5", "2026-10-09", {"i1": 7}, "2026-10-05")]
+    b, pg, errs = page_for(p, ind_sc(A, ("admin",), reps), now=NOW)
+    pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(500)
+    t = pg.inner_text("#app")
+    ok("сводка: пункт меню у администратора", "Сводка показателей" in pg.inner_text(".nav"))
+    ok("сводка: 27 строк показателей", pg.locator("table.indsum tbody tr").count() == 27, pg.locator("table.indsum tbody tr").count())
+    row1 = pg.locator("table.indsum tbody tr").first.inner_text().split("\t")
+    ok("сводка: итого по показателю 1 = 12 + 8 (последние отчёты)", row1[-1].strip() == "20", row1)
+    ok("сводка: проценты не суммируются", pg.locator("table.indsum tbody tr").nth(2).inner_text().split("\t")[-1].strip() == "", pg.locator("table.indsum tbody tr").nth(2).inner_text())
+    ok("сводка: показан отчёт сотрудника и его фамилия", "СВП №3" in t and "сотрудник тест" in t.lower())
+    ok("сводка: кто не сдал за срок 23.10.2026", "Не сдали (1)" in t and "Вторая Доя" in t and "Сотрудник Тест" not in t.split("Не сдали")[1].split("\n")[0], t[:700])
+    pg.screenshot(path=str(SHOTS / "c_ind_summary.png"), full_page=True)
+    with pg.expect_download() as d: pg.click("text=Скачать в Excel")
+    d.value.save_as("/tmp/ui_ind.xlsx")
+    import openpyxl
+    wsx = openpyxl.load_workbook("/tmp/ui_ind.xlsx").active
+    ok("сводка: Excel — 27 строк + шапка и итого", wsx.max_row == 28 and wsx.cell(2, 2).value == "Число беременных на учёте" and wsx.cell(2, wsx.max_column).value == 20, (wsx.max_row, wsx.cell(2, wsx.max_column).value))
+    pg.select_option("section select >> nth=1", "2026-10-16"); pg.wait_for_timeout(400)
+    ok("сводка: период — только отчёты за него", pg.locator("table.indsum thead th").count() == 5 and "СВП №5" in pg.inner_text("table.indsum thead"), pg.locator("table.indsum thead th").count())
+    pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(300)
+    ok("сводка: узбекский", "Жами" in pg.inner_text("table.indsum thead") or "Кўрсаткичлар" in pg.inner_text("#app"))
+    ok("ошибок JS нет (сводка)", not errs, errs); b.close()
+
+    for tag, (w, h_) in {"m": (390, 800), "d": (1280, 900)}.items():
+        b, pg, errs = page_for(p, ind_sc(A, ("admin",), reps), w, h_, now=NOW)
+        pg.goto(SITE + "#/indicators"); pg.wait_for_timeout(400)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_ind.png"), full_page=True)
+        ok(f"{tag}: нет горизонтальной прокрутки (показатели)", not hscroll(pg))
+        pg.goto(SITE + "#/indicators/summary"); pg.wait_for_timeout(400)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_indsum.png"), full_page=True)
+        ok(f"{tag}: нет горизонтальной прокрутки страницы (сводка)", not hscroll(pg))
         b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")

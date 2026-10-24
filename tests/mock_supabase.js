@@ -13,12 +13,14 @@
   Q.prototype.maybeSingle = function () { this.single = true; return this; };
   Q.prototype.insert = function (p) { this.op = "insert"; this.payload = p; return this; };
   Q.prototype.delete = function () { this.op = "delete"; return this; };
+  Q.prototype.update = function (p) { this.op = "update"; this.payload = p; return this; };
   Q.prototype.then = function (ok, bad) {
     var self = this, err = M.errors && M.errors[this.t];
     if (err) return res(null, { message: err }).then(ok, bad);
     var rows = (M.db[this.t] || []);
     if (this.op === "insert") { M.log.push(["insert", this.t, this.payload]); rows.push(Object.assign({ id: "new" + rows.length, created_at: new Date().toISOString() }, this.payload)); return res(null).then(ok, bad); }
     var hit = rows.filter(function (r) { return self.f.every(function (fn) { return fn(r); }); });
+    if (this.op === "update") { M.log.push(["update", this.t, this.payload, hit.map(function (r) { return r.id; })]); hit.forEach(function (r) { Object.assign(r, self.payload); }); return res(hit).then(ok, bad); }
     if (this.op === "delete") { M.log.push(["delete", this.t, hit.length]); M.db[this.t] = rows.filter(function (r) { return hit.indexOf(r) < 0; }); return res(hit).then(ok, bad); }
     return res(this.single ? (hit[0] || null) : hit).then(ok, bad);
   };

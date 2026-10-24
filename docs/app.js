@@ -202,7 +202,8 @@
       }));
   }
   function nav(cur) {
-    var items = [["#/folders", "nav_folders", "folders"]];
+    var items = [["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"]];
+    if (isManager()) items.push(["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
       return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null, text: t(i[1]) });
@@ -223,6 +224,8 @@
 
     var m;
     if ((m = /^\/folder\/(\d{1,2})$/.exec(route))) return folderView(+m[1]);
+    if (route === "/indicators") return indicatorsView();
+    if (route === "/indicators/summary") return isManager() ? indSummaryView() : forbidden("indsum");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
     if (route === "/admin/users") return isAdmin() ? usersView() : forbidden("users");
     if (route === "/admin/invites") return isAdmin() ? invitesView() : forbidden("invites");
@@ -302,6 +305,238 @@
     s.onerror = function () { box.textContent = t("widget_fail"); };
     box.appendChild(s);
     setTimeout(function () { if (box.isConnected && !box.querySelector("iframe")) box.firstChild && (box.firstChild.textContent = t("widget_fail")); }, 8000);
+  }
+
+  // ------------------------------------------------------------------ показатели (только числа)
+  var INDS = window.INDICATORS || {};
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function nowDate() { return window.__NOW ? new Date(window.__NOW) : new Date(); }
+  function todayS() { var d = nowDate(); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); }
+  function utc(s) { return Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)); }
+  function addDays(s, n) { var d = new Date(utc(s) + n * 86400000); return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); }
+  function dayDiff(a, b) { return Math.round((utc(a) - utc(b)) / 86400000); }
+  function dowOf(s) { return new Date(utc(s)).getUTCDay(); }
+  function lastDay(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  function indPositions() { return posList().filter(function (p) { return INDS[p.code]; }); }
+  function unitLabel(u) { return !u ? "" : u === "%" ? "%" : (window.I18N.ru["ind_unit_" + u] ? t("ind_unit_" + u) : u); }
+  function sumable(u) { return u !== "%" && u !== "yil"; }
+  function ruleText(rule) {
+    var days = t("ind_days").split(",");
+    if (rule.t === "w") return t("ind_rule_w", { day: days[rule.d % 7], h: rule.h });
+    if (rule.t === "m") return t("ind_rule_m", { d: rule.d, h: rule.h });
+    if (rule.t === "q") return t("ind_rule_q", { d: rule.d, h: rule.h });
+    return t("ind_rule_c");
+  }
+  function deadlinesBetween(rule, from, to) {
+    var out = [];
+    if (!rule || rule.t === "c") return out;
+    for (var d = from; d <= to; d = addDays(d, 1)) {
+      var day = +d.slice(8, 10), mo = +d.slice(5, 7);
+      if ((rule.t === "w" && dowOf(d) === rule.d) || (rule.t === "m" && day === rule.d) || (rule.t === "q" && day === rule.d && (mo - 1) % 3 === 0)) out.push(d);
+    }
+    return out;
+  }
+  // Какому сроку соответствует отчёт: первый срок не раньше конца периода (для еженедельных допуск 3 дня).
+  function dueFor(rule, periodEnd) {
+    if (!rule || rule.t === "c") return "";
+    var from = addDays(periodEnd, rule.t === "w" ? -3 : 0);
+    return deadlinesBetween(rule, from, addDays(from, 120))[0] || "";
+  }
+  function lastDeadline(rule) {
+    var n = nowDate(), t0 = todayS(), list = deadlinesBetween(rule, addDays(t0, -130), t0).filter(function (d) { return d < t0 || n.getHours() >= rule.h; });
+    return list[list.length - 1] || "";
+  }
+  function defaultPeriod(rule) {
+    var t0 = todayS(), y = +t0.slice(0, 4), m = +t0.slice(5, 7);
+    if (rule.t === "w") {
+      var mon = addDays(t0, -((dowOf(t0) + 6) % 7));
+      return rule.d === 1 ? [addDays(mon, -7), addDays(mon, -1)] : [mon, addDays(mon, rule.d - 1)];
+    }
+    if (rule.t === "m") { var py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1; return [py + "-" + p2(pm) + "-01", py + "-" + p2(pm) + "-" + p2(lastDay(py, pm))]; }
+    if (rule.t === "q") {
+      var q = Math.floor((m - 1) / 3), sy = q === 0 ? y - 1 : y, sm = q === 0 ? 10 : (q - 1) * 3 + 1, em = sm + 2;
+      return [sy + "-" + p2(sm) + "-01", sy + "-" + p2(em) + "-" + p2(lastDay(sy, em))];
+    }
+    return [t0, t0];
+  }
+  function myIndPos() {
+    var pos = S.profile && S.profile.position;
+    var p = indPositions().filter(function (x) { return x.ru === pos; })[0];
+    return p ? p.code : "";
+  }
+  function valText(v, unit) { return v === undefined || v === null || v === "" ? "" : unit === "%" ? String(v) + "%" : String(v); }
+
+  async function indicatorsView() {
+    var my = renderToken;
+    shell("ind", loadingBox());
+    var r = await sb.from("indicator_reports").select("id, position_code, institution, period_start, period_end, vals, updated_at")
+      .eq("user_id", S.session.user.id).order("period_end", { ascending: false });
+    if (my !== renderToken) return;
+    if (r.error) return shell("ind", failBox(r.error));
+    var mine = r.data || [];
+    var st = { pos: myIndPos() || (mine[0] && INDS[mine[0].position_code] ? mine[0].position_code : indPositions()[0].code), inst: store("ovabmk-inst") || "", ps: "", pe: "", vals: {}, key: "" };
+    if (mine[0] && !store("ovabmk-inst")) st.inst = mine[0].institution;
+    var dp = defaultPeriod(INDS[st.pos].rule); st.ps = dp[0]; st.pe = dp[1];
+
+    var posSel = h("select", { "aria-label": t("ind_pos") }, indPositions().map(function (p) { return h("option", { value: p.code, text: posTitle(p) }); }));
+    var instIn = h("input", { type: "text", maxlength: "200", value: st.inst, autocomplete: "off" });
+    var psIn = h("input", { type: "date", value: st.ps }), peIn = h("input", { type: "date", value: st.pe });
+    posSel.value = st.pos;
+    var note = h("div", { class: "small mute" }), rule = h("p", { class: "small mute" });
+    var grid = h("div", { class: "indgrid" }), msg = h("div");
+    var inputs = {}, fromEx = false;
+    function findMine() {
+      var inst = instIn.value.trim().toLowerCase();
+      return mine.filter(function (x) { return x.position_code === posSel.value && x.institution.trim().toLowerCase() === inst && x.period_end === peIn.value; })[0] || null;
+    }
+    function collect() { var o = {}; Object.keys(inputs).forEach(function (n) { o[n] = inputs[n].value; }); return o; }
+    function drawGrid(keepTyped) {
+      var def = INDS[posSel.value], typed = keepTyped && !fromEx ? collect() : {}, ex = findMine();
+      fromEx = !!ex;      // значения чужого (уже сохранённого) отчёта в новый не переносим
+      grid.textContent = ""; inputs = {};
+      rule.textContent = t("ind_deadline", { rule: ruleText(def.rule) });
+      note.textContent = ex ? t("ind_editing") : t("ind_new");
+      def.ind.forEach(function (i) {
+        var val = ex && ex.vals["i" + i.n] !== undefined ? String(ex.vals["i" + i.n]) : (typed[i.n] || "");
+        var inp = h("input", { type: "text", inputmode: "decimal", autocomplete: "off", maxlength: "14", value: val, id: "ind" + i.n, "aria-label": i.ru });
+        inputs[i.n] = inp;
+        grid.appendChild(h("div", { class: "indrow" },
+          h("label", { class: "indlab", for: "ind" + i.n }, h("span", { class: "no", text: i.n + "." }), h("span", null, h("b", { text: i.ru }), h("span", { class: "sub", text: i.uz }))),
+          h("div", { class: "indval" }, inp, h("span", { class: "unit", text: unitLabel(i.unit) }))));
+      });
+    }
+    posSel.addEventListener("change", function () {
+      var d = defaultPeriod(INDS[posSel.value].rule); psIn.value = d[0]; peIn.value = d[1]; drawGrid(false);
+    });
+    [instIn, peIn].forEach(function (el) { el.addEventListener("change", function () { drawGrid(true); }); });
+    drawGrid(false);
+
+    var btn = h("button", { class: "btn pri", type: "submit", text: t("ind_save") });
+    var form = h("form", { class: "stack", novalidate: true },
+      h("div", { class: "notice warn", text: t("ind_only_numbers") }),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("ind_pos"), posSel), h("label", { class: "f" }, t("ind_inst"), instIn),
+        h("label", { class: "f" }, t("ind_ps"), psIn), h("label", { class: "f" }, t("ind_pe"), peIn)),
+      rule, note, h("h3", { text: t("ind_values") }), grid, msg, h("div", null, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault(); msg.textContent = "";
+      var def = INDS[posSel.value], vals = {}, bad = false, cnt = 0;
+      def.ind.forEach(function (i) {
+        var raw = inputs[i.n].value.trim().replace(/\s/g, "").replace(",", ".");
+        if (raw === "") return;
+        var v = /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : NaN;
+        if (!isFinite(v) || v < 0 || v > 1e9 || (i.unit === "%" && v > 100)) { bad = true; inputs[i.n].setAttribute("aria-invalid", "true"); return; }
+        inputs[i.n].removeAttribute("aria-invalid"); vals["i" + i.n] = v; cnt++;
+      });
+      var inst = instIn.value.trim().replace(/\s+/g, " "), ps = psIn.value, pe = peIn.value;
+      var err = inst.length < 2 ? t("ind_err_inst") : (!ps || !pe || ps > pe || dayDiff(pe, ps) > 100) ? t("ind_err_period") : bad ? t("ind_err_bad") : !cnt ? t("ind_err_none") : "";
+      if (err) { msg.appendChild(h("div", { class: "notice bad", text: err })); return; }
+      btn.disabled = true;
+      var ex = findMine(), res;
+      if (ex) res = await sb.from("indicator_reports").update({ institution: inst, period_start: ps, vals: vals }).eq("id", ex.id);
+      else res = await sb.from("indicator_reports").insert({ user_id: S.session.user.id, position_code: posSel.value, institution: inst, period_start: ps, period_end: pe, vals: vals });
+      btn.disabled = false;
+      if (res.error) { msg.appendChild(h("div", { class: "notice bad", text: /duplicate|23505/.test(errMsg(res.error)) ? t("ind_err_dup") : t("err_action", { msg: errMsg(res.error) }) })); return; }
+      store("ovabmk-inst", inst); toast(t("ind_saved")); indicatorsView();
+    });
+
+    var list = !mine.length ? h("p", { class: "mute", text: t("ind_my_empty") }) :
+      h("div", { class: "tbl" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", { text: t("ind_period") }), h("th", { text: t("ind_pos") }), h("th", { class: "hide-sm", text: t("ind_inst_short") }), h("th", { class: "hide-sm" }), h("th"))),
+        h("tbody", null, mine.map(function (x) {
+          var def = INDS[x.position_code], p = posByCode(x.position_code), n = Object.keys(x.vals || {}).length;
+          return h("tr", null,
+            h("td", null, fmtDate(x.period_start) + " – " + fmtDate(x.period_end)),
+            h("td", null, p ? posTitle(p) : x.position_code),
+            h("td", { class: "hide-sm" }, x.institution),
+            h("td", { class: "hide-sm small mute", text: def ? t("ind_filled", { n: n, m: def.ind.length }) : "" }),
+            h("td", null, h("div", { class: "row" },
+              h("button", { class: "btn sm", type: "button", text: t("ind_edit"), onclick: function () {
+                posSel.value = x.position_code; instIn.value = x.institution; psIn.value = x.period_start; peIn.value = x.period_end; drawGrid(false);
+                form.scrollIntoView({ behavior: "smooth", block: "start" });
+              } }),
+              indDeleteButton(x))));
+        }))));
+    shell("ind", h("div", { class: "stack" }, h("section", { class: "panel stack" }, h("h2", { text: t("ind_title") }), form),
+      h("section", { class: "panel stack" }, h("h3", { text: t("ind_my") }), list)));
+  }
+  function indDeleteButton(x) {
+    var b = h("button", { class: "btn sm danger", type: "button", text: t("del") });
+    b.addEventListener("click", async function () {
+      if (!b.classList.contains("armed")) {
+        b.classList.add("armed"); b.textContent = t("del_confirm");
+        setTimeout(function () { b.classList.remove("armed"); b.textContent = t("del"); }, 4000);
+        return;
+      }
+      b.disabled = true;
+      var r = await sb.from("indicator_reports").delete().eq("id", x.id).select("id");
+      if (r.error || !r.data || !r.data.length) { b.disabled = false; toast(t("err_action", { msg: errMsg(r.error || "0 rows") })); return; }
+      toast(t("ind_deleted")); indicatorsView();
+    });
+    return b;
+  }
+
+  // Сводка для руководителей: показатели одной должности по всем сотрудникам.
+  var SUM = { pos: "", mode: "latest" };
+  async function indSummaryView() {
+    var my = renderToken;
+    shell("indsum", loadingBox());
+    var plist = indPositions();
+    if (!SUM.pos) SUM.pos = plist[0].code;
+    var def = INDS[SUM.pos], p = posByCode(SUM.pos);
+    var r = await sb.from("indicator_reports").select("id, user_id, institution, period_start, period_end, vals, updated_at")
+      .eq("position_code", SUM.pos).order("period_end", { ascending: false });
+    var pr = await sb.from("profiles").select("id, full_name, position");
+    if (my !== renderToken) return;
+    if (r.error) return shell("indsum", failBox(r.error));
+    var names = {}, people = pr.data || [];
+    people.forEach(function (x) { names[x.id] = x.full_name; });
+    var all = r.data || [];
+    var ends = Array.from(new Set(all.map(function (x) { return x.period_end; }))).slice(0, 12);
+    if (SUM.mode !== "latest" && ends.indexOf(SUM.mode) < 0) SUM.mode = "latest";
+    var rows;
+    if (SUM.mode === "latest") {
+      var seen = {}; rows = all.filter(function (x) { var k = x.user_id + "|" + x.institution.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+    } else rows = all.filter(function (x) { return x.period_end === SUM.mode; });
+    rows.sort(function (a, b) { return a.institution.localeCompare(b.institution); });
+
+    var posSel = h("select", { "aria-label": t("ind_sum_pos") }, plist.map(function (x) { return h("option", { value: x.code, text: posTitle(x) }); }));
+    posSel.value = SUM.pos;
+    posSel.addEventListener("change", function () { SUM.pos = posSel.value; SUM.mode = "latest"; indSummaryView(); });
+    var modeSel = h("select", { "aria-label": t("ind_sum_mode") }, h("option", { value: "latest", text: t("ind_sum_latest") }),
+      ends.map(function (d) { return h("option", { value: d, text: t("ind_sum_period", { d: fmtDate(d) }) }); }));
+    modeSel.value = SUM.mode;
+    modeSel.addEventListener("change", function () { SUM.mode = modeSel.value; indSummaryView(); });
+
+    var header = ["№", p ? posTitle(p) : SUM.pos, ""].concat(rows.map(function (x) { return x.institution + " · " + (names[x.user_id] || "") + " (" + fmtDate(x.period_end) + ")"; })).concat([t("ind_total")]);
+    var body = def.ind.map(function (i) {
+      var vals = rows.map(function (x) { var v = x.vals["i" + i.n]; return v === undefined ? "" : v; });
+      var nums = vals.filter(function (v) { return typeof v === "number"; });
+      var total = sumable(i.unit) && nums.length ? Math.round(nums.reduce(function (a, b) { return a + b; }, 0) * 100) / 100 : "";
+      return { raw: [i.n, i.ru, unitLabel(i.unit)].concat(vals).concat([total]), view: [String(i.n), i.ru, unitLabel(i.unit)].concat(vals.map(function (v) { return valText(v, i.unit); })).concat([total === "" ? "" : String(total)]) };
+    });
+    var table = !rows.length ? h("p", { class: "mute", text: t("ind_sum_empty") }) :
+      h("div", { class: "tbl" }, h("table", { class: "indsum" },
+        h("thead", null, h("tr", null, header.map(function (x) { return h("th", { text: x }); }))),
+        h("tbody", null, body.map(function (b) { return h("tr", null, b.view.map(function (c, ci) { return h("td", { class: ci > 2 ? "num" : "", text: c }); })); }))));
+    var exp = !rows.length ? null : h("button", { class: "btn", type: "button", text: t("ind_export"), onclick: function () {
+      var blob = window.XLW.write([{ name: "Показатели", rows: [header].concat(body.map(function (b) { return b.raw; })) }]);
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "Pokazateli_" + SUM.pos + "_" + todayS() + ".xlsx";
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    } });
+
+    // кто не сдал за последний срок
+    var missBox = null, ld = lastDeadline(def.rule);
+    if (def.rule.t !== "c" && ld) {
+      var expected = people.filter(function (x) { return p && x.position === p.ru; });
+      var got = {}; all.forEach(function (x) { if (dueFor(def.rule, x.period_end) === ld) got[x.user_id] = 1; });
+      var miss = expected.filter(function (x) { return !got[x.id]; });
+      missBox = h("div", { class: "notice " + (!expected.length ? "warn" : miss.length ? "bad" : "ok") },
+        h("b", { text: t("ind_missing_title", { d: fmtDate(ld) }) }), " · ",
+        !expected.length ? t("ind_missing_unknown") : miss.length ? t("ind_missing_list", { n: miss.length }) + " " + miss.map(function (x) { return x.full_name; }).join(", ") : t("ind_missing_none"));
+    }
+    shell("indsum", h("div", { class: "stack" }, h("section", { class: "panel stack" }, h("h2", { text: t("ind_sum_title") }),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("ind_sum_pos"), posSel), h("label", { class: "f" }, t("ind_sum_mode"), modeSel)),
+      h("p", { class: "small mute", text: t("ind_deadline", { rule: ruleText(def.rule) }) }), missBox, exp, table)));
   }
 
   // --- папки

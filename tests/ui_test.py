@@ -25,6 +25,13 @@ def scenario(uid=None, roles=(), role_error=None, my_folders=()):
                        "uploaded_by": A, "created_at": "2026-10-20T08:00:00Z"}],
         "invites": [{"id": "i1", "role": "staff", "full_name": "Тестовый Сотрудник", "position": "Доя", "folder_ids": [1, 2],
                      "created_at": "2026-10-20T08:00:00Z", "expires_at": "2099-01-01T00:00:00Z", "used_at": None, "revoked_at": None}],
+        "access_requests": [
+            {"id": "r1", "full_name": "Иванова Мария", "position": "Акушерка СВП (кабинет доя)", "position_code": "doya_qvp", "tg_username": "maria_i", "tg_name": "Maria",
+             "status": "pending", "role": None, "folder_ids": [], "created_at": "2026-10-24T07:00:00Z", "decided_at": None, "used_at": None},
+            {"id": "r2", "full_name": "Каримов Алишер", "position": "Врач-лаборант", "position_code": "other", "tg_username": None, "tg_name": "Alisher",
+             "status": "pending", "role": None, "folder_ids": [], "created_at": "2026-10-24T07:05:00Z", "decided_at": None, "used_at": None},
+            {"id": "r3", "full_name": "Сидорова Анна", "position": "Врач-педиатр", "position_code": "pediatr", "tg_username": "anna", "tg_name": "Anna",
+             "status": "approved", "role": "staff", "folder_ids": [4, 5, 17], "created_at": "2026-10-23T07:00:00Z", "decided_at": "2026-10-23T08:00:00Z", "used_at": None}],
         "audit_log": [{"at": "2026-10-24T06:00:00Z", "actor": A, "action": "document_added", "object": "d1", "details": {"folder": 1, "title": "Приказ №1 (тест)"}}],
     }
     return {"session": {"user": {"id": uid}} if uid else None, "db": db, "log": [],
@@ -38,6 +45,7 @@ window.__MOCK.rpc = {
     {user_id:'%s', full_name:'Сотрудник Тест', user_position:'Доя', telegram_username:'staff_t', roles:['staff'], folders:[1], created_at:'2026-10-21T08:00:00Z'}]; },
   create_invite: function(){ return '0123456789abcdef01234567'; },
   admin_set_role: function(a){ return a._role==='admin' && !a._on ? {error:{message:'last_admin'}} : null; },
+  decide_request: function(){ return null; },
   admin_set_folders: function(){ return null; }, admin_update_profile: function(){ return null; }, revoke_invite: function(){ return null; }
 };""" % (A, S_)
 
@@ -142,6 +150,61 @@ with sync_playwright() as p:
     ok("staff: нет кнопки удаления", pg.locator("button.danger").count() == 0)
     ok("ошибок JS нет (staff)", not errs, errs); b.close()
 
+    # 5б. заявка без приглашения
+    def tg_route(ctx_page, answers):
+        calls = []
+        def handler(route):
+            body = json.loads(route.request.post_data or "{}"); calls.append(body)
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(answers(body)),
+                          headers={"Access-Control-Allow-Origin": "*"})
+        ctx_page.route("**/functions/v1/tg-login", handler)
+        return calls
+    b, pg, errs = page_for(p, scenario())
+    calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
+    pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
+    t = pg.inner_text("#app")
+    ok("заявка: после входа без приглашения показана форма", "Заявка на доступ" in t and "Отправить заявку" in t, t[:300])
+    ok("заявка: ФИО подставлено из Telegram", pg.input_value("form input[type=text] >> nth=0") == "Иванова Мария")
+    ok("заявка: в списке должностей есть акушерка", pg.locator("form select option[value='doya_qvp']").count() == 1)
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("заявка: без должности — ошибка", "Выберите должность" in pg.inner_text("form"))
+    pg.select_option("form select", "other"); pg.wait_for_timeout(50)
+    ok("заявка: «Другая» открывает поле должности", pg.locator("form input[type=text] >> nth=1").is_visible())
+    pg.select_option("form select", "doya_qvp")
+    pg.screenshot(path=str(SHOTS / "c_request_form.png"), full_page=True)
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(400)
+    sent = calls[-1].get("request") or {}
+    ok("заявка: отправлены ФИО, должность и код", sent.get("full_name") == "Иванова Мария" and sent.get("position_code") == "doya_qvp" and "Акушерка" in sent.get("position", ""), sent)
+    t = pg.inner_text("#app")
+    ok("заявка: экран «ждёт одобрения»", "ждёт одобрения" in t and "Проверить" in t, t[:300])
+    pg.screenshot(path=str(SHOTS / "c_request_pending.png"), full_page=True)
+    pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(150)
+    ok("заявка: узбекский текст", "ариза" in pg.inner_text("#app").lower())
+    ok("ошибок JS нет (заявка)", not errs, errs); b.close()
+
+    # 5в. администратор: заявки
+    b, pg, errs = page_for(p, scenario(uid=A, roles=("admin",)))
+    ok("admin: в меню есть «Заявки»", "Заявки" in pg.inner_text("nav"))
+    pg.goto(SITE + "#/admin/requests"); pg.wait_for_timeout(400)
+    t = pg.inner_text("#app")
+    ok("заявки: общая ссылка показана", "https://richerdsuper-pixel.github.io/ovabmk-companion/" in t and "Ссылка для сотрудников" in t)
+    ok("заявки: 2 новые", "Новые заявки: 2" in t, t[:400])
+    card1 = pg.locator(".req").nth(0)
+    checked = card1.evaluate("el => Array.from(el.querySelectorAll('.fold-picks input:checked')).map(x => +x.value)")
+    ok("заявки: папки по должности отмечены сами (доя → 9,10,12,13)", checked == [9, 10, 12, 13], checked)
+    ok("заявки: подсказка про автоматический выбор", "автоматически" in card1.inner_text())
+    card2 = pg.locator(".req").nth(1)
+    ok("заявки: «другая должность» — без галочек и с подсказкой", card2.evaluate("el => el.querySelectorAll('.fold-picks input:checked').length") == 0 and "вручную" in card2.inner_text())
+    ok("заявки: рассмотренная в истории", "Сидорова Анна" in t and "ждёт входа" in t)
+    pg.screenshot(path=str(SHOTS / "c_requests.png"), full_page=True)
+    card1.locator(".fold-picks input[value='13']").uncheck()
+    card1.locator("button.pri").click(); pg.wait_for_timeout(300)
+    dec = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "decide_request"]
+    ok("заявки: одобрение с ролью и изменёнными папками", dec and dec[0][2] == {"_id": "r1", "_approve": True, "_role": "staff", "_folders": [9, 10, 12]}, dec)
+    rej = pg.locator(".req").nth(1).locator("button.danger"); rej.click(); pg.wait_for_timeout(100)
+    ok("заявки: отказ требует второго нажатия", "Точно" in rej.inner_text())
+    ok("ошибок JS нет (заявки)", not errs, errs); b.close()
+
     # 6. телефон и тёмная тема
     for tag, (w, h_, sch) in {"m": (390, 800, "light"), "d": (1280, 900, "dark")}.items():
         b, pg, errs = page_for(p, scenario(uid=A, roles=("admin",)), w, h_, sch)
@@ -150,6 +213,9 @@ with sync_playwright() as p:
         pg.goto(SITE + "#/admin/users"); pg.wait_for_timeout(300)
         pg.screenshot(path=str(SHOTS / f"c_{tag}_users.png"), full_page=True)
         ok(f"{tag}: нет горизонтальной прокрутки (сотрудники)", not hscroll(pg))
+        pg.goto(SITE + "#/admin/requests"); pg.wait_for_timeout(300)
+        pg.screenshot(path=str(SHOTS / f"c_{tag}_requests.png"), full_page=True)
+        ok(f"{tag}: нет горизонтальной прокрутки (заявки)", not hscroll(pg))
         b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")

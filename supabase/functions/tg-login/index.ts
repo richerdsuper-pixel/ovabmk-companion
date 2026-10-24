@@ -1,6 +1,7 @@
 // Вход через Telegram для OvaBMҚ Companion.
 // 1) проверяет подпись Telegram Login Widget токеном бота (секрет TELEGRAM_BOT_TOKEN);
-// 2) знакомый Telegram ID -> входит его пользователь; незнакомый -> нужен действующий код приглашения;
+// 2) знакомый Telegram ID -> входит его пользователь; незнакомый -> код приглашения
+//    или заявка на доступ (ФИО + должность), которую одобряет администратор;
 // 3) возвращает token_hash, по которому сайт получает сессию (supabase.auth.verifyOtp). Письма не отправляются.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { verifyTelegram } from "./telegram.ts";
@@ -11,7 +12,8 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://richerdsuper-pixel.github.io").split(",").map((s) => s.trim());
 const MAX_AGE_SEC = 3600;
 const EMAIL_DOMAIN = "tg.ovabmk-companion.example.com"; // служебный адрес, писем на него не бывает
-const INVITE_ERRORS = ["invite_invalid", "invite_used", "invite_expired", "invite_revoked", "telegram_taken"];
+const INVITE_ERRORS = ["invite_invalid", "invite_used", "invite_expired", "invite_revoked", "telegram_taken", "request_not_approved"];
+const REQUEST_ERRORS = ["already_member", "bad_full_name", "bad_position", "too_many_requests"];
 
 function reply(body: unknown, status: number, origin: string): Response {
   return new Response(JSON.stringify(body), {
@@ -24,6 +26,16 @@ function reply(body: unknown, status: number, origin: string): Response {
       "Vary": "Origin",
     },
   });
+}
+
+async function ensureUser(admin: ReturnType<typeof createClient>, tgId: number): Promise<{ uid: string; created: boolean } | null> {
+  const email = `tg${tgId}@${EMAIL_DOMAIN}`;
+  const { data: cu, error: ce } = await admin.auth.admin.createUser({
+    email, email_confirm: true, user_metadata: { telegram_id: tgId },
+  });
+  if (!ce && cu?.user) return { uid: cu.user.id, created: true };
+  const { data: existing } = await admin.rpc("auth_user_by_email", { _email: email });
+  return existing ? { uid: existing as string, created: false } : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -49,26 +61,45 @@ Deno.serve(async (req: Request) => {
   if (ke) return reply({ error: "lookup_failed" }, 500, origin);
   let uid: string | null = known ?? null;
 
-  if (!uid) {
-    if (!/^[0-9a-f]{24}$/.test(invite)) return reply({ error: "no_invite" }, 403, origin);
-    const email = `tg${tgId}@${EMAIL_DOMAIN}`;
-    let created = false;
-    const { data: cu, error: ce } = await admin.auth.admin.createUser({
-      email, email_confirm: true, user_metadata: { telegram_id: tgId },
-    });
-    if (ce || !cu?.user) {
-      const { data: existing } = await admin.rpc("auth_user_by_email", { _email: email });
-      if (!existing) return reply({ error: "create_failed", detail: ce?.message ?? "" }, 500, origin);
-      uid = existing as string;
-    } else {
-      uid = cu.user.id;
-      created = true;
+  if (!uid && !/^[0-9a-f]{24}$/.test(invite)) {
+    // Без приглашения: заявка на доступ. Учётная запись создаётся только после одобрения администратором.
+    const { data: st, error: se } = await admin.rpc("request_state", { _tg_id: tgId });
+    if (se) return reply({ error: "lookup_failed" }, 500, origin);
+    if (st !== "approved") {
+      const rq = (body as { request?: { full_name?: unknown; position?: unknown; position_code?: unknown } }).request;
+      if (rq && typeof rq.full_name === "string" && typeof rq.position === "string") {
+        const { data: ns, error: re } = await admin.rpc("submit_access_request", {
+          _tg_id: tgId, _tg_username: username, _tg_name: name,
+          _full_name: rq.full_name.slice(0, 200), _position: rq.position.slice(0, 200),
+          _position_code: typeof rq.position_code === "string" ? rq.position_code.slice(0, 40) : "",
+        });
+        if (re) {
+          const code = REQUEST_ERRORS.find((c) => (re.message ?? "").includes(c)) ?? "request_failed";
+          return reply({ error: code }, 400, origin);
+        }
+        if (ns !== "approved") return reply({ request: ns }, 200, origin);
+      } else {
+        return reply({ request: st }, 200, origin);   // none | pending | rejected
+      }
     }
+    const u = await ensureUser(admin, tgId);
+    if (!u) return reply({ error: "create_failed" }, 500, origin);
+    uid = u.uid;
+    const { error: ae } = await admin.rpc("accept_request", { _tg_id: tgId, _uid: uid, _tg_username: username });
+    if (ae) {
+      if (u.created) await admin.auth.admin.deleteUser(u.uid);
+      const code = INVITE_ERRORS.find((c) => (ae.message ?? "").includes(c)) ?? "accept_failed";
+      return reply({ error: code }, 403, origin);
+    }
+  } else if (!uid) {
+    const u = await ensureUser(admin, tgId);
+    if (!u) return reply({ error: "create_failed" }, 500, origin);
+    uid = u.uid;
     const { error: ae } = await admin.rpc("accept_invite", {
       _code: invite, _uid: uid, _tg_id: tgId, _tg_username: username, _tg_name: name,
     });
     if (ae) {
-      if (created) await admin.auth.admin.deleteUser(uid);
+      if (u.created) await admin.auth.admin.deleteUser(u.uid);
       const code = INVITE_ERRORS.find((c) => (ae.message ?? "").includes(c)) ?? "accept_failed";
       return reply({ error: code }, 403, origin);
     }

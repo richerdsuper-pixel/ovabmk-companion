@@ -22,7 +22,9 @@
     myFolders: [],
     loginBusy: false,
     loginError: "",
-    invite: readInvite()
+    invite: readInvite(),
+    req: "",                  // заявка без приглашения: "" | none | pending | rejected
+    tgUser: null              // подписанные данные Telegram для повторной отправки заявки (действуют 1 час)
   };
 
   function store(k, v) {
@@ -91,28 +93,36 @@
     if (f.restricted) return false;
     return isManager() || S.myFolders.indexOf(f.id) >= 0;
   }
+  function posList() { return window.POSITIONS || []; }
+  function posByCode(c) { return posList().filter(function (p) { return p.code === c; })[0] || null; }
+  function posTitle(p) { return S.lang === "uz" ? p.uz : p.ru; }
   function folderTitle(f) { return S.lang === "uz" ? f.title_uz : f.title_ru; }
   function folderSub(f) { return S.lang === "uz" ? f.title_ru : f.title_uz; }
 
   // ------------------------------------------------------------------ auth
   window.onTelegramAuth = function (user) { telegramLogin(user); };
 
-  async function telegramLogin(user) {
+  async function telegramLogin(user, request) {
     S.loginBusy = true; S.loginError = ""; render();
     try {
+      var payload = { telegram: user, invite: S.invite || "" };
+      if (request) payload.request = request;
       var res = await fetch(CFG.supabaseUrl + "/functions/v1/tg-login", {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey },
-        body: JSON.stringify({ telegram: user, invite: S.invite || "" })
+        body: JSON.stringify(payload)
       });
       var data = {};
       try { data = await res.json(); } catch (e) {}
+      if (res.ok && data.request) {           // нет доступа: заявка (none | pending | rejected)
+        S.loginBusy = false; S.tgUser = user; S.req = data.request; render(); return;
+      }
       if (!res.ok || !data.token_hash) throw new Error(data.error || "generic");
       var r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "email" });
       if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "magiclink" });
       if (r.error) throw new Error("generic");
       clearInvite();
-      S.loginBusy = false;
+      S.loginBusy = false; S.req = ""; S.tgUser = null;
       onSession(r.data.session);
     } catch (e) {
       S.loginBusy = false;
@@ -193,7 +203,7 @@
   }
   function nav(cur) {
     var items = [["#/folders", "nav_folders", "folders"]];
-    if (isAdmin()) items.push(["#/admin/users", "nav_users", "users"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
+    if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
       return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null, text: t(i[1]) });
     }));
@@ -213,6 +223,7 @@
 
     var m;
     if ((m = /^\/folder\/(\d{1,2})$/.exec(route))) return folderView(+m[1]);
+    if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
     if (route === "/admin/users") return isAdmin() ? usersView() : forbidden("users");
     if (route === "/admin/invites") return isAdmin() ? invitesView() : forbidden("invites");
     if (route === "/admin/log") return isAdmin() ? logView() : forbidden("log");
@@ -224,6 +235,8 @@
   function failBox(e) { return h("div", { class: "notice bad", text: t("load_failed", { msg: errMsg(e) }) }); }
 
   function loginView() {
+    if (!S.loginBusy && S.tgUser && (S.req === "none" || S.req === "rejected")) return requestForm();
+    if (!S.loginBusy && S.tgUser && S.req === "pending") return requestPending();
     var box = h("div", { class: "tgbox", id: "tgbox" }, h("span", { class: "mute small", text: t("widget_wait") }));
     var panel = h("section", { class: "panel login stack" },
       h("h2", { text: t("login_title") }),
@@ -233,6 +246,48 @@
       S.loginBusy ? h("p", { class: "boot", text: t("signing_in") }) : box);
     if (!S.loginBusy) setTimeout(function () { insertWidget(box); }, 0);
     return panel;
+  }
+
+  // Заявка на доступ: человек вошёл через Telegram, но ещё не сотрудник.
+  function requestForm() {
+    var tg = S.tgUser || {};
+    var nameIn = h("input", { type: "text", maxlength: "200", required: true, autocomplete: "name",
+      value: [tg.last_name, tg.first_name].filter(Boolean).join(" ") });
+    var posSel = h("select", { required: true },
+      h("option", { value: "", text: t("r_pick_pos") }),
+      posList().map(function (p) { return h("option", { value: p.code, text: posTitle(p) }); }));
+    var otherIn = h("input", { type: "text", maxlength: "200", placeholder: t("r_other_ph") });
+    var otherBox = h("label", { class: "f", style: "display:none" }, t("r_other"), otherIn);
+    posSel.addEventListener("change", function () { otherBox.style.display = posSel.value === "other" ? "" : "none"; });
+    var msg = h("div");
+    var form = h("form", { class: "stack", novalidate: true },
+      h("label", { class: "f" }, t("u_name"), nameIn),
+      h("label", { class: "f" }, t("u_position"), posSel),
+      otherBox, msg,
+      h("div", null, h("button", { class: "btn pri", type: "submit", text: t("r_send") })));
+    form.addEventListener("submit", function (e) {
+      e.preventDefault(); msg.textContent = "";
+      var fn = nameIn.value.trim().replace(/\s+/g, " "), p = posByCode(posSel.value);
+      var pos = !p ? "" : p.code === "other" ? otherIn.value.trim() : p.ru;
+      var err = fn.length < 3 ? t("err_bad_full_name") : !p ? t("r_need_pos") : pos.length < 2 ? t("err_bad_position") : "";
+      if (err) { msg.appendChild(h("div", { class: "notice bad", text: err })); return; }
+      telegramLogin(S.tgUser, { full_name: fn, position: pos, position_code: p.code });
+    });
+    return h("section", { class: "panel login stack" },
+      h("h2", { text: t("r_title") }),
+      h("p", { class: "mute", text: t("r_text") }),
+      S.req === "rejected" ? h("div", { class: "notice warn", text: t("r_rejected") }) : null,
+      S.loginError ? h("div", { class: "notice bad", text: S.loginError }) : null,
+      form);
+  }
+  function requestPending() {
+    return h("section", { class: "panel login stack" },
+      h("h2", { text: t("r_title") }),
+      h("div", { class: "notice ok" }, t("r_pending"), h("p", { text: t("r_pending_long") })),
+      S.loginError ? h("div", { class: "notice bad", text: S.loginError }) : null,
+      h("div", { class: "row" },
+        h("button", { class: "btn pri", type: "button", text: t("r_check"), onclick: function () { telegramLogin(S.tgUser); } }),
+        h("button", { class: "btn", type: "button", text: t("r_edit"), onclick: function () { S.req = "none"; render(); } })));
   }
   function insertWidget(box) {
     if (!box.isConnected) return;
@@ -384,6 +439,76 @@
     });
     return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("add_doc") }),
       h("div", { style: "margin-top:12px" }, form));
+  }
+
+  // --- администратор: заявки на доступ
+  async function requestsView() {
+    var my = renderToken;
+    shell("requests", loadingBox());
+    var r = await sb.from("access_requests").select("id, full_name, position, position_code, tg_username, tg_name, status, role, folder_ids, created_at, decided_at, used_at")
+      .order("created_at", { ascending: false }).limit(200);
+    if (my !== renderToken) return;
+    if (r.error) return shell("requests", failBox(r.error));
+    var pending = r.data.filter(function (x) { return x.status === "pending"; });
+    var done = r.data.filter(function (x) { return x.status !== "pending"; });
+    var link = CFG.siteUrl;
+    var code = h("code", { text: link });
+    var share = h("section", { class: "panel stack" }, h("h2", { text: t("q_share_title") }), h("p", { class: "mute small", text: t("q_share_text") }),
+      h("div", { class: "linkbox" }, code, h("button", { class: "btn sm", type: "button", text: t("copy"), onclick: function () {
+        var sel = function () { var rg = document.createRange(); rg.selectNodeContents(code); var s = getSelection(); s.removeAllRanges(); s.addRange(rg); };
+        try { navigator.clipboard.writeText(link).then(function () { toast(t("copied")); }, sel); } catch (er) { sel(); }
+      } })));
+    function card(rq) {
+      var p = posByCode(rq.position_code);
+      var roleSel = h("select", null, ROLES.map(function (x) {
+        return h("option", { value: x, selected: x === (p ? p.role : "staff"), text: t("role_" + x) }); }));
+      var picks = h("div", { class: "fold-picks" });
+      var def = p ? p.folders : [];
+      for (var i = 1; i <= 20; i++) picks.appendChild(h("label", { class: i === 15 ? "off" : "", title: i === 15 ? t("locked_long") : null },
+        h("input", { type: "checkbox", value: String(i), disabled: i === 15, checked: i !== 15 && def.indexOf(i) >= 0 }), String(i)));
+      var hint = h("p", { class: "mute small", text: p && p.code !== "other" ? t("q_auto", { pos: posTitle(p) }) : t("q_manual") });
+      function syncHint() { hint.style.display = roleSel.value === "staff" ? "" : "none"; picks.style.opacity = roleSel.value === "staff" ? "" : ".5"; }
+      roleSel.addEventListener("change", syncHint); syncHint();
+      var ok = h("button", { class: "btn pri", type: "button", text: t("q_approve") });
+      var no = h("button", { class: "btn danger", type: "button", text: t("q_reject") });
+      async function decide(approve) {
+        ok.disabled = no.disabled = true;
+        var folders = Array.from(picks.querySelectorAll("input:checked")).map(function (x) { return +x.value; });
+        var x = await sb.rpc("decide_request", { _id: rq.id, _approve: approve, _role: approve ? roleSel.value : null, _folders: approve ? folders : [] });
+        if (x.error) { ok.disabled = no.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
+        toast(approve ? t("q_approved") : t("q_rejected")); requestsView();
+      }
+      ok.addEventListener("click", function () { decide(true); });
+      no.addEventListener("click", function () {
+        if (!no.classList.contains("armed")) { no.classList.add("armed"); no.textContent = t("q_reject_confirm");
+          setTimeout(function () { no.classList.remove("armed"); no.textContent = t("q_reject"); }, 4000); return; }
+        decide(false);
+      });
+      return h("div", { class: "panel stack req" },
+        h("div", null, h("b", { text: rq.full_name }), h("div", { class: "sub", text: rq.position }),
+          h("div", { class: "sub mono", text: (rq.tg_username ? "@" + rq.tg_username + " · " : "") + (rq.tg_name ? "Telegram: " + rq.tg_name + " · " : "") + fmtDT(rq.created_at) })),
+        h("div", { class: "grid-f" }, h("label", { class: "f" }, t("i_role"), roleSel)),
+        h("div", { class: "f small" }, h("b", { class: "mute", text: t("u_folders") }), picks, hint),
+        h("div", { class: "row" }, ok, no));
+    }
+    function stLabel(x) {
+      if (x.status === "rejected") return h("span", { class: "chip", text: t("q_st_rejected") });
+      if (x.used_at) return h("span", { class: "chip ok", text: t("q_st_used") });
+      return h("span", { class: "chip acc", text: t("q_st_approved") });
+    }
+    var hist = !done.length ? h("p", { class: "mute", text: t("q_none_done") }) : h("div", { class: "tbl" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", { text: t("u_name") + " / " + t("u_position") }), h("th", { text: t("i_role") }), h("th", { class: "hide-sm", text: t("u_folders") }), h("th"))),
+      h("tbody", null, done.map(function (x) {
+        return h("tr", null,
+          h("td", null, h("b", { text: x.full_name }), h("div", { class: "sub", text: x.position + " · " + fmtDT(x.decided_at || x.created_at) })),
+          h("td", { text: x.role ? t("role_" + x.role) : "—" }),
+          h("td", { class: "hide-sm mono small", text: (x.folder_ids || []).join(", ") }),
+          h("td", null, stLabel(x)));
+      }))));
+    shell("requests", h("div", { class: "stack" }, share,
+      h("section", { class: "stack" }, h("h2", { text: t("q_pending", { n: pending.length }) }),
+        pending.length ? pending.map(card) : h("p", { class: "panel mute", text: t("q_none") })),
+      h("section", { class: "panel stack" }, h("h3", { text: t("q_done") }), hist)));
   }
 
   // --- администратор: сотрудники

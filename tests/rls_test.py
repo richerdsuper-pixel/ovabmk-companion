@@ -125,6 +125,49 @@ expect_ok("файл: staff видит свой файл", "select count(*) from 
 expect_ok("файл: staff без папок не видит", "select count(*) from storage.objects", "authenticated", S2, out="0")
 expect_ok("файл: staff не может удалить", "with d as (delete from storage.objects returning 1) select count(*) from d", "authenticated", S, out="0")
 
+# ---------------- заявки на доступ (общая ссылка)
+def submit(tg, fn="Иванова Мария Петровна", pos="Акушерка СВП (кабинет доя)", code="doya_qvp"):
+    return sql(f"select public.submit_access_request({tg}, 'u{tg}', 'TG', '{fn}', '{pos}', '{code}')", role="service_role")
+def state(tg):
+    return sql(f"select public.request_state({tg})", role="service_role")[1][0]
+ok("заявка: нового Telegram нет в заявках", state(5001) == "none")
+rc, r = submit(5001);                      ok("заявка: подана (pending)", rc == 0 and r[0] == "pending", r)
+rc, r = submit(5001, fn="Иванова Мария"); ok("заявка: повторная подача обновляет, не дублирует", rc == 0 and r[0] == "pending", r)
+expect_ok("заявка: одна открытая заявка на Telegram", "select count(*)||':'||max(full_name) from public.access_requests where telegram_id=5001", out="1:Иванова Мария")
+rc, r = submit(5002, fn="Аб");             ok("заявка: короткое ФИО отклоняется", rc != 0 and "bad_full_name" in r[1], r)
+rc, r = submit(1003);                      ok("заявка: уже сотрудник не может подать", rc != 0 and "already_member" in r[1], r)
+rc, r = submit(5003, code="Bad-Code;");    ok("заявка: мусорный код должности обнуляется", rc == 0, r)
+expect_ok("заявка: код должности пустой", "select position_code from public.access_requests where telegram_id=5003", out="")
+expect_err("заявка: anon не может подать", "select public.submit_access_request(1,'x','x','Иванов Иван','Врач','')", "anon", None, "permission denied")
+expect_err("заявка: authenticated не может подать напрямую", "select public.submit_access_request(1,'x','x','Иванов Иван','Врач','')", "authenticated", N, "permission denied")
+expect_err("заявка: authenticated не может принять заявку", f"select public.accept_request(5001, '{N}', 'x')", "authenticated", N, "permission denied")
+expect_ok("заявки: staff не видит", "select count(*) from public.access_requests", "authenticated", S, out="0")
+expect_ok("заявки: admin видит", "select count(*) from public.access_requests", "authenticated", A, out="2")
+expect_err("заявки: staff не может вставить", "insert into public.access_requests(telegram_id, full_name, position) values (9,'Иванов Иван','Врач')", "authenticated", S, "row-level security")
+rid = sql("select id from public.access_requests where telegram_id=5001")[1][0]
+rid3 = sql("select id from public.access_requests where telegram_id=5003")[1][0]
+U5 = new_user("tg5001@t")
+rc, r = sql(f"select public.accept_request(5001, '{U5}', 'u5001')", role="service_role")
+ok("заявка: до одобрения войти нельзя", rc != 0 and "request_not_approved" in r[1], r)
+expect_err("заявка: staff не может одобрить", f"select public.decide_request('{rid}', true, 'admin', '{{}}')", "authenticated", S, "forbidden")
+expect_err("заявка: deputy не может одобрить", f"select public.decide_request('{rid}', true, 'staff', '{{}}')", "authenticated", D, "forbidden")
+expect_ok("заявка: admin одобряет (папки 9,10,15)", f"select public.decide_request('{rid}', true, 'staff', '{{9,10,15}}')", "authenticated", A)
+expect_ok("заявка: папка 15 отброшена при одобрении", f"select folder_ids from public.access_requests where id='{rid}'", out="{9,10}")
+ok("заявка: состояние approved", state(5001) == "approved")
+expect_err("заявка: повторно решить нельзя", f"select public.decide_request('{rid}', false, null, '{{}}')", "authenticated", A, "request_closed")
+rc, r = sql(f"select public.accept_request(5001, '{U5}', 'u5001')", role="service_role")
+ok("заявка: вход после одобрения выдаёт роль", rc == 0 and r[0] == "staff", r)
+expect_ok("заявка: профиль из заявки", f"select full_name||'|'||position from public.profiles where id='{U5}'", out="Иванова Мария|Акушерка СВП (кабинет доя)")
+expect_ok("заявка: папки назначены", f"select array_agg(folder_id order by folder_id) from public.folder_members where user_id='{U5}'", out="{9,10}")
+expect_ok("заявка: Telegram привязан", "select user_id from public.telegram_links where telegram_id=5001", out=U5)
+rc, r = sql(f"select public.accept_request(5001, '{U5}', 'u5001')", role="service_role")
+ok("заявка: второй раз принять нельзя", rc != 0 and "request_not_approved" in r[1], r)
+expect_ok("заявка: admin отклоняет", f"select public.decide_request('{rid3}', false, null, '{{}}')", "authenticated", A)
+ok("заявка: состояние rejected", state(5003) == "rejected")
+rc, r = submit(5003);                      ok("заявка: после отказа можно подать снова", rc == 0 and r[0] == "pending", r)
+for i in range(4): submit(5004 + 0)
+expect_ok("заявка: повторы одного Telegram не плодят строки", "select count(*) from public.access_requests where telegram_id=5004", out="1")
+
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",

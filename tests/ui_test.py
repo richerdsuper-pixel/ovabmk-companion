@@ -46,8 +46,9 @@ window.__MOCK.rpc = {
   create_invite: function(){ return '0123456789abcdef01234567'; },
   admin_set_role: function(a){ return a._role==='admin' && !a._on ? {error:{message:'last_admin'}} : null; },
   decide_request: function(){ return null; },
-  admin_set_folders: function(){ return null; }, admin_update_profile: function(){ return null; }, revoke_invite: function(){ return null; }
-};""" % (A, S_)
+  admin_set_folders: function(){ return null; }, admin_update_profile: function(){ return null; }, revoke_invite: function(){ return null; },
+  admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
+};""" % (A, S_, A)
 
 def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None):
     b = p.chromium.launch()
@@ -146,9 +147,42 @@ with sync_playwright() as p:
     cb0 = pg.locator("tbody tr").first.locator("input[type=checkbox]").first; cb0.click(); pg.wait_for_timeout(250)
     ok("галочка admin вернулась обратно", cb0.is_checked())
     ok("нельзя снять последнего admin (сообщение)", "последнего администратора" in pg.inner_text("#toast"))
+    # --- сотрудники: папки по должности и удаление
+    pg.evaluate("window.__MOCK.log.length = 0")
+    row_s = pg.locator("tbody tr").nth(1)
+    row_s.locator("input[type=text]").nth(1).fill("Акушерка СВП (кабинет доя)")
+    row_s.locator("button", has_text="Папки по должности").click(); pg.wait_for_timeout(250)
+    sf = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_folders"]
+    ok("сотрудники: папки по должности доя = 9,10,12,13", sf and sf[0][2]["_folders"] == [9, 10, 12, 13], sf)
+    ok("сотрудники: галочки выставлены", row_s.evaluate("el => Array.from(el.querySelectorAll('.fold-picks input')).map((x,k)=>x.checked?k+1:0).filter(Boolean)") == [9, 10, 12, 13])
+    row_s.locator("input[type=text]").nth(1).fill("Что-то своё")
+    row_s.locator("button", has_text="Папки по должности").click(); pg.wait_for_timeout(150)
+    ok("сотрудники: должность не из списка — подсказка", "не из списка" in pg.inner_text("#toast"))
+    row_s.locator("input[type=text]").nth(1).fill("Главный врач")
+    row_s.locator("button", has_text="Папки по должности").click(); pg.wait_for_timeout(150)
+    ok("сотрудники: руководителю папки отдельно не нужны", "Руководитель видит все папки" in pg.inner_text("#toast"))
+    rm = row_s.locator("button.danger", has_text="Удалить"); rm.click(); pg.wait_for_timeout(80)
+    ok("сотрудники: удаление требует второго нажатия", "Точно" in rm.inner_text())
+    pg.evaluate("window.__MOCK.log.length = 0; window.__rm = 'deactivated'")
+    rm.click(); pg.wait_for_timeout(300)
+    ok("сотрудники: запрос на удаление ушёл", any(x[0] == "rpc" and x[1] == "admin_remove_user" and x[2]["_uid"] == S_ for x in pg.evaluate("window.__MOCK.log")))
+    ok("сотрудники: пояснение про сохранённую запись", "запись сохранена" in pg.inner_text("#toast").lower())
+    row_a = pg.locator("tbody tr").first
+    ra = row_a.locator("button.danger", has_text="Удалить"); ra.click(); pg.wait_for_timeout(60); ra.click(); pg.wait_for_timeout(250)
+    ok("сотрудники: себя удалить нельзя", "самого себя" in pg.inner_text("#toast"), pg.inner_text("#toast"))
     pg.screenshot(path=str(SHOTS / "c_users.png"), full_page=True)
     pg.goto(SITE + "#/admin/invites"); pg.wait_for_timeout(300)
-    pg.fill("form input[type=text] >> nth=0", "Новый сотрудник"); pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    pg.select_option("form select >> nth=0", "pediatr"); pg.wait_for_timeout(100)
+    ok("приглашение: должность врач-педиатр — роль и папки сами", pg.eval_on_selector("form select >> nth=1", "s => s.value") == "staff" and pg.evaluate("Array.from(document.querySelectorAll('.fold-picks input:checked')).map(x=>+x.value)") == [4, 5, 17])
+    ok("приглашение: подсказка про автоматический выбор", "по должности" in pg.inner_text("form"))
+    pg.select_option("form select >> nth=0", "bosh_vrach"); pg.wait_for_timeout(100)
+    ok("приглашение: главный врач — роль главного врача, без галочек", pg.eval_on_selector("form select >> nth=1", "s => s.value") == "chief_physician" and pg.evaluate("document.querySelectorAll('.fold-picks input:checked').length") == 0)
+    pg.select_option("form select >> nth=0", "other"); pg.wait_for_timeout(100)
+    ok("приглашение: «другая должность» — поле для ввода", pg.locator("form input[placeholder]").first.is_visible())
+    pg.select_option("form select >> nth=0", "pediatr"); pg.evaluate("window.__MOCK.log.length = 0")
+    pg.fill("form input[type=text] >> nth=0", "Новый педиатр"); pg.click("form button[type=submit]"); pg.wait_for_timeout(300)
+    ci = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "create_invite"]
+    ok("приглашение: отправлены должность, роль и папки по должности", ci and ci[0][2]["_position"] == "Врач-педиатр" and ci[0][2]["_role"] == "staff" and ci[0][2]["_folders"] == [4, 5, 17], ci)
     t = pg.inner_text("#app")
     ok("приглашение: ссылка показана", "https://richerdsuper-pixel.github.io/ovabmk-companion/?invite=0123456789abcdef01234567" in t)
     ok("список приглашений", "Тестовый Сотрудник" in t and "Действует" in t)

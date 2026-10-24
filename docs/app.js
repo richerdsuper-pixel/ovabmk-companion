@@ -95,6 +95,10 @@
   }
   function posList() { return window.POSITIONS || []; }
   function posByCode(c) { return posList().filter(function (p) { return p.code === c; })[0] || null; }
+  function posByText(txt) {
+    var x = String(txt || "").trim().toLowerCase();
+    return !x ? null : posList().filter(function (p) { return p.code !== "other" && (p.ru.toLowerCase() === x || p.uz.toLowerCase() === x); })[0] || null;
+  }
   function posTitle(p) { return S.lang === "uz" ? p.uz : p.ru; }
   function folderTitle(f) { return S.lang === "uz" ? f.title_uz : f.title_ru; }
   function folderSub(f) { return S.lang === "uz" ? f.title_ru : f.title_uz; }
@@ -485,7 +489,7 @@
     var def = INDS[SUM.pos], p = posByCode(SUM.pos);
     var r = await sb.from("indicator_reports").select("id, user_id, institution, period_start, period_end, vals, updated_at")
       .eq("position_code", SUM.pos).order("period_end", { ascending: false });
-    var pr = await sb.from("profiles").select("id, full_name, position");
+    var pr = await sb.from("profiles").select("id, full_name, position, removed_at");
     if (my !== renderToken) return;
     if (r.error) return shell("indsum", failBox(r.error));
     var names = {}, people = pr.data || [];
@@ -527,7 +531,7 @@
     // кто не сдал за последний срок
     var missBox = null, ld = lastDeadline(def.rule);
     if (def.rule.t !== "c" && ld) {
-      var expected = people.filter(function (x) { return p && x.position === p.ru; });
+      var expected = people.filter(function (x) { return p && x.position === p.ru && !x.removed_at; });
       var got = {}; all.forEach(function (x) { if (dueFor(def.rule, x.period_end) === ld) got[x.user_id] = 1; });
       var miss = expected.filter(function (x) { return !got[x.id]; });
       missBox = h("div", { class: "notice " + (!expected.length ? "warn" : miss.length ? "bad" : "ok") },
@@ -803,6 +807,26 @@
   }
 
   // --- администратор: сотрудники
+  function removeButton(u) {
+    var b = h("button", { class: "btn sm danger", type: "button", text: t("u_remove") });
+    b.addEventListener("click", async function () {
+      if (!b.classList.contains("armed")) {
+        b.classList.add("armed"); b.textContent = t("u_remove_confirm");
+        setTimeout(function () { b.classList.remove("armed"); b.textContent = t("u_remove"); }, 4000);
+        return;
+      }
+      b.disabled = true;
+      var x = await sb.rpc("admin_remove_user", { _uid: u.user_id });
+      if (x.error) {
+        b.disabled = false; b.classList.remove("armed"); b.textContent = t("u_remove");
+        var m = errMsg(x.error);
+        toast(/cannot_remove_self/.test(m) ? t("u_self") : /last_admin/.test(m) ? t("u_last_admin") : /no_such_user/.test(m) ? t("u_not_found") : t("err_action", { msg: m }));
+        return;
+      }
+      toast(x.data === "deactivated" ? t("u_deactivated") : t("u_removed")); usersView();
+    });
+    return b;
+  }
   async function usersView() {
     var my = renderToken;
     shell("users", loadingBox());
@@ -836,11 +860,21 @@
         });
         picks.appendChild(h("label", { class: off ? "off" : "", title: off ? t("locked_long") : null }, cb, String(n)));
       })(i);
+      var byPos = h("button", { class: "btn sm", type: "button", text: t("u_by_pos"), onclick: async function () {
+        var p = posByText(posIn.value);
+        if (!p) { toast(t("u_pos_unknown")); return; }
+        if (p.role !== "staff") { toast(t("u_pos_manager")); return; }
+        var boxes = Array.from(picks.querySelectorAll("input"));
+        var x = await sb.rpc("admin_set_folders", { _uid: u.user_id, _folders: p.folders });
+        if (x.error) { toast(t("err_action", { msg: errMsg(x.error) })); return; }
+        boxes.forEach(function (cb, k) { cb.checked = p.folders.indexOf(k + 1) >= 0; });
+        toast(t("u_pos_applied", { n: p.folders.length }));
+      } });
       return h("tr", null,
-        h("td", null, h("div", { class: "stack", style: "gap:6px" }, nameIn, posIn, h("div", null, save)),
+        h("td", null, h("div", { class: "stack", style: "gap:6px" }, nameIn, posIn, h("div", { class: "row" }, save, removeButton(u))),
           h("div", { class: "sub", text: (u.telegram_username ? "@" + u.telegram_username + " · " : "") + fmtDate(u.created_at) })),
         h("td", null, h("div", { class: "stack", style: "gap:4px" }, roleBoxes)),
-        h("td", { style: "min-width:220px" }, picks));
+        h("td", { style: "min-width:220px" }, picks, h("div", { style: "margin-top:8px" }, byPos)));
     });
     shell("users", h("section", { class: "panel stack" }, h("h2", { text: t("u_title") }), h("p", { class: "mute small", text: t("u_folders_hint") }),
       h("div", { class: "tbl" }, h("table", null,
@@ -855,24 +889,36 @@
     var r = await sb.from("invites").select("id, role, full_name, position, folder_ids, created_at, expires_at, used_at, revoked_at").order("created_at", { ascending: false }).limit(200);
     if (my !== renderToken) return;
     var nameIn = h("input", { type: "text", maxlength: "200" });
-    var posIn = h("input", { type: "text", maxlength: "200" });
+    var posSel = h("select", { "aria-label": t("u_position") }, h("option", { value: "", text: t("i_pos_pick") }),
+      posList().map(function (p) { return h("option", { value: p.code, text: posTitle(p) }); }));
+    var posIn = h("input", { type: "text", maxlength: "200", placeholder: t("i_pos_other"), style: "display:none", "aria-label": t("i_pos_other") });
     var roleSel = h("select", null, ROLES.map(function (x) { return h("option", { value: x, selected: x === "staff", text: t("role_" + x) }); }));
     var daysIn = h("input", { type: "number", min: "1", max: "14", value: "3" });
     var picks = h("div", { class: "fold-picks" });
     for (var i = 1; i <= 20; i++) picks.appendChild(h("label", { class: i === 15 ? "off" : "" }, h("input", { type: "checkbox", value: String(i), disabled: i === 15 }), String(i)));
-    var out = h("div");
+    var out = h("div"), autoNote = h("p", { class: "mute small" });
+    posSel.addEventListener("change", function () {
+      var p = posByCode(posSel.value);
+      posIn.style.display = posSel.value === "other" ? "" : "none";
+      autoNote.textContent = "";
+      if (!p) return;
+      roleSel.value = p.role;
+      Array.from(picks.querySelectorAll("input")).forEach(function (cb) { cb.checked = p.role === "staff" && p.folders.indexOf(+cb.value) >= 0; });
+      if (p.code !== "other") autoNote.textContent = t("i_auto");
+    });
     var btn = h("button", { class: "btn pri", type: "submit", text: t("i_create") });
     var form = h("form", { class: "stack" },
-      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("u_name"), nameIn), h("label", { class: "f" }, t("u_position"), posIn),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("u_name"), nameIn), h("label", { class: "f" }, t("u_position"), posSel, posIn),
         h("label", { class: "f" }, t("i_role"), roleSel), h("label", { class: "f" }, t("i_days"), daysIn)),
-      h("div", { class: "f small" }, h("b", { class: "mute", text: t("u_folders") }), picks, h("span", { class: "mute small", text: t("u_folders_hint") })),
+      h("div", { class: "f small" }, h("b", { class: "mute", text: t("u_folders") }), picks, h("span", { class: "mute small", text: t("u_folders_hint") }), autoNote),
       h("div", null, btn), out);
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
       btn.disabled = true;
       var folders = Array.from(picks.querySelectorAll("input:checked")).map(function (x) { return +x.value; });
       var days = Math.min(14, Math.max(1, parseInt(daysIn.value, 10) || 3));
-      var x = await sb.rpc("create_invite", { _role: roleSel.value, _full_name: nameIn.value, _position: posIn.value, _folders: folders, _days: days });
+      var sp = posByCode(posSel.value), posText = !sp ? "" : sp.code === "other" ? posIn.value.trim() : sp.ru;
+      var x = await sb.rpc("create_invite", { _role: roleSel.value, _full_name: nameIn.value, _position: posText, _folders: folders, _days: days });
       btn.disabled = false;
       out.textContent = "";
       if (x.error || !x.data) { out.appendChild(h("div", { class: "notice bad", text: t("err_action", { msg: errMsg(x.error) }) })); return; }
@@ -883,7 +929,7 @@
           var sel = function () { var rg = document.createRange(); rg.selectNodeContents(code); var s = getSelection(); s.removeAllRanges(); s.addRange(rg); };
           try { navigator.clipboard.writeText(link).then(function () { toast(t("copied")); }, sel); } catch (er) { sel(); }
         } }))));
-      nameIn.value = ""; posIn.value = "";
+      nameIn.value = ""; posIn.value = ""; posSel.value = ""; posIn.style.display = "none"; autoNote.textContent = "";
       reloadList();
     });
     var listBox = h("div");

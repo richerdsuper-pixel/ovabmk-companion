@@ -206,6 +206,38 @@ expect_ok("показатели: admin удаляет любой отчёт", f"
 expect_ok("показатели: автор удаляет свой", f"delete from public.indicator_reports where user_id='{S}' returning 1", "authenticated", S, out="1")
 expect_err("показатели: truncate недоступен клиенту", "truncate public.indicator_reports", "authenticated", A, "permission denied")
 
+# ---------------- удаление сотрудника
+R1 = new_user("rm1@t"); R2 = new_user("rm2@t"); R3 = new_user("rm3@t")
+for u, tg in ((R1, 7001), (R2, 7002), (R3, 7003)):
+    c = invite("staff", by=f"'{A}'", folders="'{1}'"); rc, r = accept(c, u, tg); ok(f"удаление: сотрудник {tg} создан", rc == 0, r)
+expect_ok("удаление: R2 загрузил документ", f"insert into public.documents(folder_id,title,uploaded_by,no_patient_data) values (1,'Док R2','{R2}',true)", "authenticated", R2)
+expect_ok("удаление: R3 сдал показатели", ins(R3), "authenticated", R3)
+expect_err("удаление: staff не может", f"select public.admin_remove_user('{R1}')", "authenticated", S, "forbidden")
+expect_err("удаление: deputy не может", f"select public.admin_remove_user('{R1}')", "authenticated", D, "forbidden")
+expect_err("удаление: anon не может", f"select public.admin_remove_user('{R1}')", "anon", None, "permission denied")
+expect_err("удаление: себя нельзя", f"select public.admin_remove_user('{A}')", "authenticated", A, "cannot_remove_self")
+expect_err("удаление: несуществующего нельзя", f"select public.admin_remove_user('{uuid.uuid4()}')", "authenticated", A, "no_such_user")
+expect_ok("удаление: без документов — полное удаление", f"select public.admin_remove_user('{R1}')", "authenticated", A, out="deleted")
+expect_ok("удаление: учётной записи больше нет", f"select count(*) from auth.users where id='{R1}'", out="0")
+expect_ok("удаление: Telegram и роли ушли", f"select (select count(*) from public.telegram_links where user_id='{R1}') + (select count(*) from public.user_roles where user_id='{R1}') + (select count(*) from public.folder_members where user_id='{R1}')", out="0")
+expect_ok("удаление: с документом — доступ закрыт, запись сохранена", f"select public.admin_remove_user('{R2}')", "authenticated", A, out="deactivated")
+expect_ok("удаление: у R2 нет ролей, папок и Telegram", f"select (select count(*) from public.user_roles where user_id='{R2}') + (select count(*) from public.folder_members where user_id='{R2}') + (select count(*) from public.telegram_links where user_id='{R2}')", out="0")
+expect_ok("удаление: документ R2 остался с автором", f"select count(*) from public.documents where uploaded_by='{R2}'", out="1")
+expect_ok("удаление: R2 больше не видит документов", "select count(*) from public.documents", "authenticated", R2, out="0")
+expect_ok("удаление: с показателями — тоже закрытие доступа", f"select public.admin_remove_user('{R3}')", "authenticated", A, out="deactivated")
+expect_ok("удаление: показатели R3 остались", f"select count(*) from public.indicator_reports where user_id='{R3}'", out="1")
+expect_err("удаление: повторно скрытого нельзя", f"select public.admin_remove_user('{R2}')", "authenticated", A, "no_such_user")
+expect_ok("удаление: скрытые не в списке сотрудников", f"select count(*) from public.admin_list_users() where user_id in ('{R1}','{R2}','{R3}')", "authenticated", A, out="0")
+expect_ok("удаление: журнал", "select count(*) from public.audit_log where action in ('user_deleted','user_deactivated')", out="3")
+# повторная заявка скрытого сотрудника возвращает доступ
+rc, r = submit(7002); ok("повтор: скрытый может подать заявку заново", rc == 0 and r[0] == "pending", r)
+rid2 = sql("select id from public.access_requests where telegram_id=7002 and status='pending'")[1][0]
+expect_ok("повтор: admin одобряет", f"select public.decide_request('{rid2}', true, 'staff', '{{1}}')", "authenticated", A)
+rc, r = sql(f"select public.accept_request(7002, '{R2}', 'again')", role="service_role")
+ok("повтор: вход после одобрения", rc == 0 and r[0] == "staff", r)
+expect_ok("повтор: сотрудник снова в списке", f"select count(*) from public.admin_list_users() where user_id='{R2}'", "authenticated", A, out="1")
+expect_ok("повтор: свой документ снова виден автору", f"select count(*) from public.documents where uploaded_by='{R2}'", "authenticated", R2, out="1")
+
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",

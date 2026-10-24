@@ -220,17 +220,25 @@
     else if (S.roleState === "ok") roleChip = S.roles.map(function (r) { return h("span", { class: "chip acc", text: t("role_" + r) }); });
     return h("header", { class: "top" },
       h("div", { class: "brand" },
-        h("div", { class: "mark", "aria-hidden": "true", html: null }, svgFolder()),
+        h("div", { class: "mark", "aria-hidden": "true", html: null }, svgEmblem()),
         h("div", null, h("h1", { text: "OvaBMҚ Companion" }), h("p", { text: t("subtitle") }))),
       h("div", { class: "who" },
         langSwitch(),
         S.session ? [name ? h("span", { class: "nm", text: name }) : null, roleChip,
           h("button", { class: "btn sm", type: "button", onclick: logout, text: t("logout") })] : null));
   }
-  function svgFolder() {
-    var ns = "http://www.w3.org/2000/svg", s = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path");
-    s.setAttribute("viewBox", "0 0 24 24"); p.setAttribute("d", "M3 6h7l2 2h9v11H3z"); s.appendChild(p); return s;
+  // эмблема «мать и дитя»
+  function svgEmblem() {
+    var ns = "http://www.w3.org/2000/svg", s = document.createElementNS(ns, "svg");
+    s.setAttribute("viewBox", "0 0 32 32");
+    [["circle", { cx: 13, cy: 8, r: 4 }], ["path", { d: "M6 28c0-8 2-13 7-13 3 0 5 2 6 4" }],
+     ["circle", { cx: 21, cy: 21, r: 3, class: "em-child" }], ["path", { d: "M16 25c2 2 7 2 9-1" }]].forEach(function (x) {
+      var e = document.createElementNS(ns, x[0]); Object.keys(x[1]).forEach(function (k) { e.setAttribute(k, x[1][k]); }); s.appendChild(e);
+    });
+    return s;
   }
+  // синяя шапка с орнаментом и волной: заголовок + меню
+  function hero(navEl) { return h("div", { class: "hero" }, header(), navEl); }
   function langSwitch() {
     return h("div", { class: "seg", role: "group", "aria-label": t("lang") },
       ["ru", "uz"].map(function (l) {
@@ -253,12 +261,12 @@
   function render() {
     renderToken++;
     var route = (location.hash || "#/overview").slice(1);
-    if (!S.session) return mount(h("div", null, header(), loginView()));
-    if (S.roleState === "loading" || S.roleState === "idle") return mount(h("div", null, header(), h("p", { class: "boot", text: t("loading") })));
-    if (S.roleState === "error") return mount(h("div", null, header(), h("div", { class: "notice bad" }, t("roles_error"),
+    if (!S.session) return mount(h("div", null, hero(null), loginView()));
+    if (S.roleState === "loading" || S.roleState === "idle") return mount(h("div", null, hero(null), h("p", { class: "boot", text: t("loading") })));
+    if (S.roleState === "error") return mount(h("div", null, hero(null), h("div", { class: "notice bad" }, t("roles_error"),
       h("p", { text: t("roles_error_long") }), h("p", { class: "mono small", text: S.roleError }),
       h("p", null, h("button", { class: "btn", type: "button", onclick: loadAccess, text: t("retry") })))));
-    if (S.roleState === "none") return mount(h("div", null, header(), h("div", { class: "notice warn" }, t("roles_none"), h("p", { text: t("roles_none_long") }))));
+    if (S.roleState === "none") return mount(h("div", null, hero(null), h("div", { class: "notice warn" }, t("roles_none"), h("p", { text: t("roles_none_long") }))));
 
     var m;
     if ((m = /^\/folder\/(\d{1,2})$/.exec(route))) return folderView(+m[1]);
@@ -272,7 +280,7 @@
     if (route === "/admin/log") return isAdmin() ? logView() : forbidden("log");
     return overviewView();
   }
-  function shell(cur, body) { mount(h("div", null, header(), nav(cur), body)); }
+  function shell(cur, body) { mount(h("div", null, hero(nav(cur)), body)); }
   function forbidden(cur) { shell(cur, h("div", { class: "notice warn", text: t("forbidden") })); }
   function loadingBox() { return h("p", { class: "boot", text: t("loading") }); }
   function failBox(e) { return h("div", { class: "notice bad", text: t("load_failed", { msg: errMsg(e) }) }); }

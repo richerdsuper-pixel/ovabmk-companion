@@ -6,7 +6,9 @@ var CS = { q: "" };
 function caseTitle(c) { return c.card ? "Карта № " + c.card + (c.name ? " · " + c.name : "") : (c.name || "Без номера"); }
 
 function dueBadge(c) {
-  var d = caseDue(c), m = { late: ["bad", "просрочено на " + (-d.n) + " дн."], today: ["warn", "сегодня"], tomorrow: ["warn", "завтра"], week: ["mute", "через " + d.n + " дн."], later: ["mute", fmtD(c.next)], none: ["mute", "дата не назначена"], closed: ["mute", "закрыт"] }[d.k];
+  var d = caseDue(c), m = { late: ["bad", "просрочено на " + (-d.n) + " дн."], today: ["warn", "сегодня"], tomorrow: ["warn", "завтра"], week: ["mute", "через " + d.n + " дн."], later: ["mute", fmtD(caseNext(c))], none: ["mute", "дата не назначена"], closed: ["mute", "закрыт"] }[d.k];
+  if (d.std && d.kind === "cur") m = ["warn", "пора на визит по стандарту"];
+  if (d.std && d.kind === "missed") m = ["bad", "визит по стандарту просрочен на " + (-d.n) + " дн."];
   return h("span", { class: "badge " + m[0], text: m[1] });
 }
 function readPhoto(file) {
@@ -72,10 +74,14 @@ async function caseForm(c) {
     street: h("input", { id: "c_street", value: c ? c.street : "", placeholder: "Улица, дом, квартира", autocomplete: "off" }),
     phone: h("input", { id: "c_phone", value: c ? c.phone : "", inputmode: "tel", placeholder: "+998 ..." }),
     diag: h("input", { id: "c_diag", value: c ? c.diag : "", placeholder: "Диагноз / причина наблюдения", autocomplete: "off" }),
-    note: h("textarea", { id: "c_note", rows: 2, placeholder: "Примечание (необязательно)" }, c ? c.note : "") };
+    note: h("textarea", { id: "c_note", rows: 2, placeholder: "Примечание (необязательно)" }, c ? c.note : ""),
+    lmp: h("input", { type: "date", id: "c_lmp", value: c && c.lmp ? c.lmp : "", max: todayStr() }) };
   if (c) f.cat.value = c.cat;
+  var lmpL = h("label", { id: "c_lmpL" }, ["Первый день последней менструации (ДПМ). По нему на этом устройстве считаются срок и визиты по приказу №180", f.lmp]);
+  function lmpShow() { lmpL.style.display = f.cat.value === "Беременная" ? "" : "none"; }
+  f.cat.addEventListener("change", lmpShow); lmpShow();
   var nx = nextPicker(c ? c.next : addDays(todayStr(), 7)), ph = c ? null : photoPicker();
-  var body = [mahallaDatalist(), h("label", null, ["№ карты (вместо Ф.И.О.)", f.card]), h("label", null, ["Категория", f.cat]), h("label", null, ["Махалля", f.mah]), h("label", null, ["Улица, дом", f.street]),
+  var body = [mahallaDatalist(), h("label", null, ["№ карты (вместо Ф.И.О.)", f.card]), h("label", null, ["Категория", f.cat]), lmpL, h("label", null, ["Махалля", f.mah]), h("label", null, ["Улица, дом", f.street]),
     h("label", null, ["Диагноз", f.diag]), h("label", null, ["Примечание", f.note]), nx.node,
     h("details", { class: "opt" }, [h("summary", { text: "Ф.И.О. и телефон (необязательно, лучше не вносить)" }), h("label", null, ["Ф.И.О.", f.name]), h("label", null, ["Телефон", f.phone])])];
   if (ph) { body.push(h("label", null, "Фото осмотра (необязательно)")); body.push(ph.node); }
@@ -84,29 +90,40 @@ async function caseForm(c) {
     if (!ok) return null;
     var card = f.card.value.trim();
     if (!card && f.name.value.trim().length < 2) { toast("Укажите № карты", true); continue; }
+    var lm = f.cat.value === "Беременная" ? f.lmp.value : "";
+    if (lm && (diffDays(todayStr(), lm) < 0 || diffDays(todayStr(), lm) > 315)) { toast("ДПМ не подходит: дата в будущем или больше 45 недель назад", true); continue; }
     if (card && activeCases().some(function (o) { return o.card === card && (!c || o.id !== c.id); })) { toast("Пациент с картой № " + card + " уже есть", true); continue; }
-    return { card: card, name: f.name.value.trim(), cat: f.cat.value, mahalla: f.mah.value.trim(), street: f.street.value.trim(), phone: f.phone.value.trim(), diag: f.diag.value.trim(), note: f.note.value.trim(), next: nx.get(), photos: ph ? ph.get() : [] };
+    return { lmp: lm, card: card, name: f.name.value.trim(), cat: f.cat.value, mahalla: f.mah.value.trim(), street: f.street.value.trim(), phone: f.phone.value.trim(), diag: f.diag.value.trim(), note: f.note.value.trim(), next: nx.get(), photos: ph ? ph.get() : [] };
   }
 }
 async function addCase() {
   var v = await caseForm(null); if (!v) return;
-  var c = { id: uid(), created: Date.now(), card: v.card, name: v.name, cat: v.cat, mahalla: v.mahalla, street: v.street, phone: v.phone, diag: v.diag, note: v.note, next: v.next, closed: false, visits: [] };
+  var c = { id: uid(), created: Date.now(), lmp: v.lmp, card: v.card, name: v.name, cat: v.cat, mahalla: v.mahalla, street: v.street, phone: v.phone, diag: v.diag, note: v.note, next: v.next, closed: false, visits: [] };
   if (v.photos.length) c.visits.push({ id: uid(), d: todayStr(), t: Date.now(), note: "Первичный осмотр", ph: await savePhotos(v.photos) });
   await persistCase(c); toast("Пациент добавлен"); render();
 }
 async function editCase(c) {
   var v = await caseForm(c); if (!v) return;
-  c.card = v.card; c.name = v.name; c.cat = v.cat; c.mahalla = v.mahalla; c.street = v.street; c.phone = v.phone; c.diag = v.diag; c.note = v.note; c.next = v.next;
+  c.card = v.card; c.lmp = v.lmp; c.name = v.name; c.cat = v.cat; c.mahalla = v.mahalla; c.street = v.street; c.phone = v.phone; c.diag = v.diag; c.note = v.note; c.next = v.next;
   await persistCase(c); toast("Сохранено"); render();
 }
 async function addVisit(c) {
   var dt = h("input", { type: "date", id: "v_date", value: todayStr() }), note = h("textarea", { id: "v_note", rows: 3, placeholder: "Что выявлено, рекомендации" });
   var ph = photoPicker(), nx = nextPicker(addDays(todayStr(), 7)), diag = h("input", { id: "v_diag", value: c.diag, placeholder: "Диагноз" });
-  var ok = await modal("Визит: " + caseTitle(c), [h("label", null, ["Дата визита", dt]), h("label", null, ["Заметка", note]), h("label", null, ["Диагноз", diag]), h("label", null, "Фото осмотра"), ph.node, nx.node,
-    h("label", { class: "inl" }, [h("input", { type: "checkbox", id: "v_close" }), " Закрыть случай (наблюдение закончено)"])], [["Отмена", false, ""], ["Сохранить визит", true, "pri"]]);
+  var st = ancState(c), stdSel = null;
+  if (st) {
+    var first = st.missed[0] || st.cur || null;
+    stdSel = h("select", { id: "v_std" }, [h("option", { value: "0", text: "— внеплановый визит —" })].concat(ANC.filter(function (r) { return !st.done[r.visit_no]; }).map(function (r) { return h("option", { value: String(r.visit_no), text: r.label }); })));
+    stdSel.value = first ? String(first.visit_no) : "0";
+  }
+  var closeCb = h("input", { type: "checkbox", id: "v_close" });
+  var ok = await modal("Визит: " + caseTitle(c), [h("label", null, ["Дата визита", dt]), h("label", null, ["Заметка", note]), h("label", null, ["Диагноз", diag]), stdSel ? h("label", null, ["Визит по стандарту (приказ №180)", stdSel]) : null, h("label", null, "Фото осмотра"), ph.node, nx.node,
+    h("label", { class: "inl" }, [closeCb, " Закрыть случай (наблюдение закончено)"])], [["Отмена", false, ""], ["Сохранить визит", true, "pri"]]);
   if (!ok) return;
-  var closeIt = $("v_close") ? $("v_close").checked : false;
-  c.visits.unshift({ id: uid(), d: dt.value || todayStr(), t: Date.now(), note: note.value.trim(), ph: await savePhotos(ph.get()) });
+  var closeIt = closeCb.checked;
+  var vstd = stdSel ? +stdSel.value || 0 : 0, vrec = { id: uid(), d: dt.value || todayStr(), t: Date.now(), note: note.value.trim(), ph: await savePhotos(ph.get()) };
+  if (vstd) vrec.std = vstd;
+  c.visits.unshift(vrec);
   c.visits.sort(function (a, b) { return (b.d || "").localeCompare(a.d || "") || (b.t || 0) - (a.t || 0); });
   c.diag = diag.value.trim(); c.next = closeIt ? "" : nx.get(); c.closed = closeIt;
   await persistCase(c); toast(closeIt ? "Визит сохранён, случай закрыт" : "Визит сохранён"); render();
@@ -115,25 +132,55 @@ async function showPhoto(id) {
   var f = await Vault.load("f:" + id); if (!f) return toast("Фото не найдено (возможно, не включено в выгрузку)", true);
   await modal("Фото осмотра", [h("img", { src: f.data, class: "bigph", alt: "фото осмотра" })], [["Закрыть", true, "pri"]]);
 }
+// блок «по стандарту» в карточке беременной: срок, что просрочено, что нужно сейчас и дальше
+function ancBlock(c) {
+  var s = ancState(c); if (!s) return c.cat === "Беременная" && !c.lmp ? h("p", { class: "small muted", text: "Укажите ДПМ («Изменить») — и здесь появятся срок и визиты по приказу №180." }) : null;
+  function one(title, r, cls) {
+    return h("div", { class: "anc " + cls }, [h("b", { text: title + ": " + r.label }), h("div", { class: "small muted", text: "окно " + r.from_week + "–" + r.until_week + " нед. · " + ancWinDates(c, r) }),
+      r.tests.length ? h("ul", { class: "small" }, r.tests.map(function (x) { return h("li", { text: x }); })) : h("div", { class: "small muted", text: "Отдельных анализов нет — стандартный осмотр." }),
+      r.notes ? h("div", { class: "small", text: r.notes }) : null]);
+  }
+  var out = [h("div", { class: "bar" }, [h("b", { text: "Срок: " + s.wk.w + " нед. " + s.wk.d + " дн." }), h("span", { class: "small muted", text: "ориентировочные роды " + fmtD(s.edd) })])];
+  if (s.wk.w > 42) out.push(h("p", { class: "small warnc", text: "Срок больше 42 недель — проверьте ДПМ." }));
+  s.missed.forEach(function (r) { out.push(one("Просрочено", r, "bad")); });
+  if (s.cur) out.push(one("Сейчас", s.cur, "warn"));
+  else if (s.nxt) out.push(one("Дальше", s.nxt, ""));
+  return h("div", { class: "ancbox" }, out);
+}
+// отметить, какие визиты по стандарту уже пройдены (например, у пациентки, взятой на учёт позже)
+async function markStd(c) {
+  var st = ancState(c); if (!st) return;
+  var boxes = ANC.map(function (r) {
+    var cb = h("input", { type: "checkbox", value: String(r.visit_no) }); cb.checked = !!st.done[r.visit_no];
+    var fromVisit = (c.visits || []).some(function (v) { return v.std === r.visit_no; }); if (fromVisit) cb.disabled = true;
+    return h("label", { class: "inl" }, [cb, " " + r.label + (fromVisit ? " (записан визит)" : "")]);
+  });
+  var ok = await modal("Пройденные визиты", [h("p", { class: "small muted", text: "Отметьте то, что уже сделано по стандарту. Отмеченные визиты не считаются просроченными." })].concat(boxes), [["Отмена", false, ""], ["Сохранить", true, "pri"]]);
+  if (!ok) return;
+  c.stdDone = {}; boxes.forEach(function (l) { var cb = l.querySelector("input"); if (cb.checked && !cb.disabled) c.stdDone[cb.value] = 1; });
+  await persistCase(c); toast("Сохранено"); render();
+}
 async function openCase(c) {
   var vis = c.visits.map(function (v) {
-    return h("div", { class: "visit" }, [h("b", { text: fmtD(v.d) }), v.note ? h("div", { text: v.note }) : null,
+    return h("div", { class: "visit" }, [h("b", { text: fmtD(v.d) + (v.std ? " · визит " + v.std + " по стандарту" : "") }), v.note ? h("div", { text: v.note }) : null,
       (v.ph || []).length ? h("div", { class: "thumbs" }, v.ph.map(function (id) { var img = h("img", { alt: "фото", class: "lazy" }); Vault.load("f:" + id).then(function (f) { if (f) img.src = f.data; }); return h("div", { class: "th", onclick: function () { showPhoto(id); } }, img); })) : null]);
   });
   var rows = [["Категория", c.cat], ["Махалля", c.mahalla], ["Улица, дом", c.street], ["Телефон", c.phone], ["Диагноз", c.diag], ["Примечание", c.note]].filter(function (r) { return r[1]; });
   var act = await modal(caseTitle(c), [h("div", { class: "kvlist" }, rows.map(function (r) { return h("div", null, [h("span", { class: "k", text: r[0] }), h("span", { class: "v", text: r[1] })]); })),
-    h("div", { class: "bar" }, [dueBadge(c), c.next && !c.closed ? h("span", { class: "small muted", text: "следующий визит: " + fmtD(c.next) }) : null]),
+    h("div", { class: "bar" }, [dueBadge(c), caseNext(c) && !c.closed ? h("span", { class: "small muted", text: "следующий визит: " + fmtD(caseNext(c)) }) : null]),
+    ancBlock(c),
     h("h2", { text: "Визиты (" + c.visits.length + ")" }), vis.length ? vis : h("p", { class: "muted small", text: "Визитов пока нет." })],
-    [["Удалить", "del", "danger"], ["Изменить", "edit", ""], c.closed ? ["Вернуть в наблюдение", "reopen", ""] : null, ["Закрыть", false, "pri"]].filter(Boolean));
+    [["Удалить", "del", "danger"], ["Изменить", "edit", ""], ancState(c) ? ["Пройденные визиты", "std", ""] : null, c.closed ? ["Вернуть в наблюдение", "reopen", ""] : null, ["Закрыть", false, "pri"]].filter(Boolean));
   if (act === "del") { if (await confirmBox("Удалить пациента «" + caseTitle(c) + "» и все его фото с этого устройства? Это нельзя отменить.", "Удалить")) { await deleteCase(c); toast("Удалено"); render(); } }
   else if (act === "edit") editCase(c);
+  else if (act === "std") { await markStd(c); }
   else if (act === "reopen") { c.closed = false; c.next = c.next || addDays(todayStr(), 7); await persistCase(c); render(); }
 }
 function caseCard(c) {
   var lastV = c.visits[0];
   return h("div", { class: "case " + caseDue(c).k }, [
     h("div", { class: "ch" }, [h("b", { text: caseTitle(c) }), dueBadge(c)]),
-    h("div", { class: "small muted", text: [c.cat, c.mahalla, c.street].filter(Boolean).join(" · ") }),
+    h("div", { class: "small muted", text: [c.cat, ancState(c) ? ancState(c).wk.w + " нед." : "", c.mahalla, c.street].filter(Boolean).join(" · ") }),
     c.diag ? h("div", { class: "small", text: c.diag }) : null,
     lastV ? h("div", { class: "small muted", text: "последний визит: " + fmtD(lastV.d) + (lastV.ph && lastV.ph.length ? " · 📷 " + lastV.ph.length : "") }) : null,
     h("div", { class: "acts" }, [c.closed ? null : h("button", { type: "button", class: "pri", onclick: function () { addVisit(c); } }, "Визит"),
@@ -149,6 +196,8 @@ function casesView() {
     h("div", { class: "card " + (cnt.today ? "warn" : "") }, [h("b", { text: String(cnt.today) }), h("span", { text: "сегодня" })]),
     h("div", { class: "card" }, [h("b", { text: String(cnt.tomorrow) }), h("span", { text: "завтра" })]),
     h("div", { class: "card" }, [h("b", { text: String(cnt.week + cnt.later + cnt.none + cnt.late + cnt.today + cnt.tomorrow) }), h("span", { text: "под наблюдением" })])]));
+  var ac = ancCounts();
+  if (ac.total) root.appendChild(h("p", { class: "small muted", id: "anc_counts", text: "Беременных под наблюдением: " + ac.total + " · пропустили визит по стандарту: " + ac.missed + " · пора на визит сейчас: " + ac.cur + " (числа для показателей; данные пациенток остаются на устройстве)" }));
   if (banner) root.appendChild(banner);
   root.appendChild(h("div", { class: "bar" }, [h("button", { class: "pri big", type: "button", id: "addCase", onclick: addCase }, "＋ Новый пациент"), q]));
   function draw() {
@@ -158,7 +207,7 @@ function casesView() {
     if (!all.length) { list.appendChild(h("p", { class: "muted", text: "Ничего не найдено." })); return; }
     var groups = [["late", "Просрочено"], ["today", "Сегодня"], ["tomorrow", "Завтра"], ["week", "В ближайшие 7 дней"], ["later", "Позже"], ["none", "Без даты визита"], ["closed", "Закрытые"]];
     groups.forEach(function (g) {
-      var items = all.filter(function (c) { return caseDue(c).k === g[0]; }).sort(function (a, b) { return (a.next || "9").localeCompare(b.next || "9") || caseTitle(a).localeCompare(caseTitle(b)); });
+      var items = all.filter(function (c) { return caseDue(c).k === g[0]; }).sort(function (a, b) { return (caseNext(a) || "9").localeCompare(caseNext(b) || "9") || caseTitle(a).localeCompare(caseTitle(b)); });
       if (!items.length) return;
       var box = h("div", { class: "grp" }, [h("h2", { text: g[1] + " (" + items.length + ")" }), h("div", { class: "cases" }, items.map(caseCard))]);
       if (g[0] === "closed") list.appendChild(h("details", null, [h("summary", { text: g[1] + " (" + items.length + ")" }), h("div", { class: "cases" }, items.map(caseCard))])); else list.appendChild(box);
@@ -168,7 +217,7 @@ function casesView() {
 }
 // календарь БЕЗ личных данных: в телефон попадает только «сегодня N визитов — откройте OvaBMQ»
 function exportCasesIcs() {
-  var by = {}; activeCases().forEach(function (c) { if (!c.closed && c.next && c.next >= todayStr()) by[c.next] = (by[c.next] || 0) + 1; });
+  var by = {}; activeCases().forEach(function (c) { var nx = caseNext(c); if (!c.closed && nx && nx >= todayStr()) by[nx] = (by[nx] || 0) + 1; });
   var days = Object.keys(by).sort(); if (!days.length) return toast("Нет назначенных визитов", true);
   var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OvaBMK Offline//RU", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"], stamp = todayStr().replace(/-/g, "") + "T000000Z";
   days.forEach(function (d) {

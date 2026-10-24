@@ -327,12 +327,42 @@ async function importFile(file) {
 /* ===== Пациенты и визиты (только на этом устройстве) ===== */
 function activeCases() { return Object.keys(S.cases).map(function (k) { return S.cases[k]; }).filter(function (c) { return !c.deleted; }); }
 async function persistCase(c) { c.updated = Date.now(); await Vault.save("c:" + c.id, c); S.cases[c.id] = c; }
+// ----- беременная по стандарту (приказ №180): срок и визиты считаются на устройстве по дате последней менструации (ДПМ) -----
+function ancWeeks(lmp) { if (!lmp) return null; var d = diffDays(todayStr(), lmp); return d < 0 ? null : { w: Math.floor(d / 7), d: d % 7, days: d }; }
+// состояние ведения: missed — пропущенные окна, cur — окно идёт сейчас, nxt — следующее; date — ближайшая дата, к которой нужно действовать
+function ancState(c) {
+  if (!c || c.cat !== "Беременная" || !c.lmp) return null;
+  var wk = ancWeeks(c.lmp); if (!wk || wk.days > 315) return null;
+  var done = {}; Object.keys(c.stdDone || {}).forEach(function (k) { if (c.stdDone[k]) done[k] = 1; }); (c.visits || []).forEach(function (v) { if (v.std) done[v.std] = 1; });
+  var rest = ANC.filter(function (r) { return !done[r.visit_no]; });
+  var missed = rest.filter(function (r) { return r.until_week < wk.w; });
+  var cur = rest.filter(function (r) { return r.from_week <= wk.w && wk.w <= r.until_week; })[0] || null;
+  var nxt = rest.filter(function (r) { return r.from_week > wk.w; })[0] || null;
+  var s = { wk: wk, missed: missed, cur: cur, nxt: nxt, done: done, edd: addDays(c.lmp, 280), date: "", kind: "" };
+  if (missed.length) { s.date = addDays(c.lmp, (missed[0].until_week + 1) * 7 - 1); s.kind = "missed"; }
+  else if (cur) { s.date = todayStr(); s.kind = "cur"; }
+  else if (nxt) { s.date = addDays(c.lmp, nxt.from_week * 7); s.kind = "next"; }
+  return s;
+}
+function ancWinDates(c, r) { return fmtD(addDays(c.lmp, r.from_week * 7)) + "–" + fmtD(addDays(c.lmp, (r.until_week + 1) * 7 - 1)); }
+// ближайшая дата визита: самая ранняя из назначенной вручную и вычисленной по стандарту
+function caseNext(c) {
+  var s = c.closed ? null : ancState(c), a = c.next || "", b = s ? s.date : "";
+  return a && b ? (a < b ? a : b) : (a || b);
+}
 // статус визита: late / today / tomorrow / week / later / none / closed
 function caseDue(c) {
   if (c.closed) return { k: "closed", n: 0 };
-  if (!c.next) return { k: "none", n: 0 };
-  var n = diffDays(c.next, todayStr());
-  return { k: n < 0 ? "late" : n === 0 ? "today" : n === 1 ? "tomorrow" : n <= 7 ? "week" : "later", n: n };
+  var nx = caseNext(c);
+  if (!nx) return { k: "none", n: 0 };
+  var n = diffDays(nx, todayStr()), s = ancState(c), std = !!(s && s.date === nx && (!c.next || s.date <= c.next));
+  return { k: n < 0 ? "late" : n === 0 ? "today" : n === 1 ? "tomorrow" : n <= 7 ? "week" : "later", n: n, std: std, kind: std ? s.kind : "" };
+}
+// для отчётных чисел: сколько беременных пропустили визит по стандарту / у скольких окно идёт сейчас
+function ancCounts() {
+  var r = { missed: 0, cur: 0, total: 0 };
+  activeCases().forEach(function (c) { if (c.closed) return; var s = ancState(c); if (!s) return; r.total++; if (s.kind === "missed") r.missed++; else if (s.kind === "cur") r.cur++; });
+  return r;
 }
 function dueCounts() {
   var r = { late: 0, today: 0, tomorrow: 0, week: 0, later: 0, none: 0, closed: 0 };

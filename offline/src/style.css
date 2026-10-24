@@ -85,3 +85,8 @@ a.btnlink{display:inline-flex;align-items:center;justify-content:center;min-heig
 @media print{header.top,.bar,button,nav{display:none!important}}
 
 details.opt{margin:.6rem 0;color:var(--mute)}details.opt summary{cursor:pointer;font-size:.88rem}
+.ancbox{border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem;margin:.6rem 0}
+.anc{border-left:4px solid var(--line);padding:.3rem .6rem;margin:.5rem 0}
+.anc.bad{border-color:var(--bad)}.anc.warn{border-color:var(--warn)}
+.anc ul{margin:.2rem 0 .2rem 1.1rem;padding:0}
+.warnc{color:var(--warn)}

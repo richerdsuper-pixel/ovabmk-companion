@@ -322,7 +322,6 @@ expect_err("махалли: дубль названия", "select public.admin_s
 expect_err("махалли: короткое название", "select public.admin_save_mahalla(null, 'а', '{}')", "authenticated", A, "bad_name")
 expect_ok("махалли: связи — 3 строки (1 + 2)", "select count(*) from public.mahalla_links", "authenticated", S, out="3")
 expect_ok("махалли: список видит сотрудник", "select count(*) from public.mahallas", "authenticated", S, out="2")
-expect_ok("махалли: без входа список закрыт", "select count(*) from public.mahallas", "anon", out="0") if False else None
 expect_err("махалли: без входа нет доступа", "select count(*) from public.mahallas", "anon", None, "permission denied")
 expect_err("махалли: напрямую писать нельзя", "insert into public.mahallas(name) values ('Взлом')", "authenticated", A, "permission denied")
 expect_ok("махалли: переименование и смена учреждений", f"select public.admin_save_mahalla({M1}, 'Боботог-1', array[{I3}])", "authenticated", A, out=M1)
@@ -337,7 +336,6 @@ expect_err("бригада: ставка вне границ", f"select public.a
 expect_err("бригада: несуществующая махалля", "select public.admin_set_brigade(99999, '[]'::jsonb)", "authenticated", A, "no_such_mahalla")
 expect_ok("бригада: чужой/неизвестный user_id отбрасывается", f"select public.admin_set_brigade({M2}, '[{{\"kind\":\"doctor\",\"rate\":1,\"user_id\":\"00000000-0000-0000-0000-0000000000ff\"}}]'::jsonb)", "authenticated", A)
 expect_ok("бригада: …и пост остаётся без сотрудника", f"select count(*) from public.brigade_posts where mahalla_id={M2} and user_id is null", "authenticated", S, out="1")
-expect_ok("показатели по махалле: свой отчёт", ins(S, "doya_qvp", "СВП №3", "2026-10-19", "2026-10-25").replace("values (", "values (").replace(" vals)", " vals)"), "authenticated", S) if False else None
 expect_ok("показатели по махалле: два отчёта на одну дату по разным махаллям",
           f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals, mahalla_id) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 1}}', {M1}), ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 2}}', {M2})", "authenticated", S)
 expect_err("показатели по махалле: дубль для той же махалли", f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals, mahalla_id) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 3}}', {M1})", "authenticated", S, "duplicate")
@@ -347,6 +345,71 @@ expect_err("махалли: с отчётами не удаляется", f"sele
 M3 = expect_ok("махалли: пустая махалля", f"select public.admin_save_mahalla(null, 'Пустая', array[{I1}])", "authenticated", A)
 expect_ok("махалли: пустая удаляется", f"select public.admin_delete_mahalla({M3})", "authenticated", A)
 expect_ok("махалли: удаление убрало её связи", f"select count(*) from public.mahalla_links where mahalla_id={M3}", "authenticated", S, out="0")
+
+# ---------------- рассылки и задания (миграция 0010)
+BC = str(uuid.uuid4()); P1 = f"{BC}/1700000000001/plan.xlsx"; P2 = f"{BC}/1700000000002/plan.xlsx"
+AUD = f'{{"users":["{S}","{S2}"]}}'
+PUB = lambda path, aud=AUD, title="План": f"select public.admin_publish_broadcast('{BC}', '{title}', 'заметка', true, '{aud}'::jsonb, '{path}', 'plan.xlsx', 1000)"
+expect_err("рассылка: staff не публикует", PUB(P1), "authenticated", S, "forbidden")
+expect_err("рассылка: путь не от этого id", PUB("00000000-0000-0000-0000-000000000000/1/x.xlsx"), "authenticated", A, "bad_path")
+expect_err("рассылка: пустая аудитория отклоняется", PUB(P1, '{}'), "authenticated", A, "no_recipients")
+expect_err("рассылка: пустое название", PUB(P1, title=" "), "authenticated", A, "bad_title")
+expect_ok("рассылка: публикация", PUB(P1), "authenticated", A)
+expect_ok("рассылка: 2 получателя, версия 1", f"select count(*) || '/' || max(version) from public.broadcast_recipients r join public.broadcast_versions v using (broadcast_id) where r.broadcast_id='{BC}'", out="2/1")
+expect_ok("аудитория «все» = действующие участники", "select array_length(private.resolve_audience('{\"all\":true}'), 1) = (select count(*) from public.profiles p where p.removed_at is null and exists (select 1 from public.user_roles r where r.user_id = p.id))", out="t")
+expect_err("рассылки: прямое чтение таблицы закрыто", "select * from public.broadcasts", "authenticated", S, "permission denied")
+expect_err("рассылки: журнал напрямую закрыт", "select * from public.broadcast_events", "authenticated", A, "permission denied")
+expect_ok("my_broadcasts: получатель видит", "select count(*) || '/' || bool_or(viewed)::text from public.my_broadcasts()", "authenticated", S, out="1/false")
+expect_ok("my_broadcasts: не получатель не видит", "select count(*) from public.my_broadcasts()", "authenticated", D, out="0")
+expect_ok("просмотр записывается", f"select public.broadcast_view('{BC}')", "authenticated", S)
+expect_ok("повторный просмотр в 10 минут не дублируется", f"select public.broadcast_view('{BC}')", "authenticated", S)
+expect_ok("…в журнале одна запись", f"select count(*) from public.broadcast_events where broadcast_id='{BC}' and action='view'", out="1")
+expect_err("просмотр: не получатель", f"select public.broadcast_view('{BC}')", "authenticated", D, "forbidden")
+expect_ok("скачивание: получатель получает путь", f"select public.broadcast_download('{BC}')", "authenticated", S, out=P1)
+expect_err("скачивание: не получатель", f"select public.broadcast_download('{BC}')", "authenticated", D, "forbidden")
+expect_ok("скачивание: админ получает путь без записи в журнал", f"select public.broadcast_download('{BC}')", "authenticated", A, out=P1)
+expect_ok("журнал: одно скачивание", f"select count(*) from public.broadcast_events where broadcast_id='{BC}' and action='download'", out="1")
+expect_ok("статус: S открыл и скачал, S2 нет", f"select string_agg(viewed::text || downloaded::text, ',' order by user_id::text = '{S}' desc) from public.admin_broadcast_status('{BC}')", "authenticated", A, out="truetrue,falsefalse")
+expect_err("статус: staff не видит", f"select * from public.admin_broadcast_status('{BC}')", "authenticated", S, "forbidden")
+expect_ok("список: счётчики", "select total || '/' || viewed || '/' || downloaded || '/' || version from public.admin_list_broadcasts()", "authenticated", A, out="2/1/1/1")
+expect_ok("список: staff ничего не видит", "select count(*) from public.admin_list_broadcasts()", "authenticated", S, out="0")
+# Telegram-уведомления
+expect_err("уведомления: staff не получает цели", f"select * from public.admin_notify_targets('broadcast', '{BC}')", "authenticated", S, "forbidden")
+expect_ok("уведомления: оба ещё не уведомлены", f"select count(*) from public.admin_notify_targets('broadcast', '{BC}')", "authenticated", A, out="2")
+expect_ok("уведомления: отметка", f"select public.admin_mark_notified('broadcast', '{BC}', array['{S}']::uuid[])", "authenticated", A)
+expect_ok("уведомления: осталась одна цель", f"select count(*) from public.admin_notify_targets('broadcast', '{BC}')", "authenticated", A, out="1")
+expect_ok("напоминание: только не открывшим", f"select count(*) from public.admin_notify_targets('broadcast', '{BC}', true)", "authenticated", A, out="1")
+# новая версия
+expect_ok("новая версия того же файла", PUB(P2, '{}'), "authenticated", A)
+expect_ok("версия 2, получатели те же", f"select max(version) || '/' || (select count(*) from public.broadcast_recipients where broadcast_id='{BC}') from public.broadcast_versions where broadcast_id='{BC}'", out="2/2")
+expect_ok("после новой версии статусы сброшены", f"select count(*) from public.admin_broadcast_status('{BC}') where viewed or downloaded", "authenticated", A, out="0")
+expect_ok("после новой версии нужно уведомить снова обоих", f"select count(*) from public.admin_notify_targets('broadcast', '{BC}')", "authenticated", A, out="2")
+expect_ok("скачивание отдаёт новый файл", f"select public.broadcast_download('{BC}')", "authenticated", S2, out=P2)
+expect_err("версия: тот же путь нельзя", PUB(P2, '{}'), "authenticated", A, "duplicate")
+# хранилище
+sql(f"insert into storage.objects(bucket_id, name) values ('broadcasts', '{P2}')")
+expect_ok("хранилище: получатель файл напрямую не видит", "select count(*) from storage.objects where bucket_id='broadcasts'", "authenticated", S, out="0")
+expect_ok("хранилище: админ видит", "select count(*) from storage.objects where bucket_id='broadcasts'", "authenticated", A, out="1")
+expect_err("хранилище: staff не загружает", f"insert into storage.objects(bucket_id, name) values ('broadcasts', '{BC}/1/y.pdf')", "authenticated", S, "row-level security")
+# задания
+TK = expect_ok("задание: создано", f"select public.admin_create_task('Сдать отчёт', 'до пятницы', '2026-10-30', false, '{AUD}'::jsonb, '{BC}')", "authenticated", A)
+expect_err("задание: staff не создаёт", f"select public.admin_create_task('x', null, null, false, '{AUD}'::jsonb)", "authenticated", S, "forbidden")
+expect_err("задание: без получателей", "select public.admin_create_task('x', null, null, false, '{}'::jsonb)", "authenticated", A, "no_recipients")
+expect_ok("my_tasks: получатель видит, не видел", "select count(*) || '/' || bool_or(seen_at is null)::text from public.my_tasks()", "authenticated", S, out="1/true")
+expect_ok("my_tasks: чужой не видит", "select count(*) from public.my_tasks()", "authenticated", D, out="0")
+expect_ok("задание: просмотрено", f"select public.task_seen('{TK}')", "authenticated", S)
+expect_err("задание: не получатель не отмечает выполнение", f"select public.task_done('{TK}', 'х')", "authenticated", D, "forbidden")
+expect_ok("задание: выполнено с заметкой", f"select public.task_done('{TK}', 'сделано')", "authenticated", S)
+expect_ok("статус задания: S выполнил, S2 не видел", f"select string_agg((seen_at is not null)::text || (done_at is not null)::text, ',' order by user_id::text = '{S}' desc) from public.admin_task_status('{TK}')", "authenticated", A, out="truetrue,falsefalse")
+expect_ok("список заданий: счётчики", "select total || '/' || seen || '/' || done from public.admin_list_tasks()", "authenticated", A, out="2/1/1")
+expect_ok("задание: напоминание только не выполнившим", f"select count(*) from public.admin_notify_targets('task', '{TK}', true)", "authenticated", A, out="1")
+expect_ok("задание: можно вернуть в «не выполнено»", f"select public.task_done('{TK}', null, false)", "authenticated", S)
+expect_ok("…и тогда оба в напоминании", f"select count(*) from public.admin_notify_targets('task', '{TK}', true)", "authenticated", A, out="2")
+expect_err("задание: staff не удаляет", f"select public.admin_delete_task('{TK}')", "authenticated", S, "forbidden")
+expect_ok("задание: админ удаляет", f"select public.admin_delete_task('{TK}')", "authenticated", A)
+expect_err("рассылка: staff не удаляет", f"select public.admin_delete_broadcast('{BC}')", "authenticated", S, "forbidden")
+expect_ok("рассылка: удаление возвращает пути файлов", f"select array_length(public.admin_delete_broadcast('{BC}'), 1)", "authenticated", A, out="2")
+expect_ok("рассылка: удалена вместе с получателями и журналом", f"select (select count(*) from public.broadcast_recipients where broadcast_id='{BC}') + (select count(*) from public.broadcast_events where broadcast_id='{BC}')", out="0")
 
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",

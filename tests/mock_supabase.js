@@ -38,6 +38,12 @@
       if (M.rpc && M.rpc[name]) { var v = M.rpc[name](args); return v && v.error ? res(null, v.error) : res(v); }
       return res(null, { message: "no mock for " + name });
     },
+    functions: { invoke: function (name, opts) {
+      M.log.push(["fn", name, opts && opts.body]);
+      var f = M.fn && M.fn[name]; if (!f) return res(null, { message: "no fn " + name });
+      var v = f(opts && opts.body);
+      return v && v.error ? res(null, { message: "edge", context: { json: function () { return Promise.resolve({ error: v.error.message }); } } }) : res(v);
+    } },
     storage: { from: function () { return {
       upload: function (p) { M.log.push(["upload", p]); return res({ path: p }); },
       createSignedUrl: function (p) { return res({ signedUrl: "about:blank#" + p }); },

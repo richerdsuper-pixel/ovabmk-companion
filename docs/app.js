@@ -230,6 +230,7 @@
         });
         await loadInstitutions();
         await loadMahallas();
+        await loadBadges();
         var m = await sb.from("folder_members").select("folder_id").eq("user_id", uid);
         S.myFolders = (m.data || []).map(function (x) { return x.folder_id; });
       }
@@ -277,11 +278,13 @@
       }));
   }
   function nav(cur) {
-    var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"]];
+    var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"],
+      ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"]];
     if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
-      return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null, text: t(i[1]) });
+      var n = i[3] && S.badge ? S.badge[i[3]] : 0;
+      return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null }, t(i[1]), n ? h("span", { class: "nbadge", text: String(n) }) : null);
     }));
   }
 
@@ -302,6 +305,8 @@
     if (route === "/folders") return foldersView();
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return canSummary() ? indSummaryView() : forbidden("indsum");
+    if (route === "/broadcasts") return broadcastsView();
+    if (route === "/tasks") return tasksView();
     if (route === "/mahallas") return canSummary() ? mahallasView() : forbidden("mahallas");
     if (route === "/admin/institutions") return isAdmin() ? institutionsView() : forbidden("institutions");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
@@ -1367,6 +1372,299 @@
             h("button", { class: "btn sm", type: "button", text: t("u_scope_child"), onclick: function () { setPos(BRANCHES.child); } }),
             h("button", { class: "btn sm", type: "button", text: t("u_scope_clear"), onclick: function () { setPos([]); } })),
           posBoxes, h("div", null, save))));
+  }
+
+  // --- рассылки и задания («топширик»)
+  var MIME = { pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
+  async function callFn(name, body) {
+    var r = await sb.functions.invoke(name, { body: body });
+    if (r.error) {
+      var m = errMsg(r.error);
+      try { var j = await r.error.context.json(); if (j && j.error) m = j.error; } catch (e) {}
+      return { error: { message: m } };
+    }
+    return { data: r.data };
+  }
+  function fnErr(e) { var m = errMsg(e); return /forbidden/.test(m) ? t("bc_forbidden") : t("err_action", { msg: m }); }
+  async function sendNotify(kind, id, remind) {
+    var r = await callFn("tg-notify", { kind: kind, id: id, remind: !!remind });
+    if (r.error) { toast(fnErr(r.error)); return null; }
+    toast(t("bc_notify_done", { sent: r.data.sent, total: r.data.total, blocked: (r.data.blocked || 0) + (r.data.failed || 0) })); return r.data;
+  }
+  async function loadBadges() {
+    var a = await sb.rpc("my_broadcasts"), b = await sb.rpc("my_tasks");
+    S.badge = { bc: (a.data || []).filter(function (x) { return !x.viewed; }).length, tk: (b.data || []).filter(function (x) { return !x.done_at; }).length };
+  }
+  function armed(btn, label, fn) {   // кнопка с подтверждением вторым нажатием
+    btn.addEventListener("click", function () {
+      if (!btn.classList.contains("armed")) {
+        btn.classList.add("armed"); btn.textContent = t("del_confirm");
+        setTimeout(function () { btn.classList.remove("armed"); btn.textContent = label; }, 4000); return;
+      }
+      btn.disabled = true; fn();
+    });
+  }
+  // выбор получателей: все / по должности / по учреждениям / вручную
+  function audiencePicker(users) {
+    var sel = h("select", { "aria-label": t("aud_label") }, ["all", "positions", "institutions", "people"].map(function (k) { return h("option", { value: k, text: t("aud_" + k) }); }));
+    var body = h("div", { class: "stack", style: "gap:8px" }), chosen = { positions: {}, institutions: {}, users: {} };
+    var qIn = h("input", { type: "search", placeholder: t("aud_search"), "aria-label": t("aud_search") });
+    var poss = Array.from(new Set(users.map(function (u) { return (u.user_position || "").trim(); }).filter(Boolean))).sort();
+    function list(key, items) {
+      if (!items.length) return h("p", { class: "mute small", text: t("aud_none") });
+      return h("div", { class: "fold-picks wide" }, items.map(function (it) {
+        var cb = h("input", { type: "checkbox", value: String(it[0]), checked: !!chosen[key][it[0]] });
+        cb.addEventListener("change", function () { if (cb.checked) chosen[key][it[0]] = 1; else delete chosen[key][it[0]]; });
+        return h("label", null, cb, it[1]);
+      }));
+    }
+    function draw() {
+      body.textContent = ""; var m = sel.value;
+      if (m === "positions") body.appendChild(list("positions", poss.map(function (p) { return [p, p]; })));
+      else if (m === "institutions") body.appendChild(list("institutions", (S.institutions || []).map(function (i) { return [i.id, i.name]; })));
+      else if (m === "people") {
+        var wrap = h("div");
+        var dr = function () {
+          var q = qIn.value.toLowerCase().trim(); wrap.textContent = "";
+          wrap.appendChild(list("users", users.filter(function (u) { return !q || (u.full_name || "").toLowerCase().indexOf(q) >= 0; })
+            .map(function (u) { return [u.user_id, (u.full_name || "—") + (u.user_position ? " — " + u.user_position : "")]; })));
+        };
+        qIn.oninput = dr; body.appendChild(qIn); body.appendChild(wrap); dr();
+      }
+    }
+    sel.addEventListener("change", draw); draw();
+    return { node: h("div", { class: "stack", style: "gap:8px" }, h("label", { class: "f" }, t("aud_label"), sel), body),
+      get: function () {
+        var m = sel.value;
+        if (m === "all") return { all: true };
+        if (m === "positions") return { positions: Object.keys(chosen.positions) };
+        if (m === "institutions") return { institutions: Object.keys(chosen.institutions).map(Number) };
+        return { users: Object.keys(chosen.users) };
+      } };
+  }
+  function statusTable(head, rows) {
+    return h("div", { class: "tbl" }, h("table", null, h("thead", null, h("tr", null, head.map(function (x) { return h("th", { text: x }); }))),
+      h("tbody", null, rows.map(function (r) { return h("tr", null, r.map(function (c) { return h("td", null, c); })); }))));
+  }
+  function dash(v) { return v ? fmtDT(v) : "—"; }
+
+  function bcCard(b) {
+    var chip = h("span", { class: "chip " + (b.downloaded ? "ok" : b.viewed ? "acc" : "warn"), text: t(b.downloaded ? "bc_st_dl" : b.viewed ? "bc_st_seen" : "bc_st_new") });
+    var dl = h("button", { class: "btn pri", type: "button", text: t("bc_download") });
+    dl.addEventListener("click", async function () {
+      dl.disabled = true;
+      await sb.rpc("broadcast_view", { _id: b.id });
+      var r = await callFn("bc-file", { id: b.id });
+      dl.disabled = false;
+      if (r.error) { toast(fnErr(r.error)); return; }
+      var a = h("a", { href: r.data.url, download: b.file_name, rel: "noopener" }); document.body.appendChild(a); a.click(); a.remove();
+      b.downloaded = true; b.viewed = true; chip.className = "chip ok"; chip.textContent = t("bc_st_dl");
+    });
+    var d = h("details", { class: "fcard" + (b.viewed ? "" : " bc-new") },
+      h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
+        h("b", { text: b.title }), b.urgent ? h("span", { class: "chip bad", text: t("bc_urgent") }) : null, chip,
+        h("span", { class: "mute small", text: t("bc_updated", { d: fmtDate(b.updated_at) }) + (b.version > 1 ? " · " + t("bc_version", { v: b.version }) : "") })),
+      h("div", { class: "stack", style: "margin-top:10px;gap:8px" }, b.note ? h("p", { text: b.note }) : null,
+        h("p", { class: "mute small", text: b.file_name + (b.file_size != null ? " · " + fmtSize(b.file_size) : "") }), h("div", { class: "row" }, dl)));
+    d.addEventListener("toggle", function () {
+      if (d.open && !b.viewed) { b.viewed = true; sb.rpc("broadcast_view", { _id: b.id }); if (!b.downloaded) { chip.className = "chip acc"; chip.textContent = t("bc_st_seen"); } }
+    });
+    return d;
+  }
+
+  function bcAdminRow(b, onNewVersion) {
+    var st = h("div");
+    var d = h("details", { class: "fcard" },
+      h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
+        h("b", { text: b.title }), b.urgent ? h("span", { class: "chip bad", text: t("bc_urgent") }) : null,
+        h("span", { class: "chip", text: t("bc_opened", { a: b.viewed, n: b.total }) }), h("span", { class: "chip", text: t("bc_downloaded", { a: b.downloaded, n: b.total }) }),
+        h("span", { class: "chip", text: t("bc_notified", { a: b.notified, n: b.total }) }),
+        h("span", { class: "mute small", text: b.file_name + " · " + t("bc_version", { v: b.version }) + " · " + fmtDate(b.updated_at) })));
+    var del = h("button", { class: "btn sm danger", type: "button", text: t("del") });
+    armed(del, t("del"), async function () {
+      var x = await sb.rpc("admin_delete_broadcast", { _id: b.id });
+      if (x.error) { del.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
+      if ((x.data || []).length) await sb.storage.from("broadcasts").remove(x.data);
+      toast(t("bc_del_done")); broadcastsView();
+    });
+    var loaded = false;
+    async function loadStatus() {
+      st.textContent = ""; st.appendChild(loadingBox());
+      var x = await sb.rpc("admin_broadcast_status", { _id: b.id });
+      st.textContent = "";
+      if (x.error) { st.appendChild(failBox(x.error)); return; }
+      st.appendChild(statusTable([t("st_col_person"), t("st_col_tg"), t("st_col_opened"), t("st_col_dl")], (x.data || []).map(function (r) {
+        return [h("div", null, h("b", { text: r.full_name || "—" }), h("div", { class: "mute small", text: r.user_position || "" })),
+          r.notified_version === b.version ? "✓" : "—", r.viewed ? dash(r.first_view) + (r.views > 1 ? " (×" + r.views + ")" : "") : "—", r.downloaded ? dash(r.last_download) + (r.downloads > 1 ? " (×" + r.downloads + ")" : "") : "—"];
+      })));
+    }
+    d.addEventListener("toggle", function () { if (d.open && !loaded) { loaded = true; loadStatus(); } });
+    d.appendChild(h("div", { class: "stack", style: "margin-top:10px;gap:10px" }, b.note ? h("p", { text: b.note }) : null,
+      h("div", { class: "row" },
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_notify"), onclick: async function () { await sendNotify("broadcast", b.id, false); broadcastsView(); } }),
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_remind"), onclick: function () { sendNotify("broadcast", b.id, true); } }),
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_newver"), onclick: function () { onNewVersion(b); } }),
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_refresh"), onclick: loadStatus }), del), st));
+    return d;
+  }
+
+  function bcPublishForm(users, existing) {
+    var target = h("select", { id: "bc_target", "aria-label": t("bc_f_target") }, h("option", { value: "", text: t("bc_f_new") }),
+      existing.map(function (b) { return h("option", { value: b.id, text: b.title }); }));
+    var title = h("input", { type: "text", id: "bc_title", maxlength: "200", "aria-label": t("bc_f_title") });
+    var note = h("textarea", { rows: "2", id: "bc_note", maxlength: "2000", "aria-label": t("bc_f_note") });
+    var urgent = h("input", { type: "checkbox", id: "bc_urgent" }), notify = h("input", { type: "checkbox", id: "bc_notify", checked: true });
+    var file = h("input", { type: "file", id: "bc_file", accept: ".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" });
+    var picker = audiencePicker(users), hint = h("p", { class: "mute small hidden", text: t("bc_f_newver") });
+    function onTarget() {
+      var b = existing.filter(function (x) { return x.id === target.value; })[0];
+      hint.classList.toggle("hidden", !b);
+      if (b) { title.value = b.title; note.value = b.note || ""; urgent.checked = !!b.urgent; }
+    }
+    target.addEventListener("change", onTarget);
+    var btn = h("button", { class: "btn pri", type: "submit", text: t("bc_publish") });
+    var form = h("form", { class: "stack", id: "bc_form" },
+      existing.length ? h("label", { class: "f" }, t("bc_f_target"), target) : null, hint,
+      h("label", { class: "f" }, t("bc_f_title"), title), h("label", { class: "f" }, t("bc_f_note"), note),
+      h("label", { class: "f" }, t("bc_f_file"), file),
+      h("label", { class: "row", style: "align-items:center" }, urgent, t("bc_f_urgent")), picker.node,
+      h("label", { class: "row", style: "align-items:center" }, notify, t("bc_f_notify")), h("div", { class: "row" }, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var f = file.files[0], id = target.value || uuid();
+      if (title.value.trim().length < 1) { toast(t("bc_need_title")); return; }
+      if (!f) { toast(t("bc_need_file")); return; }
+      if (f.size > 20 * 1024 * 1024) { toast(t("bc_too_big")); return; }
+      var ext = (/\.([a-z0-9]+)$/i.exec(f.name) || [])[1] || "", mime = MIME[ext.toLowerCase()];
+      if (!mime) { toast(t("bc_bad_type")); return; }
+      btn.disabled = true;
+      var path = id + "/" + Date.now() + "/" + safeName(f.name);
+      var up = await sb.storage.from("broadcasts").upload(path, f, { contentType: mime, upsert: false });
+      if (up.error) { btn.disabled = false; toast(t("err_action", { msg: errMsg(up.error) })); return; }
+      var x = await sb.rpc("admin_publish_broadcast", { _id: id, _title: title.value, _note: note.value, _urgent: urgent.checked, _audience: picker.get(), _path: path, _file_name: f.name, _size: f.size });
+      if (x.error) {
+        await sb.storage.from("broadcasts").remove([path]); btn.disabled = false;
+        toast(/no_recipients/.test(errMsg(x.error)) ? t("bc_no_recipients") : t("err_action", { msg: errMsg(x.error) })); return;
+      }
+      toast(t("bc_published", { n: x.data.recipients }));
+      if (notify.checked) await sendNotify("broadcast", id, false);
+      broadcastsView();
+    });
+    return { node: h("section", { class: "panel stack" }, h("h2", { text: t("bc_publish") }), form),
+      newVersion: function (b) { target.value = b.id; onTarget(); form.scrollIntoView({ behavior: "smooth", block: "start" }); } };
+  }
+
+  async function broadcastsView() {
+    var my = renderToken;
+    shell("broadcasts", loadingBox());
+    var mine = await sb.rpc("my_broadcasts");
+    var adm = isAdmin() ? await sb.rpc("admin_list_broadcasts") : null, usr = isAdmin() ? await sb.rpc("admin_list_users") : null;
+    if (my !== renderToken) return;
+    if (mine.error) { shell("broadcasts", failBox(mine.error)); return; }
+    var list = mine.data || [];
+    S.badge = S.badge || {}; S.badge.bc = list.filter(function (x) { return !x.viewed; }).length;
+    var parts = [];
+    if (isAdmin()) {
+      var form = bcPublishForm((usr && usr.data) || [], (adm && adm.data) || []);
+      parts.push(form.node);
+      var rows = ((adm && adm.data) || []).map(function (b) { return bcAdminRow(b, form.newVersion); });
+      parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("bc_sent_list", { n: rows.length }) }), rows.length ? rows : h("p", { class: "mute", text: t("bc_empty_admin") })));
+    }
+    parts.push(h("section", { class: "panel stack" }, h("h2", { text: t("bc_title") }), list.length ? list.map(bcCard) : h("p", { class: "mute", text: t("bc_empty") })));
+    shell("broadcasts", h("div", { class: "stack" }, parts));
+  }
+
+  // --- задания
+  function tkCard(k) {
+    var late = k.due_date && !k.done_at && k.due_date < new Date().toISOString().slice(0, 10);
+    var chip = h("span", { class: "chip " + (k.done_at ? "ok" : k.seen_at ? "acc" : "warn"), text: t(k.done_at ? "tk_st_done" : k.seen_at ? "tk_st_seen" : "tk_st_new") });
+    var note = h("textarea", { rows: "2", maxlength: "1000", placeholder: t("tk_note"), "aria-label": t("tk_note") }); note.value = k.note || "";
+    var btn = h("button", { class: "btn pri", type: "button", text: t(k.done_at ? "tk_btn_undo" : "tk_btn_done") });
+    btn.addEventListener("click", async function () {
+      btn.disabled = true;
+      var x = await sb.rpc("task_done", { _id: k.id, _note: note.value, _done: !k.done_at });
+      btn.disabled = false;
+      if (x.error) { toast(t("err_action", { msg: errMsg(x.error) })); return; }
+      toast(t("u_saved")); tasksView();
+    });
+    var d = h("details", { class: "fcard" + (k.done_at ? " dim" : "") },
+      h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
+        h("b", { text: k.title }), k.urgent ? h("span", { class: "chip bad", text: t("bc_urgent") }) : null, chip,
+        k.due_date ? h("span", { class: "chip " + (late ? "bad" : ""), text: late ? t("tk_overdue") + " · " + fmtDate(k.due_date) : t("tk_due", { d: fmtDate(k.due_date) }) }) : null),
+      h("div", { class: "stack", style: "margin-top:10px;gap:8px" }, k.body ? h("p", { text: k.body }) : null, h("label", { class: "f" }, t("tk_note"), note), h("div", { class: "row" }, btn)));
+    d.addEventListener("toggle", function () {
+      if (d.open && !k.seen_at) { k.seen_at = new Date().toISOString(); sb.rpc("task_seen", { _id: k.id }); if (!k.done_at) { chip.className = "chip acc"; chip.textContent = t("tk_st_seen"); } }
+    });
+    return d;
+  }
+  function tkAdminRow(k) {
+    var st = h("div"), loaded = false;
+    var d = h("details", { class: "fcard" + (k.total && k.done === k.total ? " dim" : "") },
+      h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
+        h("b", { text: k.title }), k.urgent ? h("span", { class: "chip bad", text: t("bc_urgent") }) : null,
+        h("span", { class: "chip", text: t("tk_seen_n", { a: k.seen, n: k.total }) }), h("span", { class: "chip " + (k.total && k.done === k.total ? "ok" : ""), text: t("tk_done_n", { a: k.done, n: k.total }) }),
+        k.due_date ? h("span", { class: "mute small", text: t("tk_due", { d: fmtDate(k.due_date) }) }) : null));
+    async function loadStatus() {
+      st.textContent = ""; st.appendChild(loadingBox());
+      var x = await sb.rpc("admin_task_status", { _id: k.id }); st.textContent = "";
+      if (x.error) { st.appendChild(failBox(x.error)); return; }
+      st.appendChild(statusTable([t("st_col_person"), t("st_col_tg"), t("st_col_seen"), t("st_col_done"), t("st_col_note")], (x.data || []).map(function (r) {
+        return [h("div", null, h("b", { text: r.full_name || "—" }), h("div", { class: "mute small", text: r.user_position || "" })), r.notified_at ? "✓" : "—", dash(r.seen_at), dash(r.done_at), r.note || ""];
+      })));
+    }
+    d.addEventListener("toggle", function () { if (d.open && !loaded) { loaded = true; loadStatus(); } });
+    var del = h("button", { class: "btn sm danger", type: "button", text: t("del") });
+    armed(del, t("del"), async function () {
+      var x = await sb.rpc("admin_delete_task", { _id: k.id });
+      if (x.error) { del.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
+      toast(t("tk_deleted")); tasksView();
+    });
+    d.appendChild(h("div", { class: "stack", style: "margin-top:10px;gap:10px" }, k.body ? h("p", { text: k.body }) : null,
+      h("div", { class: "row" },
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_notify"), onclick: async function () { await sendNotify("task", k.id, false); } }),
+        h("button", { class: "btn sm", type: "button", text: t("tk_btn_remind"), onclick: function () { sendNotify("task", k.id, true); } }),
+        h("button", { class: "btn sm", type: "button", text: t("bc_btn_refresh"), onclick: loadStatus }), del), st));
+    return d;
+  }
+  function tkForm(users) {
+    var title = h("input", { type: "text", id: "tk_title", maxlength: "200", "aria-label": t("tk_f_title") });
+    var body = h("textarea", { rows: "3", id: "tk_body", maxlength: "4000", "aria-label": t("tk_f_body") });
+    var due = h("input", { type: "date", id: "tk_due", "aria-label": t("tk_f_due") });
+    var urgent = h("input", { type: "checkbox", id: "tk_urgent" }), notify = h("input", { type: "checkbox", id: "tk_notify", checked: true });
+    var picker = audiencePicker(users), btn = h("button", { class: "btn pri", type: "submit", text: t("tk_create") });
+    var form = h("form", { class: "stack", id: "tk_form" }, h("label", { class: "f" }, t("tk_f_title"), title), h("label", { class: "f" }, t("tk_f_body"), body),
+      h("label", { class: "f" }, t("tk_f_due"), due), h("label", { class: "row", style: "align-items:center" }, urgent, t("bc_f_urgent")), picker.node,
+      h("label", { class: "row", style: "align-items:center" }, notify, t("bc_f_notify")), h("div", { class: "row" }, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (title.value.trim().length < 1) { toast(t("bc_need_title")); return; }
+      btn.disabled = true;
+      var x = await sb.rpc("admin_create_task", { _title: title.value, _body: body.value, _due: due.value || null, _urgent: urgent.checked, _audience: picker.get(), _broadcast: null });
+      if (x.error) { btn.disabled = false; toast(/no_recipients/.test(errMsg(x.error)) ? t("bc_no_recipients") : t("err_action", { msg: errMsg(x.error) })); return; }
+      toast(t("tk_created"));
+      if (notify.checked) await sendNotify("task", x.data, false);
+      tasksView();
+    });
+    return h("section", { class: "panel stack" }, h("h2", { text: t("tk_new") }), form);
+  }
+  async function tasksView() {
+    var my = renderToken;
+    shell("tasks", loadingBox());
+    var mine = await sb.rpc("my_tasks");
+    var adm = isAdmin() ? await sb.rpc("admin_list_tasks") : null, usr = isAdmin() ? await sb.rpc("admin_list_users") : null;
+    if (my !== renderToken) return;
+    if (mine.error) { shell("tasks", failBox(mine.error)); return; }
+    var list = mine.data || [];
+    S.badge = S.badge || {}; S.badge.tk = list.filter(function (x) { return !x.done_at; }).length;
+    var parts = [];
+    if (isAdmin()) {
+      parts.push(tkForm((usr && usr.data) || []));
+      var rows = ((adm && adm.data) || []).map(tkAdminRow);
+      parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("tk_sent_list", { n: rows.length }) }), rows.length ? rows : h("p", { class: "mute", text: t("tk_empty_admin") })));
+    }
+    parts.push(h("section", { class: "panel stack" }, h("h2", { text: t("tk_title") }), list.length ? list.map(tkCard) : h("p", { class: "mute", text: t("tk_empty") })));
+    shell("tasks", h("div", { class: "stack" }, parts));
   }
 
   // --- администратор: учреждения

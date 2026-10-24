@@ -50,14 +50,28 @@ window.__MOCK.rpc = {
   admin_set_role: function(a){ return a._role==='admin' && !a._on ? {error:{message:'last_admin'}} : null; },
   decide_request: function(){ return null; },
   admin_set_folders: function(){ return null; }, admin_update_profile: function(){ return null; }, revoke_invite: function(){ return null; },
+  my_broadcasts: function(){ return window.__BC || []; }, my_tasks: function(){ return window.__TK || []; },
+  broadcast_view: function(){ return null; }, task_seen: function(){ return null; }, task_done: function(){ return null; },
+  admin_list_broadcasts: function(){ return window.__ABC || []; },
+  admin_broadcast_status: function(){ return [
+    {user_id:'u1', full_name:'Иванова Мария', user_position:'Доя', notified_version:2, viewed:true, first_view:'2026-10-24T06:00:00Z', views:2, downloaded:true, last_download:'2026-10-24T06:05:00Z', downloads:1},
+    {user_id:'u2', full_name:'Петрова Зарина', user_position:'Педиатр', notified_version:null, viewed:false, views:0, downloaded:false, downloads:0}]; },
+  admin_publish_broadcast: function(a){ return window.__pubErr ? {error:{message:window.__pubErr}} : {id:a._id, version:1, recipients:3}; },
+  admin_delete_broadcast: function(){ return ['x/1/plan.xlsx']; },
+  admin_list_tasks: function(){ return window.__ATK || []; },
+  admin_task_status: function(){ return [{user_id:'u1', full_name:'Иванова Мария', user_position:'Доя', notified_at:'2026-10-24T05:00:00Z', seen_at:'2026-10-24T06:00:00Z', done_at:null, note:''}]; },
+  admin_create_task: function(){ return 't-new'; }, admin_delete_task: function(){ return null; },
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
 };""" % (A, S_, A)
+
+FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
+  'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; } };"""
 
 def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None, hash="#/folders"):
     b = p.chromium.launch()
     ctx = b.new_context(viewport={"width": w, "height": h}, color_scheme=scheme, accept_downloads=True)
     if now: ctx.add_init_script("window.__NOW=" + json.dumps(now))
-    ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC)
+    ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC + FN)
     ctx.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
     ctx.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
     ctx.route("**/fonts.g*/**", lambda r: r.abort())
@@ -599,6 +613,119 @@ with sync_playwright() as p:
     pg.select_option("select[aria-label='Группировать']", "inst"); pg.wait_for_timeout(500)
     ok("сводка: по учреждениям — берётся название отчёта", "свп №3 (3)" in pg.inner_text("table.indsum thead").lower(), pg.inner_text("table.indsum thead"))
     ok("ошибок JS нет (группировка)", not errs, errs); b.close()
+
+    # --- рассылки и задания
+    BCD = [{"id": "b1", "title": "План на неделю", "note": "Заполните до пятницы", "urgent": True, "version": 2, "file_name": "plan.xlsx", "file_size": 5000,
+            "updated_at": "2026-10-24T05:00:00Z", "viewed": False, "downloaded": False}]
+    TKD = [{"id": "t1", "title": "Сдать отчёт по ГСД", "body": "Форма 5", "due_date": "2026-10-20", "urgent": False, "broadcast_id": None,
+            "created_at": "2026-10-18T05:00:00Z", "seen_at": None, "done_at": None, "note": None}]
+    def bc_page(uid, roles, hash, bc=BCD, tk=TKD, abc=None, atk=None, w=1280, h_=900):
+        sc = scenario(uid, roles)
+        b_, pg_, e_ = page_for(p, sc, w=w, h=h_, hash=hash)
+        return b_, pg_, e_
+    sc = scenario(S_, ("staff",), my_folders=(1,))
+    b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 1100, "height": 900})
+    ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC + FN + "window.__BC=" + json.dumps(BCD) + ";window.__TK=" + json.dumps(TKD) + ";")
+    ctx.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
+    ctx.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    ctx.route("**/example.test/**", lambda r: r.fulfill(status=200, headers={"Content-Disposition": "attachment; filename=plan.xlsx"}, body="x"))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/broadcasts"); pg.wait_for_timeout(500)
+    nav_txt = pg.inner_text("nav.nav")
+    ok("рассылки: пункты меню и счётчики", "Рассылки" in nav_txt and "Задания" in nav_txt and pg.locator(".nbadge").count() == 2, nav_txt)
+    ok("рассылки: карточка со срочностью и статусом «новое»", "План на неделю" in pg.inner_text("#app") and "срочно" in pg.inner_text("#app") and "новое" in pg.inner_text("#app"))
+    ok("рассылки: у получателя нет формы отправки", pg.locator("#bc_form").count() == 0)
+    pg.click("details.fcard summary"); pg.wait_for_timeout(200)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("рассылки: открытие карточки пишет «открыл»", any(x[0] == "rpc" and x[1] == "broadcast_view" and x[2]["_id"] == "b1" for x in lg), lg[-3:])
+    ok("рассылки: статус стал «открыто»", "открыто" in pg.inner_text("details.fcard summary"))
+    pg.click("details.fcard .btn.pri"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("рассылки: скачивание идёт через серверную функцию", any(x[0] == "fn" and x[1] == "bc-file" and x[2]["id"] == "b1" for x in lg), lg[-4:])
+    ok("рассылки: статус стал «скачано»", "скачано" in pg.inner_text("details.fcard summary"))
+    pg.evaluate("window.__fnErr = true"); pg.click("details.fcard .btn.pri"); pg.wait_for_timeout(300)
+    ok("рассылки: отказ сервера показан понятным текстом", "Нет доступа к файлу" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.click("nav.nav >> text=Задания"); pg.wait_for_timeout(500)
+    ok("задания: карточка с просрочкой", "Сдать отчёт по ГСД" in pg.inner_text("#app") and "просрочено" in pg.inner_text("#app"))
+    pg.click("details.fcard summary"); pg.wait_for_timeout(200)
+    ok("задания: открытие пишет «прочитал»", any(x[0] == "rpc" and x[1] == "task_seen" for x in pg.evaluate("window.__MOCK.log")))
+    pg.fill("details.fcard textarea", "готово, отправлено"); pg.click("details.fcard .btn.pri"); pg.wait_for_timeout(300)
+    td = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "task_done"]
+    ok("задания: «Выполнено» уходит с комментарием", td and td[-1][2]["_done"] is True and td[-1][2]["_note"] == "готово, отправлено", td)
+    pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(200)
+    ok("рассылки/задания: узбекский интерфейс", "Тарқатмалар" in pg.inner_text("nav.nav") and "Топшириқлар" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    ok("ошибок JS нет (рассылки: получатель)", not errs, errs); b.close()
+
+    # администратор
+    ABC = [{"id": "b1", "title": "План на неделю", "note": "Заполните до пятницы", "urgent": True, "version": 2, "file_name": "plan.xlsx", "file_size": 5000,
+            "updated_at": "2026-10-24T05:00:00Z", "total": 3, "notified": 2, "viewed": 1, "downloaded": 1}]
+    ATK = [{"id": "t1", "title": "Сдать отчёт по ГСД", "body": "Форма 5", "due_date": "2026-10-30", "urgent": False, "broadcast_id": None, "created_at": "2026-10-18T05:00:00Z", "total": 3, "seen": 1, "done": 0}]
+    sc = scenario(A, ("admin",))
+    b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 1100, "height": 900})
+    ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC + FN + "window.__ABC=" + json.dumps(ABC) + ";window.__ATK=" + json.dumps(ATK) + ";")
+    ctx.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
+    ctx.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/broadcasts"); pg.wait_for_timeout(600)
+    ok("рассылки (админ): форма и список", pg.locator("#bc_form").count() == 1 and "открыли 1 из 3" in pg.inner_text("#app") and "скачали 1 из 3" in pg.inner_text("#app") and "в Telegram: 2 из 3" in pg.inner_text("#app"), pg.inner_text("#app")[:600])
+    pg.screenshot(path=str(SHOTS / "c_broadcasts_admin.png"), full_page=True)
+    pg.locator("section:has(h3) details.fcard summary").first.click(); pg.wait_for_timeout(400)
+    st_txt = pg.inner_text("section:has(h3) details.fcard")
+    ok("рассылки (админ): видно кто открыл и скачал", "Иванова Мария" in st_txt and "Петрова Зарина" in st_txt and "×2" in st_txt, st_txt)
+    # отправка без файла / с неверным типом
+    pg.fill("#bc_title", "Новый шаблон"); pg.click("#bc_form button[type=submit]"); pg.wait_for_timeout(200)
+    ok("рассылки (админ): без файла не отправляется", "Выберите файл" in pg.inner_text("#toast"))
+    pg.set_input_files("#bc_file", {"name": "virus.exe", "mimeType": "application/octet-stream", "buffer": b"MZ"}); pg.click("#bc_form button[type=submit]"); pg.wait_for_timeout(200)
+    ok("рассылки (админ): неподходящий тип отклонён", "не принимается" in pg.inner_text("#toast"))
+    pg.set_input_files("#bc_file", {"name": "Шаблон отчёта.xlsx", "mimeType": "application/vnd.ms-excel", "buffer": b"PK\x03\x04"})
+    pg.evaluate("window.__pubErr = 'no_recipients'"); pg.select_option("#bc_form select[aria-label='Кому']", "positions"); pg.click("#bc_form button[type=submit]"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("рассылки (админ): без получателей — понятная ошибка и файл убран из хранилища", "Не выбрано ни одного получателя" in pg.inner_text("#toast") and any(x[0] == "remove" for x in lg), (pg.inner_text("#toast"), lg[-3:]))
+    pg.evaluate("window.__pubErr = null"); pg.select_option("#bc_form select[aria-label='Кому']", "all")
+    pg.set_input_files("#bc_file", {"name": "Шаблон отчёта.xlsx", "mimeType": "application/vnd.ms-excel", "buffer": b"PK\x03\x04"})
+    pg.check("#bc_urgent"); pg.click("#bc_form button[type=submit]"); pg.wait_for_timeout(600)
+    lg = pg.evaluate("window.__MOCK.log")
+    up = [x for x in lg if x[0] == "upload"]; pub = [x for x in lg if x[0] == "rpc" and x[1] == "admin_publish_broadcast"]
+    ok("рассылки (админ): файл загружен в хранилище по безопасному пути", up and "/" in up[-1][1] and up[-1][1].endswith("shablon_otchyota.xlsx"), up)
+    ok("рассылки (админ): публикация со всеми получателями и срочностью", pub and pub[-1][2]["_audience"] == {"all": True} and pub[-1][2]["_urgent"] is True and pub[-1][2]["_title"] == "Новый шаблон" and pub[-1][2]["_path"] == up[-1][1], pub)
+    ok("рассылки (админ): после публикации идёт Telegram-уведомление", any(x[0] == "fn" and x[1] == "tg-notify" and x[2]["kind"] == "broadcast" and x[2]["remind"] is False for x in lg), lg[-3:])
+    # новая версия
+    pg.locator("section:has(h3) details.fcard summary").first.click(); pg.wait_for_timeout(100)
+    pg.click("button:has-text(\"Новая версия\")"); pg.wait_for_timeout(200)
+    ok("рассылки (админ): «Новая версия» подставляет название и подсказку", pg.input_value("#bc_title") == "План на неделю" and "заменит старую" in pg.inner_text("#bc_form"), pg.input_value("#bc_title"))
+    # напоминание
+    pg.click("text=Напомнить не открывшим"); pg.wait_for_timeout(300)
+    ok("рассылки (админ): напоминание не открывшим", any(x[0] == "fn" and x[1] == "tg-notify" and x[2]["remind"] is True for x in pg.evaluate("window.__MOCK.log")) and "не доставлено 1" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    # удаление — с подтверждением
+    pg.locator("section:has(h3) details.fcard .btn.danger").first.click(); pg.wait_for_timeout(100)
+    ok("рассылки (админ): удаление требует второго нажатия", not any(x[0] == "rpc" and x[1] == "admin_delete_broadcast" for x in pg.evaluate("window.__MOCK.log")))
+    pg.locator("section:has(h3) details.fcard .btn.danger").first.click(); pg.wait_for_timeout(300)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("рассылки (админ): удаление чистит и файлы хранилища", any(x[0] == "rpc" and x[1] == "admin_delete_broadcast" for x in lg) and any(x[0] == "remove" and x[1] == ["x/1/plan.xlsx"] for x in lg), lg[-3:])
+    # задания (админ)
+    pg.goto(SITE + "#/tasks"); pg.wait_for_timeout(600)
+    ok("задания (админ): список со счётчиками", "прочитали 1 из 3" in pg.inner_text("#app") and "выполнили 0 из 3" in pg.inner_text("#app"), pg.inner_text("#app")[:500])
+    pg.fill("#tk_title", "Проверить журналы"); pg.fill("#tk_due", "2026-11-05"); pg.click("#tk_form button[type=submit]"); pg.wait_for_timeout(500)
+    lg = pg.evaluate("window.__MOCK.log"); ct = [x for x in lg if x[0] == "rpc" and x[1] == "admin_create_task"]
+    ok("задания (админ): создано со сроком и аудиторией «все»", ct and ct[-1][2]["_due"] == "2026-11-05" and ct[-1][2]["_audience"] == {"all": True}, ct)
+    ok("задания (админ): после создания идёт Telegram-уведомление", any(x[0] == "fn" and x[1] == "tg-notify" and x[2]["kind"] == "task" and x[2]["id"] == "t-new" for x in lg))
+    pg.locator("section:has(h3) details.fcard summary").first.click(); pg.wait_for_timeout(400)
+    ok("задания (админ): видно кто прочитал", "Иванова Мария" in pg.inner_text("section:has(h3) details.fcard"))
+    ok("ошибок JS нет (рассылки: администратор)", not errs, errs); b.close()
+
+    # телефон
+    sc = scenario(S_, ("staff",), my_folders=(1,))
+    b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 390, "height": 780}, is_mobile=True, has_touch=True)
+    ctx.add_init_script("window.__MOCK=" + json.dumps(sc, ensure_ascii=False) + ";" + RPC + FN + "window.__BC=" + json.dumps(BCD) + ";window.__TK=" + json.dumps(TKD) + ";")
+    ctx.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
+    ctx.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    pg = ctx.new_page(); pg.goto(SITE + "#/broadcasts"); pg.wait_for_timeout(600)
+    pg.click("details.fcard summary"); pg.wait_for_timeout(200)
+    ok("рассылки на телефоне: нет горизонтальной прокрутки", not hscroll(pg))
+    pg.screenshot(path=str(SHOTS / "c_broadcasts_mobile.png"), full_page=True); b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

@@ -12,7 +12,7 @@
 <body>
 <div id="auth" class="hidden"></div>
 <div id="app" class="hidden">
-  <header class="top"><div class="brand"><b>OvaBMQ · Офлайн</b><button class="sm lock" type="button" onclick="lockNow()">🔒 Заблокировать</button></div><nav id="nav"></nav></header>
+  <header class="top"><div class="brand"><b id="brandName">OvaBMQ · Офлайн</b><button class="sm lock" id="lockBtn" type="button" onclick="lockNow()">🔒 Заблокировать</button></div><nav id="nav"></nav></header>
   <main id="main"></main>
 </div>
 <input type="file" id="casesIn" class="hidden" accept=".ovabmkc,application/octet-stream">
@@ -21,8 +21,10 @@
 <script>/*ROLES*/</script>
 <script>/*ANC*/</script>
 <script>/*XLSX*/</script>
+<script>/*I18N*/</script>
 <script>/*CORE*/</script>
 <script>/*CASES*/</script>
+<script>/*DOYA*/</script>
 <script>/*UI*/</script>
 <script>boot();</script>
 </body>

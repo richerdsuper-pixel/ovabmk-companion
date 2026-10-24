@@ -1,8 +1,12 @@
 /* ===== Интерфейс ===== */
-var TABS_ALL = [["home", "Сводка"], ["cases", "Визиты"], ["senders", "Отправители"], ["files", "Файлы"], ["data", "Данные"], ["search", "Поиск"], ["ind", "Показатели"], ["set", "Настройки"]];
-var TABS_FIELD = [["cases", "Визиты"], ["set", "Настройки"]];
-var UI = { lockTimer: null, minutes: 10, sel: null, mode: "all" };
-function tabs() { return UI.mode === "field" ? TABS_FIELD : TABS_ALL; }
+// вкладки по должности: доя кабинета, патронажная доя, координатор (руководитель)
+var TABS = {
+  cab: ["today", "cases", "screen", "report", "set"],
+  pat: ["today", "cases", "report", "set"],
+  coord: ["home", "cases", "senders", "files", "data", "search", "ind", "report", "set"]
+};
+var UI = { lockTimer: null, minutes: 10, sel: null };
+function tabs() { return (TABS[PROF.role] || TABS.cab).map(function (k) { return [k, L("nav_" + k)]; }); }
 
 function $(id) { return document.getElementById(id); }
 function toast(msg, bad) {
@@ -19,7 +23,7 @@ function modal(title, body, buttons) {
     var f = box.querySelector("input,select,textarea"); if (f) f.focus();
   });
 }
-function confirmBox(text, okLabel) { return modal("Подтвердите", [h("p", { text: text })], [["Отмена", false, ""], [okLabel || "Да", true, "danger"]]); }
+function confirmBox(text, okLabel) { return modal(L("confirm"), [h("p", { text: text })], [[L("cancel"), false, ""], [okLabel || L("yes"), true, "danger"]]); }
 function copyText(txt) {
   var done = function () { toast("Скопировано — вставьте в Telegram/SMS"); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fallback); else fallback();
@@ -58,7 +62,7 @@ function homeView() {
   var soon = all.filter(function (x) { return x.st.st === "soon"; });
   var okc = all.filter(function (x) { return x.st.st === "ok"; }).length;
   var nsub = Object.keys(S.subs).length, dc = dueCounts();
-  if (dc.late || dc.today) root.appendChild(h("div", { class: "alert " + (dc.late ? "bad" : "warn") }, [h("b", { text: "Визиты: сегодня " + dc.today + (dc.late ? ", просрочено " + dc.late : "") + " " }), h("button", { type: "button", class: "sm", onclick: function () { go("cases"); } }, "Открыть")]));
+  if (dc.late || dc.today) root.appendChild(h("div", { class: "alert " + (dc.late ? "bad" : "warn") }, [h("b", { text: L("need_visit", { a: dc.today }) + (dc.late ? ", " + L("late_n", { n: dc.late }) : "") + " " }), h("button", { type: "button", class: "sm", onclick: function () { go("cases"); } }, L("open"))]));
   root.appendChild(h("div", { class: "cards" }, [
     h("div", { class: "card" }, [h("b", { text: String(all.length) }), h("span", { text: "отправителей" })]),
     h("div", { class: "card " + (late.length ? "bad" : "ok") }, [h("b", { text: String(late.length) }), h("span", { text: "просрочили" })]),
@@ -340,103 +344,105 @@ function indView() {
 /* --- Настройки --- */
 function setView() {
   var root = h("div");
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Резервная копия" }),
-    h("p", { class: "small muted", text: "Копия зашифрована вашим паролем. Сохраняйте её на флешку или в надёжное место: если устройство сломается, данные можно вернуть. Без пароля копия бесполезна." }),
-    h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast("Копия сохранена"); } }, "Сохранить копию"),
-      h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, "Восстановить из копии")])]));
+  root.appendChild(roleLangPanel());
+  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("bk_title") }),
+    h("p", { class: "small muted", text: L("bk_hint") }),
+    h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast(L("bk_done")); } }, L("bk_save")),
+      h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, L("bk_restore"))])]));
   root.appendChild(casesSettings());
-  var md = h("select", { id: "modeSel" }, [h("option", { value: "all", text: "Руководитель: сводка по файлам + визиты" }), h("option", { value: "field", text: "Специалист: только мои пациенты и визиты" })]);
-  md.value = UI.mode;
-  md.onchange = function () { UI.mode = md.value; try { localStorage.setItem("ovabmk_mode", UI.mode); } catch (e) { } S.tab = UI.mode === "field" ? "set" : S.tab; toast("Сохранено"); render(); };
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Режим программы" }), md, h("p", { class: "small muted", text: "Специалисту (врач, медсестра патронажа, доя) нужны только пациенты и визиты — остальные вкладки скрываются." })]));
+  if (PROF.role !== "coord") root.appendChild(profPanel());
   var ml = h("input", { type: "number", min: "1", max: "240", value: UI.minutes, style: "width:5em" });
-  ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 10)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast("Сохранено"); };
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Безопасность" }),
-    h("label", { class: "inl" }, ["Блокировать через ", ml, " мин. без действий"]),
-    h("div", { class: "bar" }, [h("button", { type: "button", onclick: lockNow }, "Заблокировать сейчас"), h("button", { type: "button", onclick: changePw }, "Сменить пароль"),
-      h("button", { class: "danger", type: "button", onclick: wipeAll }, "Стереть все данные")]),
-    h("p", { class: "small muted", text: "Пароль восстановить невозможно — никто, включая разработчика, не сможет открыть данные без него." }),
-    Vault.isMem() ? h("p", { class: "small warnt", text: "⚠ В этом браузере не работает постоянное хранилище: данные хранятся только до закрытия страницы. Обязательно делайте резервную копию." }) : null]));
-  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: "Как это работает" }),
-    h("ul", { class: "small" }, [h("li", { text: "Программа не подключается к интернету: в ней нет ни одного сетевого запроса, а браузеру запрещено их выполнять." }),
-      h("li", { text: "Все данные хранятся на этом устройстве в зашифрованном виде (AES-256, ключ из вашего пароля)." }),
-      h("li", { text: "Сроки: пн/пт — еженедельно; 3, 5, 10-е числа — ежемесячно; 10-е и 15-е в янв/апр/июл/окт — ежеквартально. Файл засчитывается за ближайший срок после конца отчётного периода." }),
-      h("li", { text: "Чтобы данные читались, специалисты должны сохранять файл в Excel/WPS (программа читает сохранённые значения формул)." })])]));
+  ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 10)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast(L("saved")); };
+  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("sec_title") }),
+    h("label", { class: "inl" }, [L("sec_lock_a") + " ", ml, " " + L("sec_lock_b")]),
+    h("div", { class: "bar" }, [h("button", { type: "button", onclick: lockNow }, L("sec_lock_now")), h("button", { type: "button", onclick: changePw }, L("sec_pw")),
+      h("button", { class: "danger", type: "button", onclick: wipeAll }, L("sec_wipe"))]),
+    h("p", { class: "small muted", text: L("sec_pw_hint") }),
+    Vault.isMem() ? h("p", { class: "small warnt", text: L("sec_mem") }) : null]));
+  var how = [L("how_1"), L("how_2")];
+  if (PROF.role === "coord") how.push("Сроки: пн/пт — еженедельно; 3, 5, 10-е числа — ежемесячно; 10-е и 15-е в янв/апр/июл/окт — ежеквартально. Файл засчитывается за ближайший срок после конца отчётного периода.", "Чтобы данные читались, специалисты должны сохранять файл в Excel/WPS (программа читает сохранённые значения формул).");
+  else how.push(L("how_3"));
+  root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("how_title") }), h("ul", { class: "small" }, how.map(function (x) { return h("li", { text: x }); }))]));
   return root;
 }
 async function changePw() {
   var a = h("input", { type: "password", id: "pw0" }), b = h("input", { type: "password", id: "pw1" }), c = h("input", { type: "password", id: "pw2" });
-  if (!(await modal("Смена пароля", [h("label", null, ["Текущий пароль", a]), h("label", null, ["Новый пароль (не менее 8 знаков)", b]), h("label", null, ["Повторите новый", c])], [["Отмена", false, ""], ["Сменить", true, "pri"]]))) return;
-  if (b.value.length < 8) return toast("Пароль слишком короткий", true);
-  if (b.value !== c.value) return toast("Пароли не совпадают", true);
-  var ok = await Vault.rekey(a.value, b.value); toast(ok ? "Пароль изменён" : "Текущий пароль неверный", !ok);
+  if (!(await modal(L("pw_title"), [h("label", null, [L("pw_cur"), a]), h("label", null, [L("pw_new"), b]), h("label", null, [L("pw_rep"), c])], [[L("cancel"), false, ""], [L("change"), true, "pri"]]))) return;
+  if (b.value.length < 8) return toast(L("e_pw_short"), true);
+  if (b.value !== c.value) return toast(L("e_pw_match"), true);
+  var ok = await Vault.rekey(a.value, b.value); toast(ok ? L("pw_done") : L("pw_wrong"), !ok);
 }
 async function wipeAll() {
-  if (!(await confirmBox("Стереть ВСЕ данные из программы, включая пароль? Это нельзя отменить. Сначала сделайте резервную копию.", "Стереть"))) return;
-  await Vault.clearAll(); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; showAuth();
+  if (!(await confirmBox(L("wipe_q"), L("sec_wipe")))) return;
+  await Vault.clearAll(); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; S.prof = {}; showAuth();
 }
 
 /* --- Оболочка --- */
 function go(tab) { S.tab = tab; render(); }
 async function render() {
   var nav = $("nav"); nav.textContent = "";
-  tabs().forEach(function (t) { nav.appendChild(h("button", { type: "button", class: S.tab === t[0] ? "on" : "", onclick: function () { go(t[0]); } }, t[1])); });
+  var tl = tabs(); if (!tl.some(function (t) { return t[0] === S.tab; })) S.tab = tl[0][0];
+  tl.forEach(function (t) { nav.appendChild(h("button", { type: "button", class: S.tab === t[0] ? "on" : "", "data-tab": t[0], onclick: function () { go(t[0]); } }, t[1])); });
+  $("brandName").textContent = L("app"); $("lockBtn").textContent = "🔒 " + L("lock");
   var main = $("main"); main.textContent = "";
-  var views = { home: homeView, cases: casesView, senders: sendersView, files: filesView, data: dataView, search: searchView, ind: indView, set: setView };
+  var views = { home: homeView, today: todayView, cases: casesView, screen: screenView, report: reportView, senders: sendersView, files: filesView, data: dataView, search: searchView, ind: indView, set: setView };
   main.appendChild(views[S.tab]()); window.scrollTo(0, 0);
 }
 function armLock() {
   clearTimeout(UI.lockTimer);
   if (Vault.isOpen()) UI.lockTimer = setTimeout(lockNow, UI.minutes * 60000);
 }
-function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; $("app").classList.add("hidden"); $("main").textContent = ""; showAuth(); }
+function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; S.prof = {}; $("app").classList.add("hidden"); $("main").textContent = ""; showAuth(); }
 ["click", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, function () { if (Vault.isOpen()) armLock(); }, true); });
 
 async function enter() {
   await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
-  if (UI.mode === "field" || (!Object.keys(S.senders).length && activeCases().length)) S.tab = "cases";
-  else if (UI.mode === "all" && S.tab === "cases" && !activeCases().length) S.tab = "home";
+  if (S.prof && S.prof.role && TABS[S.prof.role]) setRole(S.prof.role);
+  if (!PROF.role) await chooseRole(true);
+  if (PROF.role === "coord") S.tab = !Object.keys(S.senders).length && activeCases().length ? "cases" : "home";
+  else S.tab = "today";
   render();
-  var dc = dueCounts(); if (dc.late || dc.today) toast("Визиты: сегодня " + dc.today + (dc.late ? ", просрочено " + dc.late : ""), !!dc.late);
+  var dc = dueCounts(); if (dc.late || dc.today) toast(L("need_visit", { a: dc.today }) + (dc.late ? ", " + L("late_n", { n: dc.late }) : ""), !!dc.late);
 }
 async function showAuth() {
   var box = $("auth"); box.classList.remove("hidden"); box.textContent = "";
-  var has = await Vault.hasVault(), err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? "Пароль" : "Новый пароль (от 8 знаков)" });
-  var p2i = h("input", { type: "password", id: "pwB", autocomplete: "off", placeholder: "Повторите пароль" });
-  var btn = h("button", { class: "pri", type: "button", id: "authGo" }, has ? "Открыть" : "Создать хранилище");
+  var has = await Vault.hasVault(), err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? L("au_pw") : L("au_newpw") });
+  var p2i = h("input", { type: "password", id: "pwB", autocomplete: "off", placeholder: L("au_rep") });
+  var btn = h("button", { class: "pri", type: "button", id: "authGo" }, has ? L("au_open") : L("au_create"));
   async function go1() {
     err.textContent = "";
     try {
-      if (has) { if (!(await Vault.unlock(p1.value))) { err.textContent = "Неверный пароль"; return; } }
+      if (has) { if (!(await Vault.unlock(p1.value))) { err.textContent = L("au_wrong"); return; } }
       else {
-        if (p1.value.length < 8) { err.textContent = "Пароль не короче 8 знаков"; return; }
-        if (p1.value !== p2i.value) { err.textContent = "Пароли не совпадают"; return; }
+        if (p1.value.length < 8) { err.textContent = L("e_pw_short"); return; }
+        if (p1.value !== p2i.value) { err.textContent = L("e_pw_match"); return; }
         await Vault.create(p1.value);
       }
       await enter();
-    } catch (e) { err.textContent = "Ошибка: " + e.message; }
+    } catch (e) { err.textContent = L("au_err", { m: e.message }); }
   }
   btn.onclick = go1; [p1, p2i].forEach(function (i) { i.addEventListener("keydown", function (e) { if (e.key === "Enter") go1(); }); });
-  box.appendChild(h("div", { class: "authbox" }, [h("h1", { text: "OvaBMQ · Офлайн" }), h("p", { class: "muted", text: has ? "Введите пароль, чтобы открыть данные." : "Первый запуск. Придумайте пароль — им будут зашифрованы все данные. Восстановить его невозможно, запишите в надёжном месте." }),
+  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
     p1, has ? null : p2i, btn, err,
-    h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, "Восстановить из резервной копии")]),
-    Vault.isMem() ? h("p", { class: "small warnt", text: "⚠ В этом браузере нет постоянного хранилища — данные сохранятся только до закрытия страницы." }) : null]));
+    h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))]),
+    Vault.isMem() ? h("p", { class: "small warnt", text: L("sec_mem") }) : null]));
   setTimeout(function () { p1.focus(); }, 30);
 }
 async function onRestore(file) {
   if (!file) return;
   var text = await file.text(), pw = h("input", { type: "password", id: "rpw" });
-  if (!(await modal("Восстановление", [h("p", { text: "Текущие данные в программе будут заменены. Введите пароль той копии." }), pw], [["Отмена", false, ""], ["Восстановить", true, "pri"]]))) return;
+  if (!(await modal(L("rs_title"), [h("p", { text: L("rs_hint") }), pw], [[L("cancel"), false, ""], [L("rs_go"), true, "pri"]]))) return;
   try {
     var ok = await Vault.importBackup(text, pw.value);
-    if (!ok) return toast("Неверный пароль копии", true);
-    toast("Данные восстановлены"); await enter(); S.tab = UI.mode === "field" ? "cases" : "home"; render();
+    if (!ok) return toast(L("rs_wrong"), true);
+    toast(L("rs_done")); await enter();
   } catch (e) { toast(e.message, true); }
 }
 async function boot() {
-  try { var m = +localStorage.getItem("ovabmk_min"); if (m) UI.minutes = m; if (localStorage.getItem("ovabmk_mode") === "field") UI.mode = "field"; } catch (e) { }
+  try { var m = +localStorage.getItem("ovabmk_min"); if (m) UI.minutes = m; } catch (e) { }
+  setLang(PROF.lang);
   $("casesIn").addEventListener("change", function () { onCasesImport(this.files[0]); this.value = ""; });
   $("restoreIn").addEventListener("change", function () { onRestore(this.files[0]); this.value = ""; });
-  if (!window.crypto || !crypto.subtle) { $("auth").textContent = "Этот браузер не поддерживает шифрование (нужен современный Chrome, Edge, Safari или Firefox)."; $("auth").classList.remove("hidden"); return; }
+  if (!window.crypto || !crypto.subtle) { $("auth").textContent = L("au_nocrypto"); $("auth").classList.remove("hidden"); return; }
   await Vault.init(); showAuth();
 }

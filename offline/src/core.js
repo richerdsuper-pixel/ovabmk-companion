@@ -194,7 +194,7 @@ function isPast(dateStr, hour) {
 }
 
 /* ===== Состояние ===== */
-var S = { senders: {}, subs: {}, cache: {}, cases: {}, tab: "home", warn: [] };
+var S = { senders: {}, subs: {}, cache: {}, cases: {}, prof: {}, tab: "home", warn: [] };
 
 function senderSubs(sid) {
   return Object.keys(S.subs).map(function (k) { return S.subs[k]; }).filter(function (m) { return m.sender === sid; })
@@ -226,13 +226,14 @@ function senderStatus(s) {
 
 async function persistSender(s) { await Vault.save("s:" + s.id, s); S.senders[s.id] = s; }
 async function loadAll() {
-  S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {};
+  S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; S.prof = {};
   var ks = await Vault.keys();
   for (var i = 0; i < ks.length; i++) {
     var k = ks[i];
     if (k.indexOf("s:") === 0) S.senders[k.slice(2)] = await Vault.load(k);
     else if (k.indexOf("m:") === 0) S.subs[k.slice(2)] = await Vault.load(k);
     else if (k.indexOf("c:") === 0) S.cases[k.slice(2)] = await Vault.load(k);
+    else if (k === "x:prof") S.prof = await Vault.load(k);
   }
 }
 async function removeSub(id) { await Vault.remove("m:" + id); await Vault.remove("d:" + id); delete S.subs[id]; delete S.cache[id]; }
@@ -327,13 +328,25 @@ async function importFile(file) {
 /* ===== Пациенты и визиты (только на этом устройстве) ===== */
 function activeCases() { return Object.keys(S.cases).map(function (k) { return S.cases[k]; }).filter(function (c) { return !c.deleted; }); }
 async function persistCase(c) { c.updated = Date.now(); await Vault.save("c:" + c.id, c); S.cases[c.id] = c; }
+var CAT_PREG = "Беременная", CAT_PP = "Родильница", CAT_NB = "Новорождённый", CAT_WOMAN = "Женщина (скрининг)";
+// что уже сделано по плану: ключи вида anc:2, pat:p12, pat:pp1 (из отметок и из записанных визитов)
+function doneMap(c) {
+  var done = {};
+  Object.keys(c.stdDone || {}).forEach(function (k) { if (c.stdDone[k]) done["anc:" + k] = 1; });
+  Object.keys(c.done || {}).forEach(function (k) { if (c.done[k]) done[k] = 1; });
+  (c.visits || []).forEach(function (v) { if (v.std) done["anc:" + v.std] = 1; (v.items || []).forEach(function (k) { done[k] = 1; }); });
+  return done;
+}
 // ----- беременная по стандарту (приказ №180): срок и визиты считаются на устройстве по дате последней менструации (ДПМ) -----
 function ancWeeks(lmp) { if (!lmp) return null; var d = diffDays(todayStr(), lmp); return d < 0 ? null : { w: Math.floor(d / 7), d: d % 7, days: d }; }
+function ancLabel(r) { return Ld(r.label, r.label_uz); }
+function ancTests(r) { return r.tests.map(function (x, i) { return Ld(x, (r.tests_uz || [])[i]); }); }
+function ancNotes(r) { return Ld(r.notes || "", r.notes_uz); }
 // состояние ведения: missed — пропущенные окна, cur — окно идёт сейчас, nxt — следующее; date — ближайшая дата, к которой нужно действовать
 function ancState(c) {
-  if (!c || c.cat !== "Беременная" || !c.lmp) return null;
+  if (!c || c.cat !== CAT_PREG || !c.lmp) return null;
   var wk = ancWeeks(c.lmp); if (!wk || wk.days > 315) return null;
-  var done = {}; Object.keys(c.stdDone || {}).forEach(function (k) { if (c.stdDone[k]) done[k] = 1; }); (c.visits || []).forEach(function (v) { if (v.std) done[v.std] = 1; });
+  var dm = doneMap(c), done = {}; ANC.forEach(function (r) { if (dm["anc:" + r.visit_no]) done[r.visit_no] = 1; });
   var rest = ANC.filter(function (r) { return !done[r.visit_no]; });
   var missed = rest.filter(function (r) { return r.until_week < wk.w; });
   var cur = rest.filter(function (r) { return r.from_week <= wk.w && wk.w <= r.until_week; })[0] || null;
@@ -345,18 +358,51 @@ function ancState(c) {
   return s;
 }
 function ancWinDates(c, r) { return fmtD(addDays(c.lmp, r.from_week * 7)) + "–" + fmtD(addDays(c.lmp, (r.until_week + 1) * 7 - 1)); }
-// ближайшая дата визита: самая ранняя из назначенной вручную и вычисленной по стандарту
+// ----- патронаж (приказ №210, приложение 2): беременная 12 и 32 нед.; родильница и новорождённый — 3 раза -----
+function patItems(c) {
+  if (!c) return [];
+  if (c.cat === CAT_PREG && c.lmp) return [{ k: "pat:p12", t: "pat_p12", from: addDays(c.lmp, 84), to: addDays(c.lmp, 97) }, { k: "pat:p32", t: "pat_p32", from: addDays(c.lmp, 224), to: addDays(c.lmp, 237) }];
+  var b = c.birth || c.disch, d = c.disch || c.birth;
+  if ((c.cat === CAT_PP || c.cat === CAT_NB) && b) {
+    var pre = c.cat === CAT_PP ? "pp" : "nb";
+    return [{ k: "pat:" + pre + "1", t: "pat_" + pre + "1", from: d, to: addDays(d, 3) }, { k: "pat:" + pre + "2", t: "pat_" + pre + "2", from: addDays(b, 13), to: addDays(b, 17) },
+      { k: "pat:" + pre + "3", t: "pat_" + pre + "3", from: addDays(b, 28), to: addDays(b, 32) }];
+  }
+  return [];
+}
+function patState(c) {
+  var items = patItems(c); if (!items.length) return null;
+  var dm = doneMap(c), t = todayStr();
+  var rest = items.filter(function (x) { return !dm[x.k]; });
+  var s = { items: items, done: dm, missed: rest.filter(function (x) { return x.to < t; }), cur: rest.filter(function (x) { return x.from <= t && t <= x.to; })[0] || null,
+    nxt: rest.filter(function (x) { return x.from > t; })[0] || null, date: "", kind: "" };
+  if (s.missed.length) { s.date = s.missed[0].to; s.kind = "missed"; }
+  else if (s.cur) { s.date = t; s.kind = "cur"; }
+  else if (s.nxt) { s.date = s.nxt.from; s.kind = "next"; }
+  return s;
+}
+// какие планы ведёт эта должность: доя кабинета — визиты по №180, патронажная доя — патронаж по №210, координатор — оба
+function planStates(c) {
+  if (!c || c.closed) return [];
+  var out = [];
+  if (PROF.role !== "pat") { var a = ancState(c); if (a && a.date) out.push({ src: "anc", s: a }); }
+  if (PROF.role !== "cab") { var p = patState(c); if (p && p.date) out.push({ src: "pat", s: p }); }
+  return out;
+}
+// ближайшая дата визита: самая ранняя из назначенной вручную и вычисленной по плану
 function caseNext(c) {
-  var s = c.closed ? null : ancState(c), a = c.next || "", b = s ? s.date : "";
-  return a && b ? (a < b ? a : b) : (a || b);
+  if (c.closed) return "";
+  var best = c.next || "";
+  planStates(c).forEach(function (x) { if (!best || x.s.date < best) best = x.s.date; });
+  return best;
 }
 // статус визита: late / today / tomorrow / week / later / none / closed
 function caseDue(c) {
   if (c.closed) return { k: "closed", n: 0 };
   var nx = caseNext(c);
   if (!nx) return { k: "none", n: 0 };
-  var n = diffDays(nx, todayStr()), s = ancState(c), std = !!(s && s.date === nx && (!c.next || s.date <= c.next));
-  return { k: n < 0 ? "late" : n === 0 ? "today" : n === 1 ? "tomorrow" : n <= 7 ? "week" : "later", n: n, std: std, kind: std ? s.kind : "" };
+  var n = diffDays(nx, todayStr()), pl = planStates(c).filter(function (x) { return x.s.date === nx; })[0], std = !!(pl && (!c.next || pl.s.date <= c.next));
+  return { k: n < 0 ? "late" : n === 0 ? "today" : n === 1 ? "tomorrow" : n <= 7 ? "week" : "later", n: n, std: std, kind: std ? pl.s.kind : "", src: std ? pl.src : "" };
 }
 // для отчётных чисел: сколько беременных пропустили визит по стандарту / у скольких окно идёт сейчас
 function ancCounts() {
@@ -369,37 +415,72 @@ function dueCounts() {
   activeCases().forEach(function (c) { r[caseDue(c).k]++; });
   return r;
 }
+// ----- скрининг (приказы №210 и 47-Т): шейка матки 35–55 лет — раз в 3 года, молочная железа 45–65 — раз в 2 года, осмотр 15–49 — раз в год -----
+var SCR = [{ k: "annual", from: 15, to: 49, years: 1 }, { k: "cerv", from: 35, to: 55, years: 3 }, { k: "breast", from: 45, to: 65, years: 2 }];
+function caseAge(c) { return c && c.byear ? +todayStr().slice(0, 4) - c.byear : null; }
+function scrState(c) {
+  if (!c || c.closed || c.deleted || c.cat !== CAT_WOMAN) return [];
+  var age = caseAge(c); if (age == null) return [];
+  var t = todayStr(), last = c.scr || {};
+  return SCR.filter(function (x) { return age >= x.from && age <= x.to; }).map(function (x) {
+    var due = last[x.k] ? addDays(last[x.k], Math.round(365.25 * x.years)) : "";
+    return { k: x.k, last: last[x.k] || "", due: due, need: !due || due <= t, never: !last[x.k] };
+  });
+}
 async function deleteCase(c) {
   for (var i = 0; i < c.visits.length; i++) for (var j = 0; j < (c.visits[i].ph || []).length; j++) await Vault.remove("f:" + c.visits[i].ph[j]);
   // надгробие без личных данных: чтобы удаление дошло до других устройств при слиянии
   var t = { id: c.id, created: c.created, deleted: true, visits: [] };
   await persistCase(t);
 }
+// личные поля: в выгрузку «только изменения» попадают, только если поменялись с прошлой отправки
+var PERSONAL = ["name", "phone", "street", "byear"];
 // слияние записи пациента с входящей (с другого устройства): побеждает более новая, визиты объединяются по id
 function mergeCase(local, inc) {
+  if (inc && inc.partial) {
+    inc = JSON.parse(JSON.stringify(inc)); delete inc.partial;
+    PERSONAL.forEach(function (f) { if (!(f in inc) && local && f in local) inc[f] = local[f]; });
+  }
   if (!local) return inc;
   var newer = (inc.updated || 0) > (local.updated || 0) ? inc : local, older = newer === inc ? local : inc;
   var m = JSON.parse(JSON.stringify(newer));
   if (m.deleted) { m.visits = []; return m; }
+  if (!m.src && older.src) m.src = older.src;
   var byId = {};
   (older.deleted ? [] : older.visits || []).concat(newer.visits || []).forEach(function (v) { byId[v.id] = v; });
   m.visits = Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) { return (b.d || "").localeCompare(a.d || "") || (b.t || 0) - (a.t || 0); });
   return m;
 }
-async function exportCases(pw, withPhotos) {
-  var cases = Object.keys(S.cases).map(function (k) { return S.cases[k]; }), photos = {};
-  if (withPhotos) for (var i = 0; i < cases.length; i++) for (var a = 0; a < cases[i].visits.length; a++) for (var b = 0; b < (cases[i].visits[a].ph || []).length; b++) {
+function personalHash(c) { return PERSONAL.map(function (f) { return c[f] == null ? "" : String(c[f]); }).join("\u0001"); }
+async function exportCases(pw, withPhotos, delta) {
+  var all = Object.keys(S.cases).map(function (k) { return S.cases[k]; }), photos = {}, prof = S.prof || {}, sent = prof.sent || {}, cases = all;
+  if (delta) {
+    var since = prof.lastExport || 0;
+    cases = all.filter(function (c) { return !prof.lastExport || (c.updated || 0) > since || !(c.id in sent); }).map(function (c) {
+      var x = JSON.parse(JSON.stringify(c)), hsh = personalHash(c);
+      if (!c.deleted && sent[c.id] === hsh) { PERSONAL.forEach(function (f) { delete x[f]; }); x.partial = true; }
+      return x;
+    });
+  }
+  if (withPhotos) for (var i = 0; i < cases.length; i++) for (var a = 0; a < (cases[i].visits || []).length; a++) for (var b = 0; b < (cases[i].visits[a].ph || []).length; b++) {
     var id = cases[i].visits[a].ph[b], f = await Vault.load("f:" + id); if (f) photos[id] = f.data;
   }
-  return Vault.seal(pw, { fmt: "ovabmk-cases", v: 1, exported: Date.now(), cases: cases, photos: photos });
+  var blob = await Vault.seal(pw, { fmt: "ovabmk-cases", v: 2, exported: Date.now(), delta: !!delta, from: { inst: prof.inst || "", unit: prof.unit || "", who: prof.who || "", role: PROF.role }, cases: cases, photos: photos });
+  if (delta) {
+    var ns = {}; all.forEach(function (c) { ns[c.id] = personalHash(c); });
+    prof.sent = ns; prof.lastExport = Date.now(); await saveProf(prof);
+  }
+  return { blob: blob, n: cases.length };
 }
 async function importCases(text, pw) {
   var data = await Vault.unseal(text, pw); if (!data) return null;
-  if (data.fmt !== "ovabmk-cases" || !Array.isArray(data.cases)) throw new Error("файл не является выгрузкой");
-  var res = { added: 0, updated: 0, same: 0, photos: 0 };
+  if (data.fmt !== "ovabmk-cases" || !Array.isArray(data.cases)) throw new Error(L("err_not_export"));
+  var res = { added: 0, updated: 0, same: 0, photos: 0, from: data.from || null };
+  var srcName = data.from ? [data.from.inst, data.from.unit, data.from.who].filter(Boolean).join(" · ") : "";
   for (var i = 0; i < data.cases.length; i++) {
-    var inc = data.cases[i], loc = S.cases[inc.id];
-    if (!inc || !inc.id) continue;
+    var inc = data.cases[i]; if (!inc || !inc.id) continue;
+    var loc = S.cases[inc.id];
+    if (srcName && !inc.src) { inc = JSON.parse(JSON.stringify(inc)); inc.src = srcName; }
     var merged = mergeCase(loc, inc);
     if (!loc) res.added++; else if (JSON.stringify(merged) === JSON.stringify(mergeCase(loc, loc))) { res.same++; continue; } else res.updated++;
     await Vault.save("c:" + merged.id, merged); S.cases[merged.id] = merged;
@@ -410,3 +491,5 @@ async function importCases(text, pw) {
   }
   return res;
 }
+// профиль устройства (учреждение, бригада, кто заполняет) и учёт отправленного — тоже зашифрован в хранилище
+async function saveProf(p) { S.prof = p; await Vault.save("x:prof", p); }

@@ -90,3 +90,11 @@ details.opt{margin:.6rem 0;color:var(--mute)}details.opt summary{cursor:pointer;
 .anc.bad{border-color:var(--bad)}.anc.warn{border-color:var(--warn)}
 .anc ul{margin:.2rem 0 .2rem 1.1rem;padding:0}
 .warnc{color:var(--warn)}
+.seg{display:inline-flex;gap:.25rem;flex-wrap:wrap}.seg button.on{background:var(--acc);color:var(--acc-ink);border-color:transparent}
+.authbox .seg{margin-bottom:.8rem}
+.lbl{font-weight:600;margin:.4rem 0 .2rem}
+.riskgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.1rem .6rem}
+.mgrp{margin:.6rem 0}.mgrp h3{margin:.3rem 0}
+.rrow{display:flex;justify-content:space-between;gap:.5rem;align-items:center;border-left:4px solid var(--line);padding:.4rem .6rem;margin:.3rem 0;background:var(--card);border-radius:8px;flex-wrap:wrap}
+.rrow.late{border-left-color:var(--bad)}.rrow.today{border-left-color:var(--warn)}.rrow .rmain{flex:1 1 220px;min-width:0}
+.bad-t{color:var(--bad)}

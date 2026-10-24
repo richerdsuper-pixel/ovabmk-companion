@@ -18,7 +18,7 @@ t=time.time()
 os.utime(D+"Baza_01_Doya_QVP_SVP3.xlsx",(t-5000,t-5000)); os.utime(D+"Baza_01_Doya_QVP_SVP3_v2.xlsx",(t-100,t-100))
 with sync_playwright() as p:
     br=p.chromium.launch(); ctx=br.new_context(viewport={"width":1100,"height":900},accept_downloads=True)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00'")
+    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','coord')}catch(e){}")
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url))
     pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e))); pg.on("console",lambda m: errs.append(m.text) if m.type=="error" and "Content Security" not in m.text else None)
@@ -135,7 +135,7 @@ with sync_playwright() as p:
     r=pg.evaluate("fetch('https://example.com').then(()=>'sent').catch(e=>'blocked')"); check("fetch blocked by CSP", r=="blocked", r)
     check("no JS errors", not errs, errs)
     # --- мобильный вид
-    m=br.new_context(viewport={"width":390,"height":780},is_mobile=True,has_touch=True); m.add_init_script("window.__NOW='2026-10-24T10:00:00'")
+    m=br.new_context(viewport={"width":390,"height":780},is_mobile=True,has_touch=True); m.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','coord')}catch(e){}")
     mp=m.new_page(); mp.goto(URL); mp.screenshot(path=HERE+"/shot_auth_mobile.png")
     pg.click("nav >> text=Сводка"); pg.screenshot(path=HERE+"/shot_home_desktop.png")
     br.close()

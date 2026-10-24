@@ -16,11 +16,11 @@ def until(fn,t=15):
 LMP="2026-06-06"   # на 2026-10-24 ровно 20 нед. 0 дн.
 with sync_playwright() as p:
     br=p.chromium.launch(); ctx=br.new_context(viewport={"width":390,"height":780},accept_downloads=True)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00'")
+    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','cab')}catch(e){}")
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url)); pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e)))
     pg.goto(URL); pg.fill("#pwA",PW); pg.fill("#pwB",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
-    pg.click("nav >> text=Визиты")
+    pg.click("nav >> text=Пациенты")
     pg.click("#addCase"); pg.wait_for_selector("#c_card")
     pg.select_option("#c_cat","Ребёнок до 1 года"); check("ДПМ скрыта для обычной категории", not pg.is_visible("#c_lmp"))
     pg.select_option("#c_cat","Беременная"); check("ДПМ появляется для беременной", pg.is_visible("#c_lmp"))
@@ -38,21 +38,21 @@ with sync_playwright() as p:
     check("карточка: просрочен первый визит с анализами", "Просрочено: Первый визит" in box and "ВИЧ (антитела IgM/IgG)" in box, box[:400])
     check("карточка: сейчас визит 2 (18–20 нед.) с УЗИ", "Сейчас: Визит 2" in box and "УЗИ плода" in box and "окно 18–20 нед." in box, box)
     # отметить 1-й визит пройденным
-    pg.click(".modal >> text=Пройденные визиты"); pg.wait_for_selector("input[type=checkbox][value='1']")
-    pg.check("input[type=checkbox][value='1']"); pg.click(".modal >> nth=-1 >> text=Сохранить"); pg.wait_for_timeout(500)
+    pg.click(".modal >> text=Пройденные визиты"); pg.wait_for_selector("input[type=checkbox][value='anc:1']")
+    pg.check("input[type=checkbox][value='anc:1']"); pg.click(".modal >> nth=-1 >> text=Сохранить"); pg.wait_for_timeout(500)
     card=pg.inner_text(".case")
     check("после отметки: пора на визит по стандарту (сегодня)", "пора на визит по стандарту" in card and "Сегодня (1)" in pg.inner_text("#main"), card)
     check("после отметки: просрочек по стандарту нет", "пропустили визит по стандарту: 0" in pg.inner_text("#anc_counts") and "пора на визит сейчас: 1" in pg.inner_text("#anc_counts"), pg.inner_text("#anc_counts"))
     # записать визит по стандарту №2
-    pg.click(".case button.pri"); pg.wait_for_selector("#v_std")
-    check("в визите по умолчанию предложен текущий №2", pg.input_value("#v_std")=="2", pg.input_value("#v_std"))
+    pg.click(".case button.pri"); pg.wait_for_selector("#v_items")
+    check("в визите по умолчанию отмечен текущий №2", pg.is_checked("input.v_item[value='anc:2']") and not pg.is_checked("input.v_item[value='anc:3']"))
     pg.fill("#v_note","УЗИ 2 триместра сделано"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); pg.wait_for_timeout(400)
     pg.click(".case >> text=Карточка"); pg.wait_for_selector(".ancbox")
     box=pg.inner_text(".ancbox"); modal=pg.inner_text(".modal")
-    check("визит записан как №2 по стандарту", "визит 2 по стандарту" in modal, modal[:300])
+    check("визит записан как №2 по стандарту", "Визит 2 (18–20 недель)" in pg.inner_text(".modal .visit"), modal[:300])
     check("дальше — визит 3 (26 нед.)", "Дальше: Визит 3" in box and "ПГТТ с 75 г глюкозы" in box and "05.12.2026" in box, box)
     pg.click(".modal button.pri")
-    check("после визита ближайшая дата — через 7 дней (назначена вручную)", "через 7 дн." in pg.inner_text(".case"), pg.inner_text(".case"))
+    check("после визита ближайшая дата — окно визита 3 (26 нед.)", "05.12.2026" in pg.inner_text(".case") and "Позже (1)" in pg.inner_text("#main"), pg.inner_text(".case"))
     # данные в хранилище зашифрованы
     JS="""async()=>{const db=await new Promise((r,j)=>{const q=indexedDB.open('ovabmk-offline');q.onsuccess=()=>r(q.result);q.onerror=j});
       const st=db.transaction('kv').objectStore('kv');
@@ -63,9 +63,9 @@ with sync_playwright() as p:
     pg.click("nav >> text=Настройки")
     with pg.expect_download() as d: pg.click("#icsCases")
     ics=open(d.value.path(),encoding="utf-8").read()
-    check("ics без ДПМ и номера карты", "Визитов запланировано" in ics and LMP not in ics and "901/1" not in ics and "Беременная" not in ics, ics[:300])
+    check("ics без ДПМ и номера карты", "Визитов: " in ics and LMP not in ics and "901/1" not in ics and "Беременная" not in ics, ics[:300])
     # закрытая карточка не даёт напоминаний
-    pg.click("nav >> text=Визиты"); pg.wait_for_selector(".case"); pg.click(".case button.pri"); pg.wait_for_selector("#v_close"); pg.check("#v_close"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); pg.wait_for_timeout(400)
+    pg.click("nav >> text=Пациенты"); pg.wait_for_selector(".case"); pg.click(".case button.pri"); pg.wait_for_selector("#v_close"); pg.check("#v_close"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); pg.wait_for_timeout(400)
     check("закрытая беременная не считается", "Беременных под наблюдением" not in pg.inner_text("#main") and "Просрочено (" not in pg.inner_text("#main"), pg.inner_text("#main")[:300])
     net=[u for u in reqs if not u.startswith(("file:","blob:","data:"))]
     check("сеть не используется", not net, net); check("ошибок JS нет", not errs, errs)

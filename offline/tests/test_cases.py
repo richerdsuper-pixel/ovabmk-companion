@@ -13,7 +13,7 @@ def jpg(color):
     b=io.BytesIO(); Image.new("RGB",(1600,1200),color).save(b,"JPEG"); return {"name":"ph.jpg","mimeType":"image/jpeg","buffer":b.getvalue()}
 def start(br,vp):
     ctx=br.new_context(viewport=vp,accept_downloads=True,is_mobile=vp["width"]<500,has_touch=vp["width"]<500)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00'")
+    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{if(!localStorage.getItem('ovabmk_role'))localStorage.setItem('ovabmk_role','coord')}catch(e){}")
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url))
     pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e))); pg.on("console",lambda m: errs.append(m.text) if m.type=="error" and "Content Security" not in m.text else None)
@@ -34,7 +34,7 @@ def add_patient(pg,name,mah,street,diag,nxt,photo=None):
 with sync_playwright() as p:
     br=p.chromium.launch()
     ctx,pg,reqs,errs=start(br,{"width":390,"height":780})
-    pg.click("nav >> text=Визиты"); check("empty hint", "Здесь будут ваши пациенты" in pg.inner_text("#main"))
+    pg.click("nav >> text=Пациенты"); check("empty hint", "Здесь будут ваши пациенты" in pg.inner_text("#main"))
     pg.screenshot(path=HERE+"/shot_cases_empty_mobile.png")
     add_patient(pg,"1234/5","Қўшон","Навоий 12","Беременность 32 нед.","2026-10-24",jpg("red"))
     add_patient(pg,"778/2","Гўзаллик","Янги 5","Новорождённый, желтуха","2026-10-23")
@@ -77,7 +77,7 @@ with sync_playwright() as p:
     pg.click("nav >> text=Настройки")
     with pg.expect_download() as d: pg.click("#icsCases")
     ics=open(d.value.path(),encoding="utf-8").read()
-    check("ics has counts only", "Визитов запланировано" in ics and "1234/5" not in ics and "Навоий" not in ics and "Беременность" not in ics and "778/2" not in ics, ics[:300])
+    check("ics has counts only", "Визитов: " in ics and "1234/5" not in ics and "Навоий" not in ics and "Беременность" not in ics and "778/2" not in ics, ics[:300])
     # выгрузка
     pg.click("#expCases"); pg.fill("#ex1","short"); pg.fill("#ex2","short"); pg.click(".modal button.pri"); pg.wait_for_selector("text=не короче 8")
     check("short export pw rejected", True)
@@ -87,7 +87,7 @@ with sync_playwright() as p:
     expA=d2.value.path(); et=open(expA,encoding="utf-8").read()
     check("export encrypted", "1234/5" not in et and "ovabmk-cases" in et and "778/2" not in et)
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
-    check("login toast about visits", "Визиты: сегодня" in pg.inner_text("#toasts"), pg.inner_text("#toasts"))
+    check("login toast about visits", "Нужно посетить: сегодня" in pg.inner_text("#toasts"), pg.inner_text("#toasts"))
     # --- второе устройство
     ctxB,pb,reqsB,errsB=start(br,{"width":1100,"height":800})
     pb.click("nav >> text=Настройки")
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     check("wrong export password rejected", True)
     pb.wait_for_timeout(300)
     pb.set_input_files("#casesIn",expA); pb.wait_for_selector("#ipw"); pb.fill("#ipw",XP); pb.click(".modal button.pri"); pb.wait_for_selector("text=новых 3")
-    pb.click("nav >> text=Визиты"); check("B has 3 patients", len(pb.query_selector_all(".case"))==3)
+    pb.click("nav >> text=Пациенты"); check("B has 3 patients", len(pb.query_selector_all(".case"))==3)
     c=[c for c in pb.query_selector_all(".case") if "1234/5" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
     until(lambda: len(pb.query_selector_all(".modal .th img[src^='data:image/jpeg']"))==2); check("B got photos", True)
     pb.click(".modal button.pri")
@@ -103,10 +103,10 @@ with sync_playwright() as p:
     pb.click("nav >> text=Настройки"); pb.set_input_files("#casesIn",expA); pb.wait_for_selector("#ipw"); pb.fill("#ipw",XP); pb.click(".modal button.pri"); pb.wait_for_selector("text=без изменений 3")
     check("re-import is idempotent", True)
     # B: правит Саидову и добавляет визит Каримовой, удаляет никого
-    pb.click("nav >> text=Визиты"); pb.wait_for_timeout(100)
+    pb.click("nav >> text=Пациенты"); pb.wait_for_timeout(100)
     c=[c for c in pb.query_selector_all(".case") if "778/2" in c.inner_text()][0]; c.query_selector("button.pri").click(); pb.wait_for_selector("#v_note"); pb.fill("#v_note","Желтуха уменьшилась"); pb.fill("#c_next","2026-10-27"); pb.click(".modal button.pri"); pb.wait_for_selector(".modal",state="detached"); settle(pb)
     # A: добавляет визит Саидовой (другая запись) и удаляет Иванову
-    pg.click("nav >> text=Визиты")
+    pg.click("nav >> text=Пациенты")
     c=[c for c in pg.query_selector_all(".case") if "Карта № 56" in c.inner_text()][0]; c.query_selector("button.pri").click(); pg.wait_for_selector("#v_note"); pg.fill("#v_note","Осмотр на дому"); pg.fill("#c_next","2026-11-02"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); settle(pg)
     c=[c for c in pg.query_selector_all(".case") if "1234/5" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pg.click(".modal button.danger"); pg.click(".modal button.danger"); pg.wait_for_selector("text=Удалено")
     check("A deleted patient", len(pg.query_selector_all(".case"))==2)
@@ -116,7 +116,7 @@ with sync_playwright() as p:
     with pb.expect_download() as d3: pb.click(".modal button.pri")
     expB=d3.value.path()
     pg.set_input_files("#casesIn",expB); pg.wait_for_selector("#ipw"); pg.fill("#ipw",XP); pg.click(".modal button.pri"); pg.wait_for_selector("text=обновлено 1")
-    pg.click("nav >> text=Визиты"); cardsA=pg.inner_text("#main")
+    pg.click("nav >> text=Пациенты"); cardsA=pg.inner_text("#main")
     check("A merged: Karimova new visit, Ivanova stays deleted", "778/2" in cardsA and "1234/5" not in cardsA and len(pg.query_selector_all(".case"))==2, cardsA[:300])
     c=[c for c in pg.query_selector_all(".case") if "778/2" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pg.wait_for_selector(".modal .visit")
     check("Karimova has visit from B", "Желтуха уменьшилась" in pg.inner_text(".modal")); pg.click(".modal button.pri")
@@ -124,18 +124,18 @@ with sync_playwright() as p:
     pg.click("#expCases"); pg.fill("#ex1",XP); pg.fill("#ex2",XP)
     with pg.expect_download() as d4: pg.click(".modal button.pri")
     pb.set_input_files("#casesIn",d4.value.path()); pb.wait_for_selector("#ipw"); pb.fill("#ipw",XP); pb.click(".modal button.pri"); pb.wait_for_selector("text=обновлено 2")
-    pb.click("nav >> text=Визиты"); tb=pb.inner_text("#main")
+    pb.click("nav >> text=Пациенты"); tb=pb.inner_text("#main")
     check("B: deletion propagated, Saidova visit merged", "1234/5" not in tb and len(pb.query_selector_all(".case"))==2, tb[:300])
     c=[c for c in pb.query_selector_all(".case") if "Карта № 56" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
     check("B has Saidova visit from A", "Осмотр на дому" in pb.inner_text(".modal")); pb.click(".modal button.pri")
     # перезапуск: напоминание при входе + сохранность
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
-    check("opens on cases when no senders", pg.query_selector("nav button.on").inner_text()=="Визиты")
+    check("opens on cases when no senders", pg.query_selector("nav button.on").inner_text()=="Пациенты")
     # режим «специалист»
-    pg.click("nav >> text=Настройки"); pg.select_option("#modeSel","field")
-    check("field mode tabs", [b.inner_text() for b in pg.query_selector_all("nav button")]==["Визиты","Настройки"])
+    pg.click("nav >> text=Настройки"); pg.click("#roleChange"); pg.wait_for_selector("#roleSel"); pg.select_option("#roleSel","pat"); pg.click(".modal button.pri"); pg.wait_for_timeout(300)
+    check("field mode tabs", [b.inner_text() for b in pg.query_selector_all("nav button")]==["Сегодня","Пациенты","Отчёт","Настройки"], [b.inner_text() for b in pg.query_selector_all("nav button")])
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
-    check("field mode persists + starts on cases", pg.query_selector("nav button.on").inner_text()=="Визиты" and len(pg.query_selector_all("nav button"))==2)
+    check("field mode persists + starts on cases", pg.query_selector("nav button.on").inner_text()=="Сегодня" and len(pg.query_selector_all("nav button"))==4, [b.inner_text() for b in pg.query_selector_all("nav button")])
     # блокировка очищает память
     pg.evaluate("lockNow()"); check("lock clears cases", pg.evaluate("Object.keys(S.cases).length")==0 and "778/2" not in pg.inner_text("body"))
     # сеть

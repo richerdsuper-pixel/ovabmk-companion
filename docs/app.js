@@ -22,6 +22,7 @@
     myFolders: [],
     scopes: { institutions: [], positions: [] },   // области видимости заведующего (учреждения / специальности)
     institutions: null,                            // справочник учреждений (null — ещё не загружен)
+    mahallas: [], mlinks: [], brigades: [],        // махалли, их связь с учреждениями и состав бригад
     loginBusy: false,
     loginError: "",
     invite: readInvite(),
@@ -99,6 +100,33 @@
     S.institutions = r.error ? [] : (r.data || []);
     return S.institutions;
   }
+  async function loadMahallas() {
+    var rs = await Promise.all([sb.from("mahallas").select("id, name").order("name"), sb.from("mahalla_links").select("mahalla_id, institution_id"),
+      sb.from("brigade_posts").select("id, mahalla_id, kind, rate, user_id")]);
+    S.mahallas = rs[0].error ? [] : (rs[0].data || []);
+    S.mlinks = rs[1].error ? [] : (rs[1].data || []);
+    S.brigades = rs[2].error ? [] : (rs[2].data || []);
+  }
+  function mahName(id) { var m = S.mahallas.filter(function (x) { return x.id === id; })[0]; return m ? m.name : ""; }
+  function mahInsts(id) { return S.mlinks.filter(function (l) { return l.mahalla_id === id; }).map(function (l) { return l.institution_id; }); }
+  // норма бригады: врач 1.0 + патронаж 1.0 + доя 0.5 (кабинет или патронаж)
+  var NORM = { doctor: 1, patronage: 1, doya: 0.5 };
+  function brigadeSum(mid) {
+    var o = { doctor: 0, patronage: 0, doya: 0 };
+    S.brigades.forEach(function (b) {
+      if (b.mahalla_id !== mid) return;
+      var k = b.kind === "doctor" ? "doctor" : b.kind === "patronage" ? "patronage" : "doya";
+      o[k] += Number(b.rate);
+    });
+    return o;
+  }
+  function brigadeGaps(mid) {
+    var sm = brigadeSum(mid), gaps = [];
+    ["doctor", "patronage", "doya"].forEach(function (k) {
+      if (sm[k] + 1e-9 < NORM[k]) gaps.push(t("br_gap_" + k, { have: String(Math.round(sm[k] * 100) / 100), need: String(NORM[k]) }));
+    });
+    return gaps;
+  }
   function instName(id) {
     var x = (S.institutions || []).filter(function (i) { return i.id === id; })[0];
     return x ? x.name : "";
@@ -169,7 +197,7 @@
   }
 
   function resetUser() {
-    S.session = null; S.roles = []; S.roleState = "idle"; S.roleError = ""; S.profile = null; S.myFolders = []; S.scopes = { institutions: [], positions: [] };
+    S.session = null; S.roles = []; S.roleState = "idle"; S.roleError = ""; S.profile = null; S.myFolders = []; S.scopes = { institutions: [], positions: [] }; S.mahallas = []; S.mlinks = []; S.brigades = [];
   }
 
   function onSession(session) {
@@ -201,6 +229,7 @@
           else if (x.kind === "position" && x.position_code) S.scopes.positions.push(x.position_code);
         });
         await loadInstitutions();
+        await loadMahallas();
         var m = await sb.from("folder_members").select("folder_id").eq("user_id", uid);
         S.myFolders = (m.data || []).map(function (x) { return x.folder_id; });
       }
@@ -241,7 +270,7 @@
   }
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"]];
-    if (canSummary()) items.push(["#/indicators/summary", "nav_indsum", "indsum"]);
+    if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
       return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null, text: t(i[1]) });
@@ -265,6 +294,7 @@
     if (route === "/folders") return foldersView();
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return canSummary() ? indSummaryView() : forbidden("indsum");
+    if (route === "/mahallas") return canSummary() ? mahallasView() : forbidden("mahallas");
     if (route === "/admin/institutions") return isAdmin() ? institutionsView() : forbidden("institutions");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
     if (route === "/admin/users") return isAdmin() ? usersView() : forbidden("users");
@@ -419,7 +449,7 @@
   async function indicatorsView() {
     var my = renderToken;
     shell("ind", loadingBox());
-    var r = await sb.from("indicator_reports").select("id, position_code, institution, period_start, period_end, vals, updated_at")
+    var r = await sb.from("indicator_reports").select("id, position_code, institution, mahalla_id, period_start, period_end, vals, updated_at")
       .eq("user_id", S.session.user.id).order("period_end", { ascending: false });
     if (my !== renderToken) return;
     if (r.error) return shell("ind", failBox(r.error));
@@ -434,12 +464,16 @@
     var instIn = h("input", { type: "text", maxlength: "200", value: st.inst, autocomplete: "off" });
     var psIn = h("input", { type: "date", value: st.ps }), peIn = h("input", { type: "date", value: st.pe });
     posSel.value = st.pos;
+    // махалля: из тех, что обслуживает учреждение сотрудника (если оно указано), иначе все
+    var myMah = S.mahallas.filter(function (m) { return !S.profile || S.profile.institution_id == null || mahInsts(m.id).indexOf(S.profile.institution_id) >= 0; });
+    var mahSel = h("select", { "aria-label": t("mah_label") }, h("option", { value: "", text: t("mah_whole") }),
+      myMah.map(function (m) { return h("option", { value: String(m.id), text: m.name }); }));
     var note = h("div", { class: "small mute" }), rule = h("p", { class: "small mute" });
     var grid = h("div", { class: "indgrid" }), msg = h("div");
     var inputs = {}, fromEx = false;
     function findMine() {
-      var inst = instIn.value.trim().toLowerCase();
-      return mine.filter(function (x) { return x.position_code === posSel.value && x.institution.trim().toLowerCase() === inst && x.period_end === peIn.value; })[0] || null;
+      var inst = instIn.value.trim().toLowerCase(), mid = mahSel.value ? +mahSel.value : null;
+      return mine.filter(function (x) { return x.position_code === posSel.value && x.institution.trim().toLowerCase() === inst && x.period_end === peIn.value && (x.mahalla_id || null) === mid; })[0] || null;
     }
     function collect() { var o = {}; Object.keys(inputs).forEach(function (n) { o[n] = inputs[n].value; }); return o; }
     function drawGrid(keepTyped) {
@@ -460,13 +494,14 @@
     posSel.addEventListener("change", function () {
       var d = defaultPeriod(INDS[posSel.value].rule); psIn.value = d[0]; peIn.value = d[1]; drawGrid(false);
     });
-    [instIn, peIn].forEach(function (el) { el.addEventListener("change", function () { drawGrid(true); }); });
+    [instIn, peIn, mahSel].forEach(function (el) { el.addEventListener("change", function () { drawGrid(true); }); });
     drawGrid(false);
 
     var btn = h("button", { class: "btn pri", type: "submit", text: t("ind_save") });
     var form = h("form", { class: "stack", novalidate: true },
       h("div", { class: "notice warn", text: t("ind_only_numbers") }),
       h("div", { class: "grid-f" }, h("label", { class: "f" }, t("ind_pos"), posSel), h("label", { class: "f" }, t("ind_inst"), instIn),
+        S.mahallas.length ? h("label", { class: "f" }, t("mah_label"), mahSel) : null,
         h("label", { class: "f" }, t("ind_ps"), psIn), h("label", { class: "f" }, t("ind_pe"), peIn)),
       rule, note, h("h3", { text: t("ind_values") }), grid, msg, h("div", null, btn));
     form.addEventListener("submit", async function (e) {
@@ -483,9 +518,9 @@
       var err = inst.length < 2 ? t("ind_err_inst") : (!ps || !pe || ps > pe || dayDiff(pe, ps) > 100) ? t("ind_err_period") : bad ? t("ind_err_bad") : !cnt ? t("ind_err_none") : "";
       if (err) { msg.appendChild(h("div", { class: "notice bad", text: err })); return; }
       btn.disabled = true;
-      var ex = findMine(), res;
+      var ex = findMine(), res, mid = mahSel.value ? +mahSel.value : null;
       if (ex) res = await sb.from("indicator_reports").update({ institution: inst, period_start: ps, vals: vals }).eq("id", ex.id);
-      else res = await sb.from("indicator_reports").insert({ user_id: S.session.user.id, position_code: posSel.value, institution: inst, period_start: ps, period_end: pe, vals: vals });
+      else res = await sb.from("indicator_reports").insert({ user_id: S.session.user.id, position_code: posSel.value, institution: inst, mahalla_id: mid, period_start: ps, period_end: pe, vals: vals });
       btn.disabled = false;
       if (res.error) { msg.appendChild(h("div", { class: "notice bad", text: /duplicate|23505/.test(errMsg(res.error)) ? t("ind_err_dup") : t("err_action", { msg: errMsg(res.error) }) })); return; }
       store("ovabmk-inst", inst); toast(t("ind_saved")); indicatorsView();
@@ -499,11 +534,11 @@
           return h("tr", null,
             h("td", null, fmtDate(x.period_start) + " – " + fmtDate(x.period_end)),
             h("td", null, p ? posTitle(p) : x.position_code),
-            h("td", { class: "hide-sm" }, x.institution),
+            h("td", { class: "hide-sm" }, x.institution, x.mahalla_id ? h("div", { class: "sub", text: mahName(x.mahalla_id) }) : null),
             h("td", { class: "hide-sm small mute", text: def ? t("ind_filled", { n: n, m: def.ind.length }) : "" }),
             h("td", null, h("div", { class: "row" },
               h("button", { class: "btn sm", type: "button", text: t("ind_edit"), onclick: function () {
-                posSel.value = x.position_code; instIn.value = x.institution; psIn.value = x.period_start; peIn.value = x.period_end; drawGrid(false);
+                posSel.value = x.position_code; instIn.value = x.institution; mahSel.value = x.mahalla_id ? String(x.mahalla_id) : ""; psIn.value = x.period_start; peIn.value = x.period_end; drawGrid(false);
                 form.scrollIntoView({ behavior: "smooth", block: "start" });
               } }),
               indDeleteButton(x))));
@@ -528,7 +563,7 @@
   }
 
   // Сводка для руководителей: показатели одной должности по всем сотрудникам.
-  var SUM = { pos: "", mode: "latest", ind: 0, inst: "" };
+  var SUM = { pos: "", mode: "latest", ind: 0, inst: "", group: "reports" };
   async function indSummaryView() {
     var my = renderToken;
     shell("indsum", loadingBox());
@@ -538,7 +573,7 @@
     if (!plist.length) return shell("indsum", h("div", { class: "notice warn", text: t("ind_sum_nopos") }));
     if (!SUM.pos || !plist.some(function (x) { return x.code === SUM.pos; })) SUM.pos = plist[0].code;
     var def = INDS[SUM.pos], p = posByCode(SUM.pos);
-    var r = await sb.from("indicator_reports").select("id, user_id, institution, period_start, period_end, vals, updated_at")
+    var r = await sb.from("indicator_reports").select("id, user_id, institution, mahalla_id, period_start, period_end, vals, updated_at")
       .eq("position_code", SUM.pos).order("period_end", { ascending: false });
     var pr = await sb.from("profiles").select("id, full_name, position, removed_at, institution_id");
     if (my !== renderToken) return;
@@ -551,12 +586,15 @@
     if (SUM.mode !== "latest" && ends.indexOf(SUM.mode) < 0) SUM.mode = "latest";
     var rows;
     if (SUM.mode === "latest") {
-      var seen = {}; rows = all.filter(function (x) { var k = x.user_id + "|" + x.institution.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+      var seen = {}; rows = all.filter(function (x) { var k = x.user_id + "|" + x.institution.toLowerCase() + "|" + (x.mahalla_id || 0); if (seen[k]) return false; seen[k] = 1; return true; });
     } else rows = all.filter(function (x) { return x.period_end === SUM.mode; });
     rows.sort(function (a, b) { return a.institution.localeCompare(b.institution); });
 
     var posSel = h("select", { "aria-label": t("ind_sum_pos") }, plist.map(function (x) { return h("option", { value: x.code, text: posTitle(x) }); }));
     posSel.value = SUM.pos;
+    var grpSel = h("select", { "aria-label": t("sum_group") }, ["reports", "mahalla", "inst", "district"].map(function (g) { return h("option", { value: g, text: t("sum_g_" + g) }); }));
+    grpSel.value = SUM.group;
+    grpSel.addEventListener("change", function () { SUM.group = grpSel.value; indSummaryView(); });
     var instSel = (S.institutions || []).length > 1 ? instOptions(h("select", { "aria-label": t("inst_label") }), t("ind_sum_all_inst")) : null;
     if (instSel) { instSel.value = SUM.inst; instSel.addEventListener("change", function () { SUM.inst = instSel.value; SUM.mode = "latest"; indSummaryView(); }); }
     posSel.addEventListener("change", function () { SUM.pos = posSel.value; SUM.mode = "latest"; SUM.ind = 0; indSummaryView(); });
@@ -565,12 +603,29 @@
     modeSel.value = SUM.mode;
     modeSel.addEventListener("change", function () { SUM.mode = modeSel.value; indSummaryView(); });
 
-    var header = ["№", p ? posTitle(p) : SUM.pos, ""].concat(rows.map(function (x) { return x.institution + " · " + (names[x.user_id] || "") + " (" + fmtDate(x.period_end) + ")"; })).concat([t("ind_total")]);
+    // столбцы: каждый отчёт отдельно или группа отчётов (махалля / учреждение / весь район): сумма, а для процентов — среднее
+    var cols;
+    if (SUM.group === "reports") cols = rows.map(function (x) { return { label: x.institution + (x.mahalla_id ? " / " + mahName(x.mahalla_id) : "") + " · " + (names[x.user_id] || "") + " (" + fmtDate(x.period_end) + ")", rows: [x] }; });
+    else {
+      var gm = {};
+      rows.forEach(function (x) {
+        var k = SUM.group === "mahalla" ? (x.mahalla_id ? mahName(x.mahalla_id) : t("mah_whole_short")) : SUM.group === "inst" ? (instName(instOf[x.user_id]) || x.institution) : t("sum_district");
+        (gm[k] = gm[k] || []).push(x);
+      });
+      cols = Object.keys(gm).sort(function (a, b) { return a.localeCompare(b); }).map(function (k) { return { label: k + " (" + gm[k].length + ")", rows: gm[k] }; });
+    }
+    function agg(list, i, mean) {
+      var nums = list.map(function (x) { return x.vals["i" + i.n]; }).filter(function (v) { return typeof v === "number"; });
+      if (!nums.length) return "";
+      var sm = nums.reduce(function (a, b) { return a + b; }, 0);
+      return Math.round((sumable(i.unit) ? sm : mean ? sm / nums.length : NaN) * 100) / 100;
+    }
+    var header = ["№", p ? posTitle(p) : SUM.pos, ""].concat(cols.map(function (c) { return c.label; })).concat(SUM.group === "district" ? [] : [t("ind_total")]);
     var body = def.ind.map(function (i) {
-      var vals = rows.map(function (x) { var v = x.vals["i" + i.n]; return v === undefined ? "" : v; });
-      var nums = vals.filter(function (v) { return typeof v === "number"; });
-      var total = sumable(i.unit) && nums.length ? Math.round(nums.reduce(function (a, b) { return a + b; }, 0) * 100) / 100 : "";
-      return { raw: [i.n, i.ru, unitLabel(i.unit)].concat(vals).concat([total]), view: [String(i.n), i.ru, unitLabel(i.unit)].concat(vals.map(function (v) { return valText(v, i.unit); })).concat([total === "" ? "" : String(total)]) };
+      var vals = cols.map(function (c) { return agg(c.rows, i, SUM.group !== "reports"); }).map(function (v) { return isNaN(v) ? "" : v; });
+      var total = agg(rows, i, false); if (total !== "" && isNaN(total)) total = "";
+      var tail = SUM.group === "district" ? [] : [total];
+      return { raw: [i.n, i.ru, unitLabel(i.unit)].concat(vals).concat(tail), view: [String(i.n), i.ru, unitLabel(i.unit)].concat(vals.map(function (v) { return valText(v, i.unit); })).concat(tail.map(function (v) { return v === "" ? "" : String(v); })) };
     });
     var table = !rows.length ? h("p", { class: "mute", text: t("ind_sum_empty") }) :
       h("div", { class: "tbl" }, h("table", { class: "indsum" },
@@ -614,10 +669,151 @@
     }
     shell("indsum", h("div", { class: "stack" }, trend, h("section", { class: "panel stack" }, h("h2", { text: t("ind_sum_title") }),
       h("div", { class: "grid-f" }, h("label", { class: "f" }, t("ind_sum_pos"), posSel), h("label", { class: "f" }, t("ind_sum_mode"), modeSel),
-        instSel ? h("label", { class: "f" }, t("inst_label"), instSel) : null),
+        instSel ? h("label", { class: "f" }, t("inst_label"), instSel) : null, h("label", { class: "f" }, t("sum_group"), grpSel)),
       h("p", { class: "small mute", text: t("ind_deadline", { rule: ruleText(def.rule) }) }), missBox, exp, table)));
   }
 
+
+
+  // --- махалли: работает ли, полная ли бригада; администратор правит справочник и состав бригад
+  var MAH = { inst: "" }, MAH_DAYS = 14;
+  var BR_KINDS = ["doctor", "patronage", "doya_cab", "doya_pat"];
+  async function mahallasView() {
+    var my = renderToken;
+    shell("mahallas", loadingBox());
+    var rs = await Promise.all([
+      sb.from("indicator_reports").select("mahalla_id, period_end").order("period_end", { ascending: false }).limit(5000),
+      loadMahallas(), loadInstitutions(true),
+      isAdmin() ? sb.from("profiles").select("id, full_name, removed_at") : Promise.resolve({ data: [] })
+    ]);
+    if (my !== renderToken) return;
+    if (rs[0].error) return shell("mahallas", failBox(rs[0].error));
+    var last = {}; (rs[0].data || []).forEach(function (x) { if (x.mahalla_id != null && (!last[x.mahalla_id] || x.period_end > last[x.mahalla_id])) last[x.mahalla_id] = x.period_end; });
+    var people = (rs[3].data || []).filter(function (x) { return !x.removed_at; });
+    var since = addDays(todayS(), -MAH_DAYS), insts = S.institutions || [];
+    var scoped = !isManager() && S.scopes.institutions.length ? S.scopes.institutions : null;
+    var vis = S.mahallas.filter(function (m) {
+      var li = mahInsts(m.id);
+      if (scoped && !li.some(function (i) { return scoped.indexOf(i) >= 0; })) return false;
+      return !MAH.inst || li.indexOf(+MAH.inst) >= 0 || (MAH.inst === "none" && !li.length);
+    });
+    function works(m) { return !!last[m.id] && last[m.id] >= since; }
+    var nW = vis.filter(works).length, nB = vis.filter(function (m) { return !brigadeGaps(m.id).length; }).length;
+    var pw = pctOf(nW, vis.length), pb = pctOf(nB, vis.length);
+    var kpis = h("div", { class: "kpis" },
+      kpi(t("mah_k_work"), CH.ring(pw, { label: pw === null ? "" : pw + "%" }), vis.length ? t("mah_k_work_of", { n: nW, m: vis.length, d: MAH_DAYS }) : t("mah_none")),
+      kpi(t("mah_k_br"), CH.ring(pb, { label: pb === null ? "" : pb + "%" }), vis.length ? t("mah_k_br_of", { n: nB, m: vis.length }) : t("mah_none")),
+      kpi(t("mah_k_down"), h("span", { class: "big", text: String(vis.length - nW) }), t("mah_k_down_sub")));
+
+    var groups = insts.filter(function (i) { return !MAH.inst || MAH.inst === String(i.id); }).map(function (i) { return { id: i.id, name: i.name, list: vis.filter(function (m) { return mahInsts(m.id).indexOf(i.id) >= 0; }) }; })
+      .filter(function (g) { return g.list.length; });
+    var orphan = vis.filter(function (m) { return !mahInsts(m.id).length; });
+    if (orphan.length && (!MAH.inst || MAH.inst === "none")) groups.push({ id: 0, name: t("mah_no_inst"), list: orphan });
+
+    var bars = groups.map(function (g) {
+      var n = g.list.filter(works).length, p = pctOf(n, g.list.length);
+      return { label: g.name, sub: n + " / " + g.list.length, pct: p, text: p + "%", tone: CH.tone(p) };
+    }).sort(function (a, b) { return a.pct - b.pct || a.label.localeCompare(b.label); });
+    var barPanel = !bars.length ? null : h("section", { class: "panel" }, panelHead(t("mah_chart"), t("mah_chart_sub", { d: MAH_DAYS })), CH.hbars(bars, { aria: t("mah_chart") }));
+
+    var filter = h("select", { "aria-label": t("inst_label") }, h("option", { value: "", text: t("ind_sum_all_inst") }),
+      insts.map(function (i) { return h("option", { value: String(i.id), text: i.name }); }), h("option", { value: "none", text: t("mah_no_inst") }));
+    filter.value = MAH.inst;
+    filter.addEventListener("change", function () { MAH.inst = filter.value; mahallasView(); });
+
+    function row(m, g) {
+      var gaps = brigadeGaps(m.id), ok = works(m);
+      var cells = [
+        h("td", null, h("b", { text: m.name }), mahInsts(m.id).length > 1 ? h("div", { class: "sub", text: t("mah_shared") }) : null),
+        h("td", null, h("span", { class: "chip " + (ok ? "ok" : "bad"), text: ok ? t("mah_works") : t("mah_down") }),
+          h("div", { class: "sub", text: last[m.id] ? t("mah_last", { d: fmtDate(last[m.id]) }) : t("mah_never") })),
+        h("td", null, !S.brigades.some(function (b) { return b.mahalla_id === m.id; }) ? h("span", { class: "chip warn", text: t("br_none") })
+          : !gaps.length ? h("span", { class: "chip ok", text: t("br_full") })
+          : [h("span", { class: "chip warn", text: t("br_incomplete") }), h("div", { class: "sub", text: gaps.join("; ") })])
+      ];
+      if (isAdmin()) cells.push(h("td", null, mahEditor(m, people, function () { mahallasView(); })));
+      return h("tr", null, cells);
+    }
+    var tables = groups.map(function (g) {
+      return h("section", { class: "panel stack" }, h("h3", { text: g.name }),
+        h("div", { class: "tbl" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", { text: t("mah_label") }), h("th", { text: t("mah_status") }), h("th", { text: t("br_title") }), isAdmin() ? h("th") : null)),
+          h("tbody", null, g.list.map(function (m) { return row(m, g); })))));
+    });
+    shell("mahallas", h("div", { class: "stack" },
+      h("div", { class: "ovh" }, h("h2", { text: t("mah_title") }), h("label", { class: "f", style: "min-width:220px" }, filter)),
+      kpis, barPanel,
+      isAdmin() ? mahAddForm(function () { mahallasView(); }) : null,
+      tables.length ? tables : h("p", { class: "panel mute", text: t("mah_none") })));
+  }
+
+  function mahErr(e) {
+    var m = errMsg(e);
+    return /mahalla_exists/.test(m) ? t("mah_exists") : /mahalla_has_reports/.test(m) ? t("mah_has_reports") : /bad_name/.test(m) ? t("inst_bad_name") : t("err_action", { msg: m });
+  }
+  function instChecks(selected) {
+    return h("div", { class: "fold-picks wide" }, (S.institutions || []).map(function (i) {
+      return h("label", null, h("input", { type: "checkbox", value: String(i.id), checked: selected.indexOf(i.id) >= 0 }), i.name);
+    }));
+  }
+  function mahAddForm(done) {
+    var nameIn = h("input", { type: "text", maxlength: "120", "aria-label": t("mah_label") }), checks = instChecks([]);
+    var form = h("form", { class: "stack" }, h("label", { class: "f" }, t("mah_label"), nameIn),
+      h("b", { class: "small mute", text: t("mah_inst_serving") }), checks,
+      h("div", null, h("button", { class: "btn pri", type: "submit", text: t("inst_add") })));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var ids = Array.from(checks.querySelectorAll("input:checked")).map(function (x) { return +x.value; });
+      var x = await sb.rpc("admin_save_mahalla", { _id: null, _name: nameIn.value, _institutions: ids });
+      if (x.error) { toast(mahErr(x.error)); return; }
+      toast(t("mah_added")); done();
+    });
+    return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("mah_add") }), h("div", { style: "margin-top:12px" }, form));
+  }
+  function mahEditor(m, people, done) {
+    var nameIn = h("input", { type: "text", value: m.name, maxlength: "120", "aria-label": t("mah_label") });
+    var checks = instChecks(mahInsts(m.id));
+    var posts = S.brigades.filter(function (b) { return b.mahalla_id === m.id; }).map(function (b) { return { kind: b.kind, rate: Number(b.rate), user_id: b.user_id || "" }; });
+    var box = h("div", { class: "stack", style: "gap:6px" });
+    function drawPosts() {
+      box.textContent = "";
+      posts.forEach(function (p, idx) {
+        var ks = h("select", { "aria-label": t("br_kind") }, BR_KINDS.map(function (k) { return h("option", { value: k, text: t("br_kind_" + k) }); })); ks.value = p.kind;
+        var ri = h("input", { type: "number", min: "0.25", max: "2", step: "0.25", value: String(p.rate), "aria-label": t("br_rate"), style: "width:80px" });
+        var us = h("select", { "aria-label": t("br_person") }, h("option", { value: "", text: t("br_vacant") }),
+          people.map(function (x) { return h("option", { value: x.id, text: x.full_name }); })); us.value = p.user_id || "";
+        ks.addEventListener("change", function () { p.kind = ks.value; });
+        ri.addEventListener("change", function () { p.rate = Number(ri.value) || 0; });
+        us.addEventListener("change", function () { p.user_id = us.value; });
+        box.appendChild(h("div", { class: "row" }, ks, ri, us, h("button", { class: "btn sm danger", type: "button", text: "×", "aria-label": t("del"), onclick: function () { posts.splice(idx, 1); drawPosts(); } })));
+      });
+    }
+    drawPosts();
+    var msg = h("div");
+    var save = h("button", { class: "btn pri", type: "button", text: t("save") });
+    save.addEventListener("click", async function () {
+      var ids = Array.from(checks.querySelectorAll("input:checked")).map(function (x) { return +x.value; });
+      save.disabled = true;
+      var x = await sb.rpc("admin_save_mahalla", { _id: m.id, _name: nameIn.value, _institutions: ids });
+      if (!x.error) x = await sb.rpc("admin_set_brigade", { _mahalla: m.id, _posts: posts.filter(function (p) { return p.rate > 0; }).map(function (p) { return { kind: p.kind, rate: p.rate, user_id: p.user_id || null }; }) });
+      save.disabled = false;
+      if (x.error) { toast(mahErr(x.error)); return; }
+      toast(t("u_saved")); done();
+    });
+    var del = h("button", { class: "btn danger", type: "button", text: t("del") });
+    del.addEventListener("click", async function () {
+      if (!del.classList.contains("armed")) { del.classList.add("armed"); del.textContent = t("del_confirm"); setTimeout(function () { del.classList.remove("armed"); del.textContent = t("del"); }, 4000); return; }
+      var x = await sb.rpc("admin_delete_mahalla", { _id: m.id });
+      if (x.error) { toast(mahErr(x.error)); return; }
+      toast(t("mah_deleted")); done();
+    });
+    return h("details", null, h("summary", { style: "cursor:pointer;font-weight:700", text: t("mah_edit") }),
+      h("div", { class: "stack", style: "margin-top:8px;min-width:260px" },
+        h("label", { class: "f" }, t("mah_label"), nameIn), h("b", { class: "small mute", text: t("mah_inst_serving") }), checks,
+        h("b", { class: "small mute", text: t("br_title") + " — " + t("br_norm") }), box,
+        h("div", null, h("button", { class: "btn sm", type: "button", text: t("br_add"), onclick: function () { posts.push({ kind: "doctor", rate: 1, user_id: "" }); drawPosts(); } })),
+        msg, h("div", { class: "row" }, save, del)));
+  }
 
   // --- обзор: проценты и графики
   function shortDate(s) { return s.slice(8, 10) + "." + s.slice(5, 7); }

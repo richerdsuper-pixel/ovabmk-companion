@@ -313,6 +313,41 @@ ok("create_invite без учреждения работает (старый в�
 rc, r = sql("select public.decide_request('00000000-0000-0000-0000-000000000000', false, null, null)", "authenticated", A)
 ok("decide_request: старый вызов из 4 аргументов разрешается", "no_such_request" in r[1], r)
 
+# ---------------- махалли и бригады
+I3 = expect_ok("махалли: учреждение для проверок", "select public.admin_save_institution(null, 'Мах-тест СВП', 'svp')", "authenticated", A)
+M1 = expect_ok("махалли: admin создаёт махаллю с учреждением", f"select public.admin_save_mahalla(null, 'Боботог', array[{I1}])", "authenticated", A)
+M2 = expect_ok("махалли: вторая, у двух учреждений", f"select public.admin_save_mahalla(null, 'Қораариқ', array[{I1},{I3}])", "authenticated", A)
+expect_err("махалли: staff не создаёт", "select public.admin_save_mahalla(null, 'Левая', '{}')", "authenticated", S, "admin")
+expect_err("махалли: дубль названия", "select public.admin_save_mahalla(null, ' боботог ', '{}')", "authenticated", A, "mahalla_exists")
+expect_err("махалли: короткое название", "select public.admin_save_mahalla(null, 'а', '{}')", "authenticated", A, "bad_name")
+expect_ok("махалли: связи — 3 строки (1 + 2)", "select count(*) from public.mahalla_links", "authenticated", S, out="3")
+expect_ok("махалли: список видит сотрудник", "select count(*) from public.mahallas", "authenticated", S, out="2")
+expect_ok("махалли: без входа список закрыт", "select count(*) from public.mahallas", "anon", out="0") if False else None
+expect_err("махалли: без входа нет доступа", "select count(*) from public.mahallas", "anon", None, "permission denied")
+expect_err("махалли: напрямую писать нельзя", "insert into public.mahallas(name) values ('Взлом')", "authenticated", A, "permission denied")
+expect_ok("махалли: переименование и смена учреждений", f"select public.admin_save_mahalla({M1}, 'Боботог-1', array[{I3}])", "authenticated", A, out=M1)
+expect_ok("махалли: связи заменены", f"select institution_id from public.mahalla_links where mahalla_id={M1}", "authenticated", S, out=I3)
+BR = f'''[{{"kind":"doctor","rate":1,"user_id":"{S}"}},{{"kind":"patronage","rate":1}},{{"kind":"doya_cab","rate":0.5}}]'''
+expect_ok("бригада: состав сохранён", f"select public.admin_set_brigade({M1}, '{BR}'::jsonb)", "authenticated", A)
+expect_ok("бригада: 3 ставки, сумма 2.5", f"select count(*) || '/' || sum(rate) from public.brigade_posts where mahalla_id={M1}", "authenticated", S, out="3/2.50")
+expect_ok("бригада: сотрудник привязан", f"select count(*) from public.brigade_posts where mahalla_id={M1} and user_id='{S}'", "authenticated", S, out="1")
+expect_err("бригада: staff не меняет", f"select public.admin_set_brigade({M1}, '[]'::jsonb)", "authenticated", S, "admin")
+expect_err("бригада: неверный вид", f"select public.admin_set_brigade({M1}, '[{{\"kind\":\"x\",\"rate\":1}}]'::jsonb)", "authenticated", A, "bad_posts")
+expect_err("бригада: ставка вне границ", f"select public.admin_set_brigade({M1}, '[{{\"kind\":\"doctor\",\"rate\":3}}]'::jsonb)", "authenticated", A, "bad_posts")
+expect_err("бригада: несуществующая махалля", "select public.admin_set_brigade(99999, '[]'::jsonb)", "authenticated", A, "no_such_mahalla")
+expect_ok("бригада: чужой/неизвестный user_id отбрасывается", f"select public.admin_set_brigade({M2}, '[{{\"kind\":\"doctor\",\"rate\":1,\"user_id\":\"00000000-0000-0000-0000-0000000000ff\"}}]'::jsonb)", "authenticated", A)
+expect_ok("бригада: …и пост остаётся без сотрудника", f"select count(*) from public.brigade_posts where mahalla_id={M2} and user_id is null", "authenticated", S, out="1")
+expect_ok("показатели по махалле: свой отчёт", ins(S, "doya_qvp", "СВП №3", "2026-10-19", "2026-10-25").replace("values (", "values (").replace(" vals)", " vals)"), "authenticated", S) if False else None
+expect_ok("показатели по махалле: два отчёта на одну дату по разным махаллям",
+          f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals, mahalla_id) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 1}}', {M1}), ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 2}}', {M2})", "authenticated", S)
+expect_err("показатели по махалле: дубль для той же махалли", f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals, mahalla_id) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 3}}', {M1})", "authenticated", S, "duplicate")
+expect_ok("показатели по махалле: без махалли тоже один", f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 4}}')", "authenticated", S)
+expect_err("показатели без махалли: второй дубль", f"insert into public.indicator_reports(position_code, institution, period_start, period_end, vals) values ('doya_qvp','СВП №3','2026-10-19','2026-10-25','{{\"i1\": 5}}')", "authenticated", S, "duplicate")
+expect_err("махалли: с отчётами не удаляется", f"select public.admin_delete_mahalla({M2})", "authenticated", A, "mahalla_has_reports")
+M3 = expect_ok("махалли: пустая махалля", f"select public.admin_save_mahalla(null, 'Пустая', array[{I1}])", "authenticated", A)
+expect_ok("махалли: пустая удаляется", f"select public.admin_delete_mahalla({M3})", "authenticated", A)
+expect_ok("махалли: удаление убрало её связи", f"select count(*) from public.mahalla_links where mahalla_id={M3}", "authenticated", S, out="0")
+
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",

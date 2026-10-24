@@ -1,0 +1,313 @@
+/* ===== Утилиты ===== */
+function h(tag, attrs, kids) {
+  var e = document.createElement(tag);
+  if (attrs) for (var k in attrs) {
+    var v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v);
+    else if (k === "value") e.value = v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  (function add(list) {
+    if (list == null || list === false) return;
+    if (Array.isArray(list)) return list.forEach(add);
+    e.appendChild(list.nodeType ? list : document.createTextNode(String(list)));
+  })(kids);
+  return e;
+}
+function nowD() { return window.__NOW ? new Date(window.__NOW) : new Date(); }
+function p2(n) { return (n < 10 ? "0" : "") + n; }
+function ymdOf(d) { return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); }
+function todayStr() { return ymdOf(nowD()); }
+function dUTC(s) { var m = /^(\d{4})-(\d\d)-(\d\d)/.exec(s); return Date.UTC(+m[1], +m[2] - 1, +m[3]); }
+function addDays(s, n) { var d = new Date(dUTC(s) + n * 86400000); return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); }
+function diffDays(a, b) { return Math.round((dUTC(a) - dUTC(b)) / 86400000); }
+function dow(s) { return new Date(dUTC(s)).getUTCDay(); }
+function fmtD(s) { if (!s) return ""; var m = /^(\d{4})-(\d\d)-(\d\d)/.exec(s); return m ? m[3] + "." + m[2] + "." + m[1] : String(s); }
+function fmtDT(ts) { var d = new Date(ts); return fmtD(ymdOf(d)) + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+var DOW_RU = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+function parseDate(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "number") { if (v > 20000 && v < 80000) { var d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); } return ""; }
+  var s = String(v).trim(), m;
+  if ((m = /^(\d{4})-(\d\d)-(\d\d)/.exec(s))) return m[1] + "-" + m[2] + "-" + m[3];
+  if ((m = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/.exec(s))) return m[3] + "-" + p2(+m[2]) + "-" + p2(+m[1]);
+  return "";
+}
+function norm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9а-яёўқғҳ]+/gi, ""); }
+function uid() { var a = new Uint8Array(8); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (x) { return (x < 16 ? "0" : "") + x.toString(16); }).join(""); }
+function b64(u8) { var s = ""; for (var i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s); }
+function unb64(s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function download(name, blob) {
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+var ROLE = {}; ROLES.forEach(function (r) { ROLE[r.no] = r; });
+function roleName(no) { return (ROLE[no] || {}).ru || ("Роль " + no); }
+
+/* ===== Шифрование и хранилище ===== */
+var Vault = (function () {
+  var key = null, db = null, mem = {}, usingMem = false, ITER = 250000;
+  function idbOpen() {
+    return new Promise(function (res, rej) {
+      try {
+        var r = indexedDB.open("ovabmk-offline", 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore("kv"); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { rej(r.error); };
+      } catch (e) { rej(e); }
+    });
+  }
+  async function init() {
+    try { db = await idbOpen(); usingMem = false; } catch (e) { db = null; usingMem = true; }
+    return !usingMem;
+  }
+  function tx(mode) { return db.transaction("kv", mode).objectStore("kv"); }
+  function get(k) {
+    if (usingMem) return Promise.resolve(mem[k]);
+    return new Promise(function (res, rej) { var r = tx("readonly").get(k); r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; });
+  }
+  function put(k, v) {
+    if (usingMem) { mem[k] = v; return Promise.resolve(); }
+    return new Promise(function (res, rej) { var r = tx("readwrite").put(v, k); r.onsuccess = function () { res(); }; r.onerror = function () { rej(r.error); }; });
+  }
+  function del(k) {
+    if (usingMem) { delete mem[k]; return Promise.resolve(); }
+    return new Promise(function (res, rej) { var r = tx("readwrite").delete(k); r.onsuccess = function () { res(); }; r.onerror = function () { rej(r.error); }; });
+  }
+  function keys() {
+    if (usingMem) return Promise.resolve(Object.keys(mem));
+    return new Promise(function (res, rej) { var r = tx("readonly").getAllKeys(); r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; });
+  }
+  async function clearAll() { var ks = await keys(); for (var i = 0; i < ks.length; i++) await del(ks[i]); }
+  async function derive(pw, salt, iter) {
+    var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function gz(u8) { var cs = new CompressionStream("gzip"), w = cs.writable.getWriter(); w.write(u8); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); }
+  async function gunz(u8) { var ds = new DecompressionStream("gzip"), w = ds.writable.getWriter(); w.write(u8); w.close(); return new Uint8Array(await new Response(ds.readable).arrayBuffer()); }
+  async function enc(k, obj) {
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var raw = await gz(new TextEncoder().encode(JSON.stringify(obj)));
+    var ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, k, raw));
+    return { iv: iv, ct: ct };
+  }
+  async function dec(k, rec) {
+    var raw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: rec.iv }, k, rec.ct));
+    return JSON.parse(new TextDecoder().decode(await gunz(raw)));
+  }
+  return {
+    init: init, isMem: function () { return usingMem; },
+    hasVault: async function () { return !!(await get("meta")); },
+    isOpen: function () { return !!key; },
+    create: async function (pw) {
+      var salt = crypto.getRandomValues(new Uint8Array(16));
+      key = await derive(pw, salt, ITER);
+      await put("meta", { salt: salt, iter: ITER, ver: await enc(key, "ovabmk-ok") });
+    },
+    unlock: async function (pw) {
+      var m = await get("meta"); if (!m) throw new Error("нет хранилища");
+      var k = await derive(pw, m.salt, m.iter);
+      try { var ok = await dec(k, m.ver); if (ok !== "ovabmk-ok") throw 0; } catch (e) { return false; }
+      key = k; return true;
+    },
+    lock: function () { key = null; },
+    save: async function (k, obj) { await put(k, await enc(key, obj)); },
+    load: async function (k) { var r = await get(k); return r ? dec(key, r) : null; },
+    remove: del, keys: keys, clearAll: clearAll,
+    rekey: async function (oldPw, newPw) {
+      var m = await get("meta"), ok = await derive(oldPw, m.salt, m.iter);
+      try { if ((await dec(ok, m.ver)) !== "ovabmk-ok") throw 0; } catch (e) { return false; }
+      var ks = (await keys()).filter(function (k) { return k !== "meta"; }), vals = {};
+      for (var i = 0; i < ks.length; i++) vals[ks[i]] = await dec(ok, await get(ks[i]));
+      var salt = crypto.getRandomValues(new Uint8Array(16)), nk = await derive(newPw, salt, ITER);
+      for (var j = 0; j < ks.length; j++) await put(ks[j], await enc(nk, vals[ks[j]]));
+      await put("meta", { salt: salt, iter: ITER, ver: await enc(nk, "ovabmk-ok") });
+      key = nk; return true;
+    },
+    exportBackup: async function () {
+      var out = { v: 1, app: "ovabmk-offline", recs: {} }, m = await get("meta");
+      out.meta = { salt: b64(m.salt), iter: m.iter, ver: { iv: b64(m.ver.iv), ct: b64(m.ver.ct) } };
+      var ks = (await keys()).filter(function (k) { return k !== "meta"; });
+      for (var i = 0; i < ks.length; i++) { var r = await get(ks[i]); out.recs[ks[i]] = { iv: b64(r.iv), ct: b64(r.ct) }; }
+      return new Blob([JSON.stringify(out)], { type: "application/octet-stream" });
+    },
+    // восстановление: проверяем пароль копии, затем заменяем всё
+    importBackup: async function (text, pw) {
+      var b; try { b = JSON.parse(text); } catch (e) { throw new Error("файл не является копией"); }
+      if (!b || b.app !== "ovabmk-offline" || !b.meta) throw new Error("файл не является копией");
+      var salt = unb64(b.meta.salt), k = await derive(pw, salt, b.meta.iter);
+      try { if ((await dec(k, { iv: unb64(b.meta.ver.iv), ct: unb64(b.meta.ver.ct) })) !== "ovabmk-ok") throw 0; } catch (e) { return false; }
+      await clearAll();
+      for (var n in b.recs) await put(n, { iv: unb64(b.recs[n].iv), ct: unb64(b.recs[n].ct) });
+      await put("meta", { salt: salt, iter: b.meta.iter, ver: { iv: unb64(b.meta.ver.iv), ct: unb64(b.meta.ver.ct) } });
+      key = k; return true;
+    }
+  };
+})();
+
+/* ===== Сроки сдачи ===== */
+function deadlinesBetween(rule, from, to) { // даты 'YYYY-MM-DD' включительно
+  var out = [];
+  if (!rule || rule.t === "c") return out;
+  for (var d = from; d <= to; d = addDays(d, 1)) {
+    var day = +d.slice(8, 10), mo = +d.slice(5, 7);
+    if (rule.t === "w" && dow(d) === rule.d) out.push(d);
+    else if (rule.t === "m" && day === rule.d) out.push(d);
+    else if (rule.t === "q" && day === rule.d && (mo - 1) % 3 === 0) out.push(d);
+  }
+  return out;
+}
+function tolDays(rule) { return rule.t === "w" ? 3 : 0; }
+function assignDeadline(rule, pEnd) {
+  if (!rule || rule.t === "c" || !pEnd) return "";
+  var from = addDays(pEnd, -tolDays(rule)), list = deadlinesBetween(rule, from, addDays(from, 120));
+  return list[0] || "";
+}
+function ruleText(rule) {
+  if (!rule) return "";
+  var t = " до " + rule.h + ":00";
+  if (rule.t === "w") return "каждую неделю, " + ["", "пн", "вт", "ср", "чт", "пт"][rule.d] + t;
+  if (rule.t === "m") return "ежемесячно, до " + rule.d + "-го числа" + t.replace(" до", ",");
+  if (rule.t === "q") return "ежеквартально (янв, апр, июл, окт), до " + rule.d + "-го" + t.replace(" до", ",");
+  return "по каждому случаю";
+}
+function isPast(dateStr, hour) {
+  var n = nowD(), t = todayStr();
+  if (dateStr < t) return true;
+  if (dateStr > t) return false;
+  return n.getHours() >= hour;
+}
+
+/* ===== Состояние ===== */
+var S = { senders: {}, subs: {}, cache: {}, tab: "home", warn: [] };
+
+function senderSubs(sid) {
+  return Object.keys(S.subs).map(function (k) { return S.subs[k]; }).filter(function (m) { return m.sender === sid; })
+    .sort(function (a, b) { return (b.pEnd || "").localeCompare(a.pEnd || "") || b.imported - a.imported; });
+}
+function latestSub(sid) { return senderSubs(sid)[0] || null; }
+
+function senderStatus(s) {
+  var rule = (ROLE[s.role] || {}).rule, t = todayStr(), res = { st: "wait", text: "", last: null, next: null, late: 0, missed: 0, rule: rule };
+  var subs = senderSubs(s.id);
+  res.lastSub = subs[0] || null;
+  if (!rule || rule.t === "c") { res.st = subs.length ? "ok" : "case"; res.text = subs.length ? "получено файлов: " + subs.length : "по случаю"; return res; }
+  var all = deadlinesBetween(rule, addDays(t, -400), addDays(t, 120));
+  var got = {}; subs.forEach(function (m) { if (m.ddl) got[m.ddl] = m; });
+  var past = all.filter(function (d) { return isPast(d, rule.h); });
+  var fut = all.filter(function (d) { return !isPast(d, rule.h); });
+  res.last = past[past.length - 1] || null; res.next = fut[0] || null;
+  var since = s.since || "0000-00-00";
+  var counted = past.filter(function (d) { return d >= since; }).slice(-6);
+  var miss = counted.filter(function (d) { return !got[d]; });
+  if (res.last && res.last >= since) {
+    if (got[res.last]) { res.st = "ok"; res.text = "сдано за срок " + fmtD(res.last); res.missed = miss.length; }
+    else { res.st = "late"; res.late = diffDays(t, res.last); res.text = "не сдано за " + fmtD(res.last) + (res.late > 0 ? " (" + res.late + " дн.)" : " (сегодня)"); res.missed = miss.length; }
+  } else { res.text = "ждём первый срок"; }
+  if (res.st !== "late" && res.next && diffDays(res.next, t) <= 3 && !got[res.next]) { res.st = "soon"; res.text = "срок " + fmtD(res.next) + " (" + DOW_RU[dow(res.next)] + ") через " + diffDays(res.next, t) + " дн."; }
+  if (res.st === "wait" && res.next) res.text = "ближайший срок " + fmtD(res.next);
+  return res;
+}
+
+async function persistSender(s) { await Vault.save("s:" + s.id, s); S.senders[s.id] = s; }
+async function loadAll() {
+  S.senders = {}; S.subs = {}; S.cache = {};
+  var ks = await Vault.keys();
+  for (var i = 0; i < ks.length; i++) {
+    var k = ks[i];
+    if (k.indexOf("s:") === 0) S.senders[k.slice(2)] = await Vault.load(k);
+    else if (k.indexOf("m:") === 0) S.subs[k.slice(2)] = await Vault.load(k);
+  }
+}
+async function removeSub(id) { await Vault.remove("m:" + id); await Vault.remove("d:" + id); delete S.subs[id]; delete S.cache[id]; }
+async function subData(id) {
+  if (!S.cache[id]) {
+    var d = await Vault.load("d:" + id) || { sheets: {} };
+    Object.keys(d.sheets).forEach(function (sn) { d.sheets[sn].forEach(function (r) { r.q = r.c.join(" ").toLowerCase(); }); });
+    S.cache[id] = d;
+  }
+  return S.cache[id];
+}
+
+/* ===== Импорт Excel ===== */
+var HEAD_DOC_OK = /^(bor|да|yes|ha|есть|\+|✔|✓|1)/i;
+function detectRole(a1, fileName) {
+  var key = String(a1 || "").replace(/\s+/g, " ").trim();
+  for (var i = 0; i < ROLES.length; i++) if (ROLES[i].a1.replace(/\s+/g, " ").trim() === key) return ROLES[i];
+  var m = /Baza_(\d\d)_/i.exec(fileName);
+  if (m && ROLE[+m[1]]) return ROLE[+m[1]];
+  return null;
+}
+async function importFile(file) {
+  var res = { name: file.name, ok: false, msg: "", warn: [] };
+  if (!/\.xlsx$/i.test(file.name)) { res.msg = "это не файл .xlsx"; return res; }
+  var wb;
+  try { wb = await XL.read(await file.arrayBuffer()); } catch (e) { res.msg = "не удалось прочитать файл (" + e.message + ")"; return res; }
+  if (!wb.has("Boshqaruv")) { res.msg = "это не файл «Baza» (нет листа Boshqaruv)"; return res; }
+  var yor = wb.has("Yoriqnoma") ? await wb.sheet("Yoriqnoma") : [];
+  var role = detectRole((yor[0] || [])[0], file.name);
+  if (!role) { res.msg = "не удалось определить должность по файлу"; return res; }
+  var bq = await wb.sheet("Boshqaruv");
+  function bc(r) { return ((bq[r - 1] || [])[2]); }
+  var inst = String(bc(5) || "").trim(), filler = String(bc(6) || "").trim(), phone = String(bc(8) || "").trim();
+  var pStart = parseDate(bc(9)), pEnd = parseDate(bc(10));
+  var readyTxt = String(bc(13) || ""), ready = readyTxt.charAt(0) === "✔";
+  var fileMod = file.lastModified || Date.now();
+  if (!pEnd) { pEnd = ymdOf(new Date(fileMod)); res.warn.push("не заполнен период — взята дата файла " + fmtD(pEnd)); }
+  var vals = [];
+  role.ind.forEach(function (ind) { var v = (bq[ind.row - 1] || [])[5]; vals.push({ n: ind.n, v: v == null ? "" : v }); });
+  var sheets = {}, counts = {}, rowsTotal = 0;
+  for (var sn in role.sheets) {
+    if (!wb.has(sn)) continue;
+    var meta = role.sheets[sn], rows = await wb.sheet(sn), out = [];
+    for (var ri = 4; ri < rows.length; ri++) {
+      var r = rows[ri]; if (!r) continue;
+      var filled = meta.inp.some(function (ci) { var v = r[ci]; return v !== undefined && v !== "" && v != null; });
+      if (!filled) continue;
+      var cells = []; for (var c = 1; c < meta.hdr.length; c++) { var v2 = r[c]; cells.push(v2 == null ? "" : v2); }
+      out.push({ r: ri + 1, c: cells });
+    }
+    if (out.length) { sheets[sn] = out; counts[sn] = out.length; rowsTotal += out.length; }
+  }
+  var docsTotal = 0, docsHave = 0, docsMiss = [];
+  if (wb.has("Hujjatlar")) {
+    var hr = await wb.sheet("Hujjatlar");
+    for (var i = 4; i < hr.length; i++) {
+      var q = hr[i]; if (!q || !q[2]) continue;
+      docsTotal++;
+      if (HEAD_DOC_OK.test(String(q[4] || ""))) docsHave++; else docsMiss.push({ folder: q[1] || "", uz: q[2], ru: q[3] || "" });
+    }
+  }
+  // отправитель
+  var sKey = norm(inst) || norm(filler) || norm(file.name), sender = null;
+  Object.keys(S.senders).forEach(function (id) { var s = S.senders[id]; if (s.role === role.no && s.key === sKey) sender = s; });
+  var ddl = assignDeadline(role.rule, pEnd);
+  if (!sender) {
+    sender = { id: uid(), role: role.no, key: sKey, inst: inst || "(без названия)", filler: filler, phone: phone, created: Date.now(), since: ddl || "" };
+  } else {
+    if (filler) sender.filler = filler; if (phone) sender.phone = phone; if (inst) sender.inst = inst;
+    if (ddl && (!sender.since || ddl < sender.since)) sender.since = ddl;
+  }
+  // дубликаты
+  var dupe = false, replace = [];
+  senderSubs(sender.id).forEach(function (m) {
+    if (m.fileName === file.name && m.fileSize === file.size && m.fileMod === fileMod) dupe = true;
+    else if (m.pEnd === pEnd) replace.push(m.id);
+  });
+  if (dupe) { res.msg = "уже загружен ранее"; res.skipped = true; return res; }
+  var newer = replace.filter(function (id) { return S.subs[id].fileMod > fileMod; });
+  if (newer.length) { res.msg = "в программе уже есть более новая версия за этот период"; res.skipped = true; return res; }
+  var sub = { id: uid(), sender: sender.id, role: role.no, fileName: file.name, fileSize: file.size, fileMod: fileMod, imported: Date.now(), pStart: pStart, pEnd: pEnd, inst: inst, filler: filler, phone: phone, ready: ready, readyTxt: readyTxt, ddl: ddl, ind: vals, counts: counts, rows: rowsTotal, docsTotal: docsTotal, docsHave: docsHave, docsMiss: docsMiss };
+  await persistSender(sender);
+  await Vault.save("d:" + sub.id, { sheets: sheets });
+  await Vault.save("m:" + sub.id, sub); S.subs[sub.id] = sub;
+  for (var k = 0; k < replace.length; k++) await removeSub(replace[k]);
+  res.ok = true; res.sub = sub; res.sender = sender; res.replaced = replace.length;
+  res.msg = roleName(role.no) + " · " + (inst || "без названия") + " · " + fmtD(pStart) + "–" + fmtD(pEnd) + " · строк данных: " + rowsTotal + (ready ? "" : " · файл помечен «не полон»");
+  if (!ddl && role.rule.t !== "c") res.warn.push("не удалось привязать к сроку");
+  return res;
+}

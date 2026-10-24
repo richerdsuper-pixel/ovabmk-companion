@@ -113,6 +113,25 @@ with sync_playwright() as p:
     ok("файл загружен по пути папки с латинским именем", up and up[0][1].startswith("1/") and up[0][1].endswith("/plan_raboty.pdf"), up)
     ok("строка документа с подтверждением", ins and ins[0][2]["no_patient_data"] is True and ins[0][2]["file_name"] == "План работы.pdf", ins)
     pg.screenshot(path=str(SHOTS / "c_folder.png"), full_page=True)
+    # пакетная загрузка
+    pg.locator("details.panel summary", has_text="несколько файлов").click(); pg.wait_for_timeout(100)
+    bulk = pg.locator("details.panel", has_text="несколько файлов")
+    pg.evaluate("window.__MOCK.log.length = 0")
+    bulk.locator("input[type=file]").set_input_files(files=[
+        {"name": "Prikaz_12.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4 a"},
+        {"name": "Шаблон_журнала.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": b"PK xlsx"},
+        {"name": "virus.exe", "mimeType": "application/x-msdownload", "buffer": b"MZ"}])
+    pg.wait_for_timeout(150)
+    ok("пакет: три строки, у неподходящего — ошибка типа", bulk.locator("input[type=text]").count() == 3 and "не принимается" in bulk.inner_text())
+    ok("пакет: название из имени файла", bulk.locator("input[type=text]").nth(0).input_value() == "Prikaz 12")
+    bulk.locator("button[type=submit]").click(); pg.wait_for_timeout(150)
+    ok("пакет: без подтверждения — ошибка", "Подтвердите" in bulk.inner_text())
+    bulk.locator(".check input").check(); bulk.locator("button[type=submit]").click(); pg.wait_for_timeout(500)
+    log = pg.evaluate("window.__MOCK.log")
+    ups = [x for x in log if x[0] == "upload"]; inss = [x for x in log if x[0] == "insert"]
+    ok("пакет: загружены два допустимых файла", len(ups) == 2 and len(inss) == 2, log)
+    ok("пакет: пути в папке 1, латиница", all(u[1].startswith("1/") for u in ups) and ups[1][1].endswith("/shablon_jurnala.xlsx"), ups)
+    ok("пакет: подтверждение данных пациентов записано", all(i[2]["no_patient_data"] is True for i in inss) and inss[1][2]["title"] == "Шаблон журнала", inss)
     btn = pg.locator("button.danger").first; btn.click(); pg.wait_for_timeout(100)
     ok("удаление требует второго нажатия", "Точно" in btn.inner_text())
     btn.click(); pg.wait_for_timeout(300)

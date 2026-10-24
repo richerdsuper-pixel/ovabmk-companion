@@ -371,7 +371,7 @@
               doc.storage_path ? h("button", { class: "btn sm", type: "button", onclick: function () { openFile(doc.storage_path); }, text: t("open") }) : null,
               isAdmin() ? deleteButton(doc, id) : null)));
         }))));
-    shell("folders", h("div", { class: "stack" }, back, head, uploadForm(id),
+    shell("folders", h("div", { class: "stack" }, back, head, uploadForm(id), bulkForm(id),
       h("section", { class: "panel stack" }, h("h3", { text: t("docs") }), list)));
   }
 
@@ -438,6 +438,62 @@
       toast(t("added")); folderView(folderId);
     });
     return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("add_doc") }),
+      h("div", { style: "margin-top:12px" }, form));
+  }
+
+  // Пакетная загрузка: сразу несколько файлов в одну папку, названия берутся из имён файлов и правятся перед отправкой.
+  function bulkForm(folderId) {
+    var file = h("input", { type: "file", multiple: true, accept: ".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" });
+    var conf = h("input", { type: "checkbox" });
+    var list = h("div", { class: "stack", style: "gap:8px" });
+    var msg = h("div");
+    var btn = h("button", { class: "btn pri", type: "submit", text: t("b_upload", { n: 0 }), disabled: true });
+    var rows = [];
+    function titleOf(name) { return name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim().slice(0, 300) || name; }
+    file.addEventListener("change", function () {
+      rows = []; list.textContent = ""; msg.textContent = "";
+      Array.prototype.forEach.call(file.files || [], function (fl) {
+        var bad = fl.size > MAX_FILE ? t("err_file_big") : (fl.type && TYPES.indexOf(fl.type) < 0) ? t("err_file_type") : "";
+        var inp = h("input", { type: "text", maxlength: "300", value: titleOf(fl.name), "aria-label": t("f_title") });
+        var st = h("span", { class: "small " + (bad ? "bad" : "mute"), text: bad || fmtSize(fl.size) });
+        list.appendChild(h("div", { class: "row", style: "flex-wrap:wrap;gap:8px;align-items:center" }, inp, st));
+        rows.push({ fl: fl, inp: inp, st: st, bad: !!bad });
+      });
+      var n = rows.filter(function (r) { return !r.bad; }).length;
+      btn.textContent = t("b_upload", { n: n }); btn.disabled = n === 0;
+    });
+    var form = h("form", { class: "stack", novalidate: true },
+      h("div", { class: "notice warn", text: t("pd_warning") }),
+      h("p", { class: "mute small", text: t("b_hint") }),
+      h("label", { class: "f" }, t("b_files"), file), list,
+      h("label", { class: "check" }, conf, h("span", { text: t("b_confirm") })),
+      msg, h("div", null, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault(); msg.textContent = "";
+      var todo = rows.filter(function (r) { return !r.bad && !r.done; });
+      if (!todo.length) { msg.appendChild(h("div", { class: "notice bad", text: t("err_need_file") })); return; }
+      if (!conf.checked) { msg.appendChild(h("div", { class: "notice bad", text: t("err_need_confirm") })); return; }
+      if (todo.some(function (r) { return !r.inp.value.trim(); })) { msg.appendChild(h("div", { class: "notice bad", text: t("err_need_title") })); return; }
+      btn.disabled = true; file.disabled = true; var okN = 0;
+      for (var i = 0; i < todo.length; i++) {
+        var r = todo[i], fl = r.fl;
+        btn.textContent = t("uploading") + " " + (i + 1) + "/" + todo.length;
+        r.st.className = "small mute"; r.st.textContent = t("uploading");
+        var path = folderId + "/" + uuid() + "/" + safeName(fl.name);
+        var up = await sb.storage.from("documents").upload(path, fl, { contentType: fl.type || "application/octet-stream", upsert: false });
+        if (up.error) { r.st.className = "small bad"; r.st.textContent = errMsg(up.error); continue; }
+        var ins = await sb.from("documents").insert({
+          folder_id: folderId, title: r.inp.value.trim(), storage_path: path, file_name: fl.name.slice(0, 200), file_size: fl.size,
+          mime_type: (fl.type || "").slice(0, 150) || null, no_patient_data: true, uploaded_by: S.session.user.id
+        });
+        if (ins.error) { await sb.storage.from("documents").remove([path]); r.st.className = "small bad"; r.st.textContent = errMsg(ins.error); continue; }
+        okN++; r.done = true; r.st.className = "small ok"; r.st.textContent = "✓";
+      }
+      toast(t("b_done", { ok: okN, n: todo.length }));
+      if (okN === todo.length) folderView(folderId);
+      else { btn.disabled = false; btn.textContent = t("b_upload", { n: todo.length - okN }); msg.appendChild(h("div", { class: "notice warn", text: t("b_partial", { ok: okN, n: todo.length }) })); }
+    });
+    return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("b_add") }),
       h("div", { style: "margin-top:12px" }, form));
   }
 

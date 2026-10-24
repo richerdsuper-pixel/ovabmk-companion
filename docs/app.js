@@ -279,7 +279,7 @@
   }
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"],
-      ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"]];
+      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"]];
     if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
@@ -305,6 +305,7 @@
     if (route === "/folders") return foldersView();
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return canSummary() ? indSummaryView() : forbidden("indsum");
+    if (route === "/pregnant") return pregnantView();
     if (route === "/broadcasts") return broadcastsView();
     if (route === "/tasks") return tasksView();
     if (route === "/mahallas") return canSummary() ? mahallasView() : forbidden("mahallas");
@@ -1665,6 +1666,150 @@
     }
     parts.push(h("section", { class: "panel stack" }, h("h2", { text: t("tk_title") }), list.length ? list.map(tkCard) : h("p", { class: "mute", text: t("tk_empty") })));
     shell("tasks", h("div", { class: "stack" }, parts));
+  }
+
+  // --- беременные по неделям (приказ №180): только № карты, год рождения, махалля, ДПМ
+  var PG = { q: "", st: "", all: false };
+  function pgToday() { return new Date().toISOString().slice(0, 10); }
+  function pgChip(st) {
+    var c = { ok: "ok", due: "warn", overdue: "bad", check: "bad", closed: "" }[st] || "";
+    return h("span", { class: "chip " + c, text: t("pg_st_" + st) });
+  }
+  function ancRow(no) { return (S.anc || []).filter(function (x) { return x.visit_no === no; })[0] || null; }
+  function testsList(row) {
+    var tests = (row && row.tests) || [];
+    return tests.length ? h("ul", { class: "small", style: "margin:4px 0 0 18px" }, tests.map(function (x) { return h("li", { text: x }); })) : h("p", { class: "mute small", text: t("pg_no_tests") });
+  }
+  function pgCard(p) {
+    var row = ancRow(p.visit_no), st = h("div", { class: "stack", style: "gap:10px;margin-top:10px" });
+    var mine = p.owner_id === S.session.user.id || isAdmin();
+    var sum = h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
+      h("b", { text: t("pg_card") + " " + p.card_no }), pgChip(p.state), h("span", { class: "chip", text: t("pg_weeks", { w: p.weeks }) }), p.risk ? h("span", { class: "chip bad", text: t("pg_risk") }) : null,
+      p.mahalla_id ? h("span", { class: "mute small", text: mahName(p.mahalla_id) }) : null,
+      row && p.state !== "closed" ? h("span", { class: "mute small", text: row.label + " · " + t("pg_window", { a: p.due_from, b: p.due_until }) }) : null);
+    // что нужно на ближайшем визите
+    var need = h("div", null, h("b", { class: "small", text: t("pg_need") }), row ? testsList(row) : h("p", { class: "mute small", text: t("pg_no_tests") }),
+      row && row.notes ? h("p", { class: "small", text: row.notes }) : null);
+    var done = h("p", { class: "small mute", text: t("pg_done_visits") + ": " + ((p.done || []).length ? p.done.join(", ") : "—") + (p.last_visit ? " · " + t("pg_last") + " " + fmtDate(p.last_visit) : "") });
+    // запись визита
+    var vSel = h("select", { "aria-label": t("pg_visit_no") }, [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return h("option", { value: String(n), text: n === 0 ? t("pg_extra") : (ancRow(n) ? ancRow(n).label : String(n)) }); }));
+    vSel.value = String(p.visit_no && p.state !== "closed" ? p.visit_no : 0);
+    var dIn = h("input", { type: "date", value: pgToday(), max: pgToday(), "aria-label": t("pg_visit_date") });
+    var tBox = h("div", { class: "fold-picks wide" });
+    function drawTests() {
+      tBox.textContent = "";
+      var r = ancRow(+vSel.value); ((r && r.tests) || []).forEach(function (x) { tBox.appendChild(h("label", null, h("input", { type: "checkbox", value: x }), x)); });
+    }
+    vSel.addEventListener("change", drawTests); drawTests();
+    var rec = h("button", { class: "btn pri", type: "button", text: t("pg_record") });
+    rec.addEventListener("click", async function () {
+      rec.disabled = true;
+      var tests = Array.from(tBox.querySelectorAll("input:checked")).map(function (x) { return x.value; });
+      var x = await sb.rpc("record_anc_visit", { _id: p.id, _visit: +vSel.value, _date: dIn.value, _tests: tests });
+      rec.disabled = false;
+      if (x.error) { toast(t("err_action", { msg: errMsg(x.error) })); return; }
+      toast(t("pg_recorded")); pregnantView();
+    });
+    var form = mine && p.state !== "closed" ? h("div", { class: "stack", style: "gap:8px" }, h("b", { class: "small", text: t("pg_record_title") }),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("pg_visit_no"), vSel), h("label", { class: "f" }, t("pg_visit_date"), dIn)), h("b", { class: "small mute", text: t("pg_tests_done") }), tBox, h("div", { class: "row" }, rec)) : null;
+    // закрыть / изменить / удалить
+    var acts = null;
+    if (mine) {
+      var outSel = h("select", { "aria-label": t("pg_outcome") }, ["delivered", "miscarriage", "transferred", "other"].map(function (k) { return h("option", { value: k, text: t("pg_out_" + k) }); }));
+      var closeBtn = h("button", { class: "btn sm", type: "button", text: p.state === "closed" ? t("pg_reopen") : t("pg_close") });
+      closeBtn.addEventListener("click", async function () {
+        closeBtn.disabled = true;
+        var x = await sb.rpc("close_pregnancy", { _id: p.id, _outcome: p.state === "closed" ? null : outSel.value, _date: pgToday() });
+        if (x.error) { closeBtn.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
+        pregnantView();
+      });
+      var del = h("button", { class: "btn sm danger", type: "button", text: t("del") });
+      armed(del, t("del"), async function () {
+        var x = await sb.rpc("delete_pregnancy", { _id: p.id });
+        if (x.error) { del.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
+        toast(t("pg_deleted")); pregnantView();
+      });
+      acts = h("div", { class: "row" }, p.state === "closed" ? null : outSel, closeBtn, del);
+    }
+    st.appendChild(need); st.appendChild(done); if (form) st.appendChild(form); if (acts) st.appendChild(acts);
+    if (p.state === "check") st.insertBefore(h("div", { class: "notice warn", text: t("pg_check_hint") }), st.firstChild);
+    return h("details", { class: "fcard" + (p.state === "closed" ? " dim" : "") }, sum, st);
+  }
+  function pgAddForm(onDone) {
+    var card = h("input", { type: "text", id: "pg_card", maxlength: "30", autocomplete: "off", "aria-label": t("pg_card_no") });
+    var yr = h("input", { type: "number", id: "pg_year", min: "1950", max: "2020", inputmode: "numeric", "aria-label": t("pg_year") });
+    var myMah = S.mahallas.filter(function (m) { return !S.profile || S.profile.institution_id == null || mahInsts(m.id).indexOf(S.profile.institution_id) >= 0; });
+    var mah = h("select", { id: "pg_mah", "aria-label": t("mah_label") }, h("option", { value: "", text: t("mah_whole_short") }), myMah.map(function (m) { return h("option", { value: String(m.id), text: m.name }); }));
+    var lmp = h("input", { type: "date", id: "pg_lmp", max: pgToday(), "aria-label": t("pg_lmp") });
+    var risk = h("input", { type: "checkbox", id: "pg_riskcb" }), btn = h("button", { class: "btn pri", type: "submit", text: t("pg_add") });
+    var form = h("form", { class: "stack", id: "pg_form" }, h("div", { class: "notice warn", text: t("pg_privacy") }),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("pg_card_no"), card), h("label", { class: "f" }, t("pg_year"), yr),
+        S.mahallas.length ? h("label", { class: "f" }, t("mah_label"), mah) : null, h("label", { class: "f" }, t("pg_lmp"), lmp)),
+      h("label", { class: "row", style: "align-items:center" }, risk, t("pg_risk_label")), h("div", { class: "row" }, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (!card.value.trim()) { toast(t("pg_need_card")); return; }
+      if (!lmp.value) { toast(t("pg_need_lmp")); return; }
+      btn.disabled = true;
+      var x = await sb.rpc("add_pregnancy", { _card: card.value, _birth_year: yr.value ? +yr.value : null, _mahalla: mah.value ? +mah.value : null, _lmp: lmp.value, _risk: risk.checked });
+      btn.disabled = false;
+      if (x.error) { var m = errMsg(x.error); toast(/card_exists/.test(m) ? t("pg_card_exists") : /bad_lmp/.test(m) ? t("pg_bad_lmp") : t("err_action", { msg: m })); return; }
+      toast(t("pg_added")); onDone();
+    });
+    return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:700", text: t("pg_add_title") }), h("div", { style: "margin-top:10px" }, form));
+  }
+  function pgSchedule() {
+    var rows = (S.anc || []).map(function (r) {
+      var fr = h("input", { type: "number", min: "0", max: "60", value: String(r.from_week), style: "width:70px", "aria-label": t("pg_from") });
+      var un = h("input", { type: "number", min: "0", max: "60", value: String(r.until_week), style: "width:70px", "aria-label": t("pg_until") });
+      var sv = h("button", { class: "btn sm", type: "button", text: t("save") });
+      sv.addEventListener("click", async function () {
+        sv.disabled = true;
+        var x = await sb.rpc("admin_save_anc_row", { _visit: r.visit_no, _from: +fr.value, _until: +un.value, _tests: null, _notes: null });
+        sv.disabled = false;
+        if (x.error) { toast(/bad_window/.test(errMsg(x.error)) ? t("pg_bad_window") : t("err_action", { msg: errMsg(x.error) })); return; }
+        toast(t("u_saved")); pregnantView();
+      });
+      return h("tr", null, h("td", { text: r.label }),
+        h("td", null, isAdmin() ? h("div", { class: "row" }, fr, un, sv) : r.from_week + "–" + r.until_week),
+        h("td", null, testsList(r)), h("td", { class: "small", text: r.notes || "" }));
+    });
+    return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:700", text: t("pg_schedule") }),
+      h("p", { class: "mute small", style: "margin-top:8px", text: t("pg_schedule_hint") }),
+      h("div", { class: "tbl" }, h("table", null, h("thead", null, h("tr", null, [t("pg_visit_no"), t("pg_window_col"), t("pg_need"), t("pg_notes")].map(function (x) { return h("th", { text: x }); }))), h("tbody", null, rows))));
+  }
+  async function pregnantView() {
+    var my = renderToken;
+    shell("pregnant", loadingBox());
+    var sch = await sb.rpc("anc_schedule_list"), lst = await sb.rpc("list_pregnancies", { _all: !!PG.all });
+    if (my !== renderToken) return;
+    if (lst.error) { shell("pregnant", failBox(lst.error)); return; }
+    S.anc = sch.data || [];
+    var all = lst.data || [], cnt = { overdue: 0, due: 0, ok: 0, other: 0 };
+    all.forEach(function (p) { if (cnt[p.state] != null) cnt[p.state]++; else cnt.other++; });
+    var q = PG.q.toLowerCase().trim();
+    var shown = all.filter(function (p) { return (!PG.st || p.state === PG.st) && (!q || (p.card_no || "").toLowerCase().indexOf(q) >= 0); });
+    var kp = h("div", { class: "kpis" }, [["overdue", "bad"], ["due", "warn"], ["ok", "ok"]].map(function (k) {
+      return h("div", { class: "kpi" }, h("div", { class: "kpi-b " + k[1], text: String(cnt[k[0]]) }), h("div", { class: "kpi-l", text: t("pg_kpi_" + k[0]) }));
+    }));
+    var stSel = h("select", { "aria-label": t("pg_filter") }, h("option", { value: "", text: t("pg_all_states") }), ["overdue", "due", "ok", "check", "closed"].map(function (k) { return h("option", { value: k, text: t("pg_st_" + k) }); }));
+    stSel.value = PG.st; stSel.addEventListener("change", function () { PG.st = stSel.value; pregnantView(); });
+    var qIn = h("input", { type: "search", value: PG.q, placeholder: t("pg_search"), "aria-label": t("pg_search") });
+    qIn.addEventListener("change", function () { PG.q = qIn.value; pregnantView(); });
+    var wide = null;
+    if (canSummary() || isAdmin()) {
+      var cb = h("input", { type: "checkbox", checked: !!PG.all });
+      cb.addEventListener("change", function () { PG.all = cb.checked; pregnantView(); });
+      wide = h("label", { class: "row", style: "align-items:center" }, cb, t("pg_all_mine"));
+    }
+    var dg = isAdmin() ? h("button", { class: "btn sm", type: "button", text: t("pg_digest_now") }) : null;
+    if (dg) dg.addEventListener("click", async function () {
+      dg.disabled = true; var r = await callFn("anc-digest", {}); dg.disabled = false;
+      toast(r.error ? fnErr(r.error) : t("pg_digest_done", { sent: r.data.sent, total: r.data.total }));
+    });
+    shell("pregnant", h("div", { class: "stack" }, h("section", { class: "panel stack" }, h("h2", { text: t("pg_title") }), kp, h("div", { class: "row" }, wide, dg)),
+      pgAddForm(function () { pregnantView(); }), pgSchedule(),
+      h("section", { class: "panel stack" }, h("div", { class: "row" }, qIn, stSel), shown.length ? shown.map(pgCard) : h("p", { class: "mute", text: all.length ? t("pg_none_match") : t("pg_empty") }))));
   }
 
   // --- администратор: учреждения

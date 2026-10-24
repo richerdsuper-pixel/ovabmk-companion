@@ -61,11 +61,20 @@ window.__MOCK.rpc = {
   admin_list_tasks: function(){ return window.__ATK || []; },
   admin_task_status: function(){ return [{user_id:'u1', full_name:'Иванова Мария', user_position:'Доя', notified_at:'2026-10-24T05:00:00Z', seen_at:'2026-10-24T06:00:00Z', done_at:null, note:''}]; },
   admin_create_task: function(){ return 't-new'; }, admin_delete_task: function(){ return null; },
+  anc_schedule_list: function(){ return [
+    {visit_no:1, label:'1-й визит (до 12 нед.)', from_week:0, until_week:12, tests:['Общий анализ крови','ВИЧ, RW'], notes:'Оценить факторы риска.'},
+    {visit_no:2, label:'2-й визит (18–20 нед.)', from_week:16, until_week:22, tests:['УЗИ плода'], notes:'Аномалии развития.'},
+    {visit_no:3, label:'3-й визит (24–26 нед.)', from_week:23, until_week:28, tests:[], notes:''}]; },
+  list_pregnancies: function(){ return window.__PG || []; },
+  add_pregnancy: function(a){ return window.__pgErr ? {error:{message:window.__pgErr}} : 'p-new'; },
+  record_anc_visit: function(){ return null; }, close_pregnancy: function(){ return null; }, delete_pregnancy: function(){ return null; },
+  admin_save_anc_row: function(){ return window.__ancErr ? {error:{message:window.__ancErr}} : null; },
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
 };""" % (A, S_, A)
 
 FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
-  'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; } };"""
+  'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; },
+  'anc-digest': function(){ return {total:4, sent:3, blocked:1, failed:0}; } };"""
 
 def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None, hash="#/folders"):
     b = p.chromium.launch()
@@ -726,6 +735,89 @@ with sync_playwright() as p:
     pg.click("details.fcard summary"); pg.wait_for_timeout(200)
     ok("рассылки на телефоне: нет горизонтальной прокрутки", not hscroll(pg))
     pg.screenshot(path=str(SHOTS / "c_broadcasts_mobile.png"), full_page=True); b.close()
+
+    # --- беременные по неделям (приказ №180)
+    PGD = [{"id": "p1", "card_no": "A-123", "birth_year": 1995, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-06-01", "weeks": 20, "risk": True,
+            "outcome": None, "state": "overdue", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"},
+           {"id": "p2", "card_no": "B-9", "birth_year": 1990, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-08-01", "weeks": 12, "risk": False,
+            "outcome": None, "state": "due", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"},
+           {"id": "p3", "card_no": "C-5", "birth_year": 1992, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-09-20", "weeks": 5, "risk": False,
+            "outcome": None, "state": "ok", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"}]
+    def pg_ctx(uid, roles, w=1100, h_=900, mob=False):
+        sc_ = scenario(uid, roles, my_folders=(1,))
+        b_ = p.chromium.launch(); c_ = b_.new_context(viewport={"width": w, "height": h_}, is_mobile=mob, has_touch=mob)
+        c_.add_init_script("window.__MOCK=" + json.dumps(sc_, ensure_ascii=False) + ";" + RPC + FN + "window.__PG=" + json.dumps(PGD) + ";")
+        c_.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
+        c_.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
+        c_.route("**/fonts.g*/**", lambda r: r.abort())
+        return b_, c_
+    b, ctx = pg_ctx(S_, ("staff",))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/pregnant"); pg.wait_for_timeout(600)
+    txt = pg.inner_text("#app")
+    ok("беременные: пункт меню и три карточки", "Беременные" in pg.inner_text("nav.nav") and pg.locator("details.fcard").count() == 3, txt[:300])
+    ok("беременные: счётчики и статусы", "осмотр просрочен" in txt and "пора на осмотр" in txt and "по графику" in txt and "Карта № A-123" in txt and "группа риска" in txt, txt[:500])
+    ok("беременные: нет Ф.И.О. и телефона в форме добавления", pg.locator("#pg_form input[type=tel]").count() == 0 and "Не вносите" in pg.text_content("#pg_form"))
+    pg.locator("details.fcard summary").first.click(); pg.wait_for_timeout(200)
+    c1 = pg.inner_text("details.fcard >> nth=0")
+    ok("беременные: в карточке анализы и заметка по приказу", "Общий анализ крови" in c1 and "ВИЧ, RW" in c1 and "Оценить факторы риска" in c1, c1)
+    # запись визита
+    pg.locator("details.fcard >> nth=0").locator("input[type=checkbox]").first.check()
+    pg.locator("details.fcard >> nth=0").locator("button:has-text('Записать визит')").click(); pg.wait_for_timeout(400)
+    rv = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "record_anc_visit"]
+    ok("беременные: визит записывается с отмеченным анализом", rv and rv[-1][2]["_id"] == "p1" and rv[-1][2]["_visit"] == 1 and rv[-1][2]["_tests"] == ["Общий анализ крови"], rv)
+    # добавление
+    pg.click("details.panel >> nth=0 >> summary"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(200)
+    ok("беременные: без номера карты не добавляется", "Укажите номер карты" in pg.inner_text("#toast"))
+    pg.fill("#pg_card", "Z-77"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(200)
+    ok("беременные: без даты менструации не добавляется", "последней менструации" in pg.inner_text("#toast"))
+    pg.fill("#pg_year", "1999"); pg.fill("#pg_lmp", "2026-09-01"); pg.check("#pg_riskcb")
+    pg.evaluate("window.__pgErr = 'card_exists'"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(300)
+    ok("беременные: дубль карты — понятное сообщение", "уже есть" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.evaluate("window.__pgErr = null"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(400)
+    ap = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "add_pregnancy"]
+    ok("беременные: добавление отправляет только карту, год, ДПМ и риск", ap and ap[-1][2]["_card"] == "Z-77" and ap[-1][2]["_birth_year"] == 1999 and ap[-1][2]["_lmp"] == "2026-09-01" and ap[-1][2]["_risk"] is True and set(ap[-1][2]) == {"_card", "_birth_year", "_mahalla", "_lmp", "_risk"}, ap)
+    # поиск и фильтр
+    pg.fill("input[type=search]", "B-9"); pg.dispatch_event("input[type=search]", "change"); pg.wait_for_timeout(400)
+    ok("беременные: поиск по номеру карты", pg.locator("details.fcard").count() == 1 and "B-9" in pg.inner_text("details.fcard"), pg.locator("details.fcard").count())
+    pg.fill("input[type=search]", ""); pg.dispatch_event("input[type=search]", "change"); pg.wait_for_timeout(400)
+    pg.select_option("select[aria-label='Состояние']", "overdue"); pg.wait_for_timeout(400)
+    ok("беременные: фильтр по состоянию", pg.locator("details.fcard").count() == 1 and "A-123" in pg.inner_text("details.fcard"))
+    pg.select_option("select[aria-label='Состояние']", ""); pg.wait_for_timeout(300)
+    # закрытие и удаление
+    pg.locator("details.fcard >> nth=0 >> summary").click()
+    pg.locator("details.fcard >> nth=0").locator("button:has-text('Закрыть наблюдение')").click(); pg.wait_for_timeout(300)
+    cl = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "close_pregnancy"]
+    ok("беременные: закрытие с исходом", cl and cl[-1][2]["_outcome"] == "delivered", cl)
+    pg.locator("details.fcard >> nth=0 >> summary").click()
+    d0 = pg.locator("details.fcard >> nth=0").locator(".btn.danger"); d0.click(); pg.wait_for_timeout(100)
+    ok("беременные: удаление требует второго нажатия", not any(x[0] == "rpc" and x[1] == "delete_pregnancy" for x in pg.evaluate("window.__MOCK.log")))
+    pg.locator("details.fcard >> nth=0").locator(".btn.danger").click(); pg.wait_for_timeout(300)
+    ok("беременные: удаление выполнено", any(x[0] == "rpc" and x[1] == "delete_pregnancy" and x[2]["_id"] == "p1" for x in pg.evaluate("window.__MOCK.log")))
+    ok("беременные: у сотрудника нет кнопки сводки и редактирования окон", pg.locator("button:has-text('Отправить сводку')").count() == 0 and pg.locator("details.panel >> nth=1").locator("input[type=number]").count() == 0)
+    pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(200)
+    ok("беременные: узбекский интерфейс", "Ҳомиладорлар" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    ok("ошибок JS нет (беременные: сотрудник)", not errs, errs); b.close()
+
+    b, ctx = pg_ctx(A, ("admin",))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/pregnant"); pg.wait_for_timeout(600)
+    pg.click("details.panel >> nth=1 >> summary"); pg.wait_for_timeout(100)
+    ok("беременные (админ): окна визитов редактируются", pg.locator("details.panel >> nth=1").locator("input[type=number]").count() == 6)
+    pg.locator("details.panel >> nth=1").locator("input[type=number]").nth(1).fill("14")
+    pg.locator("details.panel >> nth=1").locator("button:has-text('Сохранить')").first.click(); pg.wait_for_timeout(300)
+    sv = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_save_anc_row"]
+    ok("беременные (админ): сохранение окна", sv and sv[-1][2]["_visit"] == 1 and sv[-1][2]["_until"] == 14 and sv[-1][2]["_tests"] is None, sv)
+    pg.click("button:has-text('Отправить сводку')"); pg.wait_for_timeout(400)
+    ok("беременные (админ): сводка в Telegram отправляется и показывает итог", any(x[0] == "fn" and x[1] == "anc-digest" for x in pg.evaluate("window.__MOCK.log")) and "3 из 4" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.screenshot(path=str(SHOTS / "c_pregnant_admin.png"), full_page=True)
+    ok("ошибок JS нет (беременные: админ)", not errs, errs); b.close()
+
+    b, ctx = pg_ctx(S_, ("staff",), w=390, h_=780, mob=True)
+    pg = ctx.new_page(); pg.goto(SITE + "#/pregnant"); pg.wait_for_timeout(600)
+    pg.locator("details.fcard summary").first.click(); pg.wait_for_timeout(200)
+    ok("беременные на телефоне: нет горизонтальной прокрутки", not hscroll(pg))
+    pg.screenshot(path=str(SHOTS / "c_pregnant_mobile.png"), full_page=True); b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

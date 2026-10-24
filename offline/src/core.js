@@ -146,6 +146,27 @@ var Vault = (function () {
       var k = await derive(pw, unb64(b.salt), b.iter);
       try { return await dec(k, { iv: unb64(b.iv), ct: unb64(b.ct) }); } catch (e) { return null; }
     },
+    // файлы для координатора: шифруются его открытым ключом (ECDH P-256 + AES-GCM). Открыть может только программа координатора — пароли не нужны
+    newKeyPair: async function () {
+      var kp = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey"]);
+      var pub = await crypto.subtle.exportKey("jwk", kp.publicKey), priv = await crypto.subtle.exportKey("jwk", kp.privateKey);
+      return { pub: { x: pub.x, y: pub.y }, priv: priv };
+    },
+    sealPub: async function (pub, obj) {
+      var cp = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", x: pub.x, y: pub.y, ext: true }, { name: "ECDH", namedCurve: "P-256" }, false, []);
+      var eph = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey"]);
+      var k = await crypto.subtle.deriveKey({ name: "ECDH", public: cp }, eph.privateKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+      var r = await enc(k, obj), ej = await crypto.subtle.exportKey("jwk", eph.publicKey);
+      return new Blob([JSON.stringify({ v: 3, app: "ovabmk-cases", kid: pub.kid || "", epk: { x: ej.x, y: ej.y }, iv: b64(r.iv), ct: b64(r.ct) })], { type: "application/octet-stream" });
+    },
+    openPriv: async function (b, priv) {
+      try {
+        var pk = await crypto.subtle.importKey("jwk", priv, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"]);
+        var ep = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", x: b.epk.x, y: b.epk.y, ext: true }, { name: "ECDH", namedCurve: "P-256" }, false, []);
+        var k = await crypto.subtle.deriveKey({ name: "ECDH", public: ep }, pk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+        return await dec(k, { iv: unb64(b.iv), ct: unb64(b.ct) });
+      } catch (e) { return null; }
+    },
     // восстановление: проверяем пароль копии, затем заменяем всё
     importBackup: async function (text, pw) {
       var b; try { b = JSON.parse(text); } catch (e) { throw new Error("файл не является копией"); }
@@ -452,7 +473,17 @@ function mergeCase(local, inc) {
   return m;
 }
 function personalHash(c) { return PERSONAL.map(function (f) { return c[f] == null ? "" : String(c[f]); }).join("\u0001"); }
-async function exportCases(pw, withPhotos, delta) {
+// код ключа: короткий отпечаток открытого ключа координатора (виден в настройках у координатора и у доя — можно сверить)
+async function keyId(pub) { var hsh = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pub.x + "." + pub.y))); return b64(hsh).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase(); }
+// чей ключ использовать: доя — ключ координатора (из ссылки-приглашения), координатор — свой
+function sendKey() { var p = S.prof || {}; return PROF.role === "coord" ? (p.ckp && p.ckp.pub) : p.ckey; }
+async function ensureCoordKey() {
+  if (PROF.role !== "coord" || (S.prof && S.prof.ckp)) return;
+  var kp = await Vault.newKeyPair(); kp.pub.kid = await keyId(kp.pub);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckp = kp; await saveProf(np);
+}
+async function exportCases(withPhotos, delta) {
+  var key = sendKey(); if (!key) throw new Error("NO_KEY");
   var all = Object.keys(S.cases).map(function (k) { return S.cases[k]; }), photos = {}, prof = S.prof || {}, sent = prof.sent || {}, cases = all;
   if (delta) {
     var since = prof.lastExport || 0;
@@ -465,15 +496,28 @@ async function exportCases(pw, withPhotos, delta) {
   if (withPhotos) for (var i = 0; i < cases.length; i++) for (var a = 0; a < (cases[i].visits || []).length; a++) for (var b = 0; b < (cases[i].visits[a].ph || []).length; b++) {
     var id = cases[i].visits[a].ph[b], f = await Vault.load("f:" + id); if (f) photos[id] = f.data;
   }
-  var blob = await Vault.seal(pw, { fmt: "ovabmk-cases", v: 2, exported: Date.now(), delta: !!delta, from: { inst: prof.inst || "", unit: prof.unit || "", who: prof.who || "", role: PROF.role }, cases: cases, photos: photos });
+  var blob = await Vault.sealPub(key, { fmt: "ovabmk-cases", v: 3, exported: Date.now(), delta: !!delta, from: { inst: prof.inst || "", unit: prof.unit || "", who: prof.who || "", role: PROF.role }, cases: cases, photos: photos });
   if (delta) {
     var ns = {}; all.forEach(function (c) { ns[c.id] = personalHash(c); });
-    prof.sent = ns; prof.lastExport = Date.now(); await saveProf(prof);
+    var np = JSON.parse(JSON.stringify(S.prof || {})); np.sent = ns; np.lastExport = Date.now(); await saveProf(np);
   }
   return { blob: blob, n: cases.length };
 }
+// приём файла: новые файлы открываются ключом координатора без вопросов; старые (с паролем) — по паролю
+async function openCasesFile(text, pw) {
+  var b; try { b = JSON.parse(text); } catch (e) { throw new Error(L("err_not_export")); }
+  if (!b || b.app !== "ovabmk-cases" || !b.ct) throw new Error(L("err_not_export"));
+  if (b.v === 3) {
+    var my = S.prof && S.prof.ckp;
+    if (!my || (b.kid && my.pub.kid && b.kid !== my.pub.kid)) throw new Error(L("e_other_key"));
+    var d = await Vault.openPriv(b, my.priv); if (!d) throw new Error(L("e_other_key"));
+    return d;
+  }
+  if (pw == null) return { needPw: true };
+  return await Vault.unseal(text, pw);
+}
 async function importCases(text, pw) {
-  var data = await Vault.unseal(text, pw); if (!data) return null;
+  var data = await openCasesFile(text, pw); if (!data || data.needPw) return data;
   if (data.fmt !== "ovabmk-cases" || !Array.isArray(data.cases)) throw new Error(L("err_not_export"));
   var res = { added: 0, updated: 0, same: 0, photos: 0, from: data.from || null };
   var srcName = data.from ? [data.from.inst, data.from.unit, data.from.who].filter(Boolean).join(" · ") : "";

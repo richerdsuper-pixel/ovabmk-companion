@@ -304,20 +304,9 @@ function casesSettings() {
   var cnt = activeCases().length;
   return h("div", { class: "panel" }, [h("h2", { text: L("set_cases", { n: cnt }) }),
     h("p", { class: "small muted", text: L("set_cases_hint") }),
-    h("div", { class: "bar" }, [h("span", { text: L("xk_now") + ": " }), h("b", { id: "xkState", text: S.prof && S.prof.xkey ? L("xk_set") : L("xk_unset") }), h("button", { type: "button", class: "sm", id: "xkChange", onclick: async function () { if (await askXkey(false)) render(); } }, L("change"))]),
     h("div", { class: "bar" }, [h("button", { type: "button", id: "expCases", onclick: function () { exportCasesUi(false); } }, L("exp_full")),
       h("button", { type: "button", id: "impCases", onclick: function () { $("casesIn").click(); } }, L("imp_cases")),
       h("button", { type: "button", id: "icsCases", onclick: exportCasesIcs }, L("ics_btn"))])]);
-}
-// код отправки: задаётся один раз (его знают координатор и бригады района), хранится внутри зашифрованных данных — больше не спрашивается
-async function askXkey(first) {
-  var a = h("input", { type: "password", id: "ex1", placeholder: L("ph_expw"), autocomplete: "off" }), b = h("input", { type: "password", id: "ex2", placeholder: L("ph_repeat"), autocomplete: "off" });
-  while (true) {
-    if (!(await modal(L("xk_title"), [h("p", { class: "small muted", text: L(first ? "xk_first" : "xk_hint") }), a, b], [[L("cancel"), false, ""], [L("save"), true, "pri"]]))) return "";
-    if (a.value.length < 8) { toast(L("e_pw_short"), true); continue; }
-    if (a.value !== b.value) { toast(L("e_pw_match"), true); continue; }
-    var np = JSON.parse(JSON.stringify(S.prof || {})); np.xkey = a.value; await saveProf(np); toast(L("xk_saved")); return a.value;
-  }
 }
 // отдать файл: на телефоне — сразу в Telegram/другое приложение (меню «Поделиться»), иначе — сохранить в «Загрузки»
 async function shareOrSave(name, blob, type) {
@@ -327,10 +316,36 @@ async function shareOrSave(name, blob, type) {
   } catch (e) { if (e && e.name === "AbortError") return "cancel"; }
   download(name, blob); return "saved";
 }
+// приглашение доя: ссылка с открытым ключом координатора (ключ не секретный — по нему можно только зашифровать файл для координатора)
+var APP_URL = "https://richerdsuper-pixel.github.io/ovabmk-companion/app/";
+function inviteLink() { var k = S.prof && S.prof.ckp && S.prof.ckp.pub; return k ? APP_URL + "#k=" + k.x + "." + k.y : ""; }
+async function acceptKey(pub, quiet) {
+  if (!pub || !pub.x || !pub.y) return false;
+  pub = { x: pub.x, y: pub.y }; pub.kid = await keyId(pub);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckey = pub; await saveProf(np);
+  if (!quiet) toast(L("key_got", { k: pub.kid })); return true;
+}
+function keyPanel() {
+  var p = S.prof || {};
+  if (PROF.role === "coord") {
+    var link = inviteLink();
+    return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("inv_title") }), h("p", { class: "small muted", text: L("inv_hint") }),
+      h("p", null, [h("span", { text: L("key_code") + ": " }), h("b", { id: "myKid", text: p.ckp ? p.ckp.pub.kid : "—" })]),
+      h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "invShare", onclick: async function () {
+        try { if (navigator.share) { await navigator.share({ title: "OvaBMQ", text: L("inv_msg"), url: link }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+        copyText(L("inv_msg") + "\n" + link);
+      } }, L("inv_btn")),
+        h("button", { type: "button", id: "invFile", onclick: function () { download("OvaBMQ_kalit_" + p.ckp.pub.kid + ".ovabmkc", new Blob([JSON.stringify({ app: "ovabmk-key", v: 1, x: p.ckp.pub.x, y: p.ckp.pub.y })], { type: "application/octet-stream" })); } }, L("inv_file"))]),
+      h("input", { type: "text", id: "invLink", readonly: true, value: link, class: "small" })]);
+  }
+  return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("key_title") }),
+    p.ckey ? h("p", null, [h("span", { class: "badge ok", text: L("key_ok") }), " ", h("span", { text: L("key_code") + ": " }), h("b", { id: "keyKid", text: p.ckey.kid })]) : h("p", { class: "badge warn", id: "keyKid", text: L("key_none") }),
+    h("p", { class: "small muted", text: L("key_hint") })]);
+}
 async function exportCasesUi(delta) {
   if (!Object.keys(S.cases).length) return toast(L("e_nothing"), true);
-  var key = (S.prof && S.prof.xkey) || await askXkey(true); if (!key) return;
-  var r = await exportCases(key, !delta, delta);
+  if (!sendKey()) { await modal(L("key_title"), [h("p", { text: L("key_need") })], [[L("close"), true, "pri"]]); return; }
+  var r = await exportCases(!delta, delta);
   var who = (S.prof && (S.prof.unit || S.prof.inst)) || "";
   var how = await shareOrSave("OvaBMQ_" + (delta ? "yangilash_" : "pacienty_") + (who ? norm(who).slice(0, 20) + "_" : "") + todayStr() + ".ovabmkc", r.blob);
   if (how !== "cancel") toast(L(how === "shared" ? "exp_shared" : "exp_done", { n: r.n }));
@@ -338,17 +353,16 @@ async function exportCasesUi(delta) {
 }
 async function onCasesImport(file) {
   if (!file) return;
-  var text = await file.text(), keys = [], p = S.prof || {};
-  [p.xkey].concat(p.keys || []).forEach(function (k) { if (k && keys.indexOf(k) < 0) keys.push(k); });
+  var text = await file.text(), j = null;
+  try { j = JSON.parse(text); } catch (e) { }
+  if (j && j.app === "ovabmk-key") { if (await acceptKey(j)) render(); return; }
   try {
-    var r = null;
-    for (var i = 0; i < keys.length && !r; i++) r = await importCases(text, keys[i]);
-    if (!r) {
-      var pw = h("input", { type: "password", id: "ipw", autocomplete: "off" }), rem = h("input", { type: "checkbox", id: "ipw_rem" }); rem.checked = true;
-      if (!(await modal(L("t_import"), [h("p", { class: "small muted", text: L("import_hint") }), h("label", null, [L("import_pw"), pw]), h("label", { class: "inl" }, [rem, " " + L("import_rem")])], [[L("cancel"), false, ""], [L("import_go"), true, "pri"]]))) return;
+    var r = await importCases(text);
+    if (r && r.needPw) {   // старый файл, зашифрованный паролем
+      var pw = h("input", { type: "password", id: "ipw", autocomplete: "off" });
+      if (!(await modal(L("t_import"), [h("p", { class: "small muted", text: L("import_old") }), h("label", null, [L("import_pw"), pw])], [[L("cancel"), false, ""], [L("import_go"), true, "pri"]]))) return;
       r = await importCases(text, pw.value);
       if (!r) return toast(L("e_import_pw"), true);
-      if (rem.checked) { var np = JSON.parse(JSON.stringify(S.prof || {})); np.keys = (np.keys || []).concat([pw.value]); await saveProf(np); }
     }
     toast(L("import_done", { a: r.added, u: r.updated, s: r.same }) + (r.photos ? ", " + L("photos_n", { n: r.photos }) : "") + (r.from && (r.from.unit || r.from.inst) ? " · " + (r.from.unit || r.from.inst) : "")); render();
   } catch (e) { toast(e.message, true); }

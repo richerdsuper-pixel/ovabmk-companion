@@ -11,13 +11,13 @@ def check(name,cond,extra=""):
     else: fails.append(name); print("FAIL",name,extra)
 def jpg(color):
     b=io.BytesIO(); Image.new("RGB",(1600,1200),color).save(b,"JPEG"); return {"name":"ph.jpg","mimeType":"image/jpeg","buffer":b.getvalue()}
-def start(br,vp):
+def start(br,vp,role="cab",url=None):
     ctx=br.new_context(viewport=vp,accept_downloads=True,is_mobile=vp["width"]<500,has_touch=vp["width"]<500)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{if(!localStorage.getItem('ovabmk_role'))localStorage.setItem('ovabmk_role','coord')}catch(e){}")
+    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{if(!localStorage.getItem('ovabmk_role'))localStorage.setItem('ovabmk_role','%s')}catch(e){}" % role)
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url))
     pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e))); pg.on("console",lambda m: errs.append(m.text) if m.type=="error" and "Content Security" not in m.text else None)
-    pg.goto(URL); pg.fill("#pwA",PW); pg.fill("#pwB",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
+    pg.goto(url or URL); pg.fill("#pwA",PW); pg.fill("#pwB",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
     return ctx,pg,reqs,errs
 def until(fn,t=15):
     end=time.time()+t
@@ -78,59 +78,54 @@ with sync_playwright() as p:
     with pg.expect_download() as d: pg.click("#icsCases")
     ics=open(d.value.path(),encoding="utf-8").read()
     check("ics has counts only", "Визитов: " in ics and "1234/5" not in ics and "Навоий" not in ics and "Беременность" not in ics and "778/2" not in ics, ics[:300])
-    # выгрузка
-    pg.click("#expCases"); pg.fill("#ex1","short"); pg.fill("#ex2","short"); pg.click(".modal button.pri"); pg.wait_for_selector("text=не короче 8")
-    check("short export pw rejected", True)
-    pg.wait_for_selector("#ex1"); pg.fill("#ex1",XP); pg.fill("#ex2",XP)
-    with pg.expect_download() as d2: pg.click(".modal button.pri")
-    check("код отправки запомнен", "задан" in pg.inner_text("#xkState"))
+    # без ключа администратора отправить нельзя — понятное объяснение, без паролей
+    pg.click("nav >> text=Настройки"); pg.click("#expCases"); pg.wait_for_selector(".modal >> text=ссылку-приглашение")
+    check("без ключа: просьба открыть ссылку-приглашение", "Отправить администратору" in pg.inner_text(".modal") or "ссылку-приглашение" in pg.inner_text(".modal")); pg.click(".modal button.pri")
+    # --- администратор (второе устройство): ключ создаётся сам, приглашение — ссылкой или файлом
+    ctxB,pb,reqsB,errsB=start(br,{"width":1100,"height":800},"coord")
+    pb.click("nav >> text=Настройки"); kidB=pb.inner_text("#myKid"); link=pb.input_value("#invLink")
+    check("администратор: ключ создан, ссылка-приглашение", len(kidB)==8 and "/app/#k=" in link, (kidB, link))
+    with pb.expect_download() as dk: pb.click("#invFile")
+    pg.set_input_files("#casesIn",dk.value.path()); pg.wait_for_selector("text=Ключ администратора получен")
+    check("доя: ключ принят, код совпадает", pg.inner_text("#keyKid")==kidB, pg.inner_text("#keyKid"))
+    # ссылка-приглашение: ключ из адреса запоминается до входа и сохраняется после
+    ctxL,pl,_,errsL=start(br,{"width":390,"height":780},"pat",URL+"#k="+link.split("#k=")[1])
+    pl.click("nav >> text=Настройки")
+    check("ссылка-приглашение: ключ сохранён, адрес очищен", pl.inner_text("#keyKid")==kidB and "#k=" not in pl.url, (pl.inner_text("#keyKid"), pl.url)); ctxL.close()
+    # выгрузка: без паролей
+    with pg.expect_download() as d2: pg.click("#expCases")
+    check("выгрузка без вопроса о пароле", pg.query_selector("#ex1") is None)
     expA=d2.value.path(); et=open(expA,encoding="utf-8").read()
-    check("export encrypted", "1234/5" not in et and "ovabmk-cases" in et and "778/2" not in et)
+    check("export encrypted", "1234/5" not in et and "ovabmk-cases" in et and "778/2" not in et and '"v": 3' in et.replace('"v":3','"v": 3'))
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
     check("login toast about visits", "Нужно посетить: сегодня" in pg.inner_text("#toasts"), pg.inner_text("#toasts"))
-    # --- второе устройство
-    ctxB,pb,reqsB,errsB=start(br,{"width":1100,"height":800})
-    pb.click("nav >> text=Настройки")
-    pb.set_input_files("#casesIn",expA); pb.wait_for_selector("#ipw"); pb.fill("#ipw","wrong-wrong"); pb.click(".modal button.pri"); pb.wait_for_selector("text=Код не подходит")
-    check("wrong export password rejected", True)
-    pb.wait_for_timeout(300)
-    pb.set_input_files("#casesIn",expA); pb.wait_for_selector("#ipw"); pb.fill("#ipw",XP); pb.click(".modal button.pri"); pb.wait_for_selector("text=новых 3")
+    pb.set_input_files("#casesIn",expA); pb.wait_for_selector("text=новых 3")
+    check("администратор принял файл без пароля", pb.query_selector("#ipw") is None)
     pb.click("nav >> text=Пациенты"); check("B has 3 patients", len(pb.query_selector_all(".case"))==3)
-    c=[c for c in pb.query_selector_all(".case") if "1234/5" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
+    pb.locator(".case", has_text="1234/5").locator("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
     until(lambda: len(pb.query_selector_all(".modal .th img[src^='data:image/jpeg']"))==2); check("B got photos", True)
     pb.click(".modal button.pri")
-    # повторный приём без изменений
     pb.click("nav >> text=Настройки"); pb.set_input_files("#casesIn",expA); pb.wait_for_selector("text=без изменений 3")
-    check("re-import is idempotent, код запомнен — не спрашивается", True)
-    # B: правит Саидову и добавляет визит Каримовой, удаляет никого
-    pb.click("nav >> text=Пациенты"); pb.wait_for_timeout(100)
-    c=[c for c in pb.query_selector_all(".case") if "778/2" in c.inner_text()][0]; c.query_selector("button.pri").click(); pb.wait_for_selector("#v_note"); pb.fill("#v_note","Желтуха уменьшилась"); pb.fill("#c_next","2026-10-27"); pb.click(".modal button.pri"); pb.wait_for_selector(".modal",state="detached"); settle(pb)
-    # A: добавляет визит Саидовой (другая запись) и удаляет Иванову
+    check("re-import is idempotent", True)
+    # чужой администратор не откроет файл
+    ctxC,pc,_,_=start(br,{"width":1100,"height":800},"coord"); pc.click("nav >> text=Настройки")
+    pc.set_input_files("#casesIn",expA); pc.wait_for_selector("text=другого администратора")
+    check("файл не открывается у другого администратора", len(pc.evaluate("Object.keys(S.cases)"))==0); ctxC.close()
+    # A: визит Саидовой и удаление Ивановой → B получает изменения
     pg.click("nav >> text=Пациенты")
-    c=[c for c in pg.query_selector_all(".case") if "Карта № 56" in c.inner_text()][0]; c.query_selector("button.pri").click(); pg.wait_for_selector("#v_note"); pg.fill("#v_note","Осмотр на дому"); pg.fill("#c_next","2026-11-02"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); settle(pg)
-    c=[c for c in pg.query_selector_all(".case") if "1234/5" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pg.click(".modal button.danger"); pg.click(".modal button.danger"); pg.wait_for_selector("text=Удалено")
+    pg.locator(".case", has_text="Карта № 56").locator("button.pri").click(); pg.wait_for_selector("#v_note"); pg.fill("#v_note","Осмотр на дому"); pg.fill("#c_next","2026-11-02"); pg.click(".modal button.pri"); pg.wait_for_selector(".modal",state="detached"); settle(pg)
+    pg.locator(".case", has_text="1234/5").locator("text=Карточка").click(); pg.click(".modal button.danger"); pg.click(".modal button.danger"); pg.wait_for_selector("text=Удалено")
     check("A deleted patient", len(pg.query_selector_all(".case"))==2)
-    # обмен A<->B
-    pg.click("nav >> text=Настройки")
-    pb.click("nav >> text=Настройки"); pb.click("#expCases"); pb.fill("#ex1",XP); pb.fill("#ex2",XP)
-    with pb.expect_download() as d3: pb.click(".modal button.pri")
-    expB=d3.value.path()
-    pg.set_input_files("#casesIn",expB); pg.wait_for_selector("text=обновлено 1")
-    pg.click("nav >> text=Пациенты"); cardsA=pg.inner_text("#main")
-    check("A merged: Karimova new visit, Ivanova stays deleted", "778/2" in cardsA and "1234/5" not in cardsA and len(pg.query_selector_all(".case"))==2, cardsA[:300])
-    c=[c for c in pg.query_selector_all(".case") if "778/2" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pg.wait_for_selector(".modal .visit")
-    check("Karimova has visit from B", "Желтуха уменьшилась" in pg.inner_text(".modal")); pg.click(".modal button.pri")
     pg.click("nav >> text=Настройки")
     with pg.expect_download() as d4: pg.click("#expCases")
-    check("повторная выгрузка без вопроса о коде", pg.query_selector("#ex1") is None)
     pb.set_input_files("#casesIn",d4.value.path()); pb.wait_for_selector("text=обновлено 2")
     pb.click("nav >> text=Пациенты"); tb=pb.inner_text("#main")
     check("B: deletion propagated, Saidova visit merged", "1234/5" not in tb and len(pb.query_selector_all(".case"))==2, tb[:300])
-    c=[c for c in pb.query_selector_all(".case") if "Карта № 56" in c.inner_text()][0]; c.query_selector("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
+    pb.locator(".case", has_text="Карта № 56").locator("text=Карточка").click(); pb.wait_for_selector(".modal .visit")
     check("B has Saidova visit from A", "Осмотр на дому" in pb.inner_text(".modal")); pb.click(".modal button.pri")
     # перезапуск: напоминание при входе + сохранность
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
-    check("opens on cases when no senders", pg.query_selector("nav button.on").inner_text()=="Пациенты")
+    check("доя: открывается «Сегодня»", pg.query_selector("nav button.on").inner_text()=="Сегодня")
     # режим «специалист»
     pg.click("nav >> text=Настройки"); pg.click("#roleChange"); pg.wait_for_selector("#roleSel"); pg.select_option("#roleSel","pat"); pg.click(".modal button.pri"); pg.wait_for_timeout(300)
     check("field mode tabs", [b.inner_text() for b in pg.query_selector_all("nav button")]==["Сегодня","Пациенты","Отчёт","Настройки"], [b.inner_text() for b in pg.query_selector_all("nav button")])

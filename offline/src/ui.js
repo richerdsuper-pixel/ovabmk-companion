@@ -5,7 +5,7 @@ var TABS = {
   pat: ["today", "cases", "report", "set"],
   coord: ["home", "cases", "senders", "files", "data", "search", "ind", "report", "set"]
 };
-var UI = { lockTimer: null, minutes: 30, sel: null };
+var UI = { lockTimer: null, minutes: 0, sel: null };   // 0 — не блокировать автоматически
 function tabs() { return (TABS[PROF.role] || TABS.cab).map(function (k) { return [k, L("nav_" + k)]; }); }
 
 function $(id) { return document.getElementById(id); }
@@ -349,12 +349,14 @@ function setView() {
     h("p", { class: "small muted", text: L("bk_hint") }),
     h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast(L("bk_done")); } }, L("bk_save")),
       h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, L("bk_restore"))])]));
+  root.appendChild(keyPanel());
   root.appendChild(casesSettings());
   if (PROF.role !== "coord") root.appendChild(profPanel());
-  var ml = h("input", { type: "number", min: "1", max: "240", value: UI.minutes, style: "width:5em" });
-  ml.onchange = function () { UI.minutes = Math.max(1, Math.min(240, +ml.value || 30)); try { localStorage.setItem("ovabmk_min", UI.minutes); } catch (e) { } armLock(); toast(L("saved")); };
+  var ml = h("select", { id: "lockSel" }, [[0, L("lock_never")], [5, "5"], [15, "15"], [30, "30"], [60, "60"]].map(function (x) { return h("option", { value: String(x[0]), text: x[0] ? x[1] + " " + L("lock_min") : x[1] }); }));
+  ml.value = String(UI.minutes);
+  ml.onchange = function () { UI.minutes = +ml.value || 0; try { localStorage.setItem("ovabmk_min", String(UI.minutes)); } catch (e) { } armLock(); toast(L("saved")); };
   root.appendChild(h("div", { class: "panel" }, [h("h2", { text: L("sec_title") }),
-    h("label", { class: "inl" }, [L("sec_lock_a") + " ", ml, " " + L("sec_lock_b")]),
+    h("label", { class: "inl" }, [L("sec_lock") + " ", ml]),
     h("div", { class: "bar" }, [h("button", { type: "button", onclick: lockNow }, L("sec_lock_now")), h("button", { type: "button", onclick: changePw }, L("sec_pw")),
       h("button", { class: "danger", type: "button", onclick: wipeAll }, L("sec_wipe"))]),
     h("p", { class: "small muted", text: L("sec_pw_hint") }),
@@ -390,7 +392,7 @@ async function render() {
 }
 function armLock() {
   clearTimeout(UI.lockTimer);
-  if (Vault.isOpen()) UI.lockTimer = setTimeout(lockNow, UI.minutes * 60000);
+  if (Vault.isOpen() && UI.minutes > 0) UI.lockTimer = setTimeout(lockNow, UI.minutes * 60000);
 }
 function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S.subs = {}; S.cache = {}; S.cases = {}; S.prof = {}; $("app").classList.add("hidden"); $("main").textContent = ""; showAuth(); }
 ["click", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, function () { if (Vault.isOpen()) armLock(); }, true); });
@@ -399,6 +401,9 @@ async function enter() {
   await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
   if (S.prof && S.prof.role && TABS[S.prof.role]) setRole(S.prof.role);
   if (!PROF.role) await chooseRole(true);
+  await ensureCoordKey();
+  var pk = null; try { pk = JSON.parse(localStorage.getItem("ovabmk_pendkey") || "null"); } catch (e) { }
+  if (pk && PROF.role !== "coord") { await acceptKey(pk); try { localStorage.removeItem("ovabmk_pendkey"); } catch (e) { } }
   if (PROF.role === "coord") S.tab = !Object.keys(S.senders).length && activeCases().length ? "cases" : "home";
   else S.tab = "today";
   render();
@@ -422,7 +427,7 @@ async function showAuth() {
     } catch (e) { err.textContent = L("au_err", { m: e.message }); }
   }
   btn.onclick = go1; [p1, p2i].forEach(function (i) { i.addEventListener("keydown", function (e) { if (e.key === "Enter") go1(); }); });
-  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
+  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), UI.pendKey ? h("div", { class: "alert ok", id: "pendKeyNote", text: L("key_pending") }) : null, h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
     p1, has ? null : p2i, btn, err,
     h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))]),
     Vault.isMem() ? h("p", { class: "small warnt", text: L("sec_mem") }) : null]));
@@ -439,7 +444,10 @@ async function onRestore(file) {
   } catch (e) { toast(e.message, true); }
 }
 async function boot() {
-  try { var m = +localStorage.getItem("ovabmk_min"); if (m) UI.minutes = m; } catch (e) { }
+  try { var m = localStorage.getItem("ovabmk_min"); if (m != null && m !== "" && !isNaN(+m) && +m !== 10 && +m !== 30) UI.minutes = +m; } catch (e) { }
+  // ссылка-приглашение координатора: #k=<открытый ключ>. Ключ не секретный; запоминаем до входа и убираем из адреса
+  var mk = /[#&]k=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/.exec(location.hash || "");
+  if (mk) { try { localStorage.setItem("ovabmk_pendkey", JSON.stringify({ x: mk[1], y: mk[2] })); } catch (e) { } try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { } UI.pendKey = true; }
   setLang(PROF.lang);
   $("casesIn").addEventListener("change", function () { onCasesImport(this.files[0]); this.value = ""; });
   $("restoreIn").addEventListener("change", function () { onRestore(this.files[0]); this.value = ""; });

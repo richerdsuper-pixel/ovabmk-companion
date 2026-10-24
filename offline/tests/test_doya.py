@@ -1,5 +1,5 @@
 """Помощник доя: выбор должности, три языка, кабинет (беременные по №180, риск, возраст, скрининг), патронаж (№210),
-«Сегодня», отчётные числа (файл для сайта), выгрузка «только изменения» и приём у координатора. Запуск: python3 offline/tests/test_doya.py"""
+«Сегодня», отчётные числа (файл для сайта), выгрузка «только изменения» и приём у администратора. Запуск: python3 offline/tests/test_doya.py"""
 import os, sys, json, time
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); URL = "file://" + os.path.abspath(HERE + "/../dist/OvaBMQ_Offline.html")
@@ -95,9 +95,14 @@ with sync_playwright() as p:
     check("латиница: махалля транслитерирована в карточке", "Qoʻshon" in pg.inner_text("#main"), pg.inner_text("#main")[:300])
     pg.click("nav button[data-tab=set]"); pg.click("#langSeg button[data-lang=ru]"); pg.wait_for_timeout(200)
     # выгрузка «только изменения» — 1-я
-    pg.click("nav button[data-tab=report]"); pg.click("#deltaExp"); pg.fill("#ex1", XP); pg.fill("#ex2", XP)
-    with pg.expect_download() as d1: pg.click(".modal button.pri")
-    check("отправка 2-го и следующих раз — без вопроса о коде", True)
+    # ключ администратора (как из ссылки-приглашения) — дальше отправка без паролей
+    cx, pc, rc, ec = ctx_page(br, "coord", mobile=False); pc.wait_for_selector("#app:not(.hidden)")
+    pc.click("nav button[data-tab=set]")
+    with pc.expect_download() as dk: pc.click("#invFile")
+    pg.click("nav button[data-tab=set]"); pg.set_input_files("#casesIn", dk.value.path()); pg.wait_for_selector("text=Ключ администратора получен")
+    pg.click("nav button[data-tab=report]")
+    with pg.expect_download() as d1: pg.click("#deltaExp")
+    check("отправка без вопроса о пароле", pg.query_selector("#ex1") is None)
     exp1 = d1.value.path(); check("выгрузка 1: имя файла с бригадой", "brigada2" in d1.value.suggested_filename or "бригада2" in d1.value.suggested_filename, d1.value.suggested_filename)
     check("выгрузка 1: файл зашифрован", "B-1" not in open(exp1, encoding="utf-8").read())
     check("выгрузка 1: дата прошлой отправки показана", "Прошлая отправка" in pg.inner_text("#main"))
@@ -116,7 +121,7 @@ with sync_playwright() as p:
     check("календарь: числа визитов + еженедельная проверка, без данных", "RRULE:FREQ=WEEKLY;BYDAY=MO" in ics and "Визитов: " in ics and "B-1" not in ics and "Қўшон" not in ics and "2026-06-06" not in ics and "20261205" in ics, ics[:400])
     check("кабинет: нет ошибок JS", not errs, errs)
     check("кабинет: сеть не используется", not [u for u in reqs if not u.startswith(("file:", "blob:", "data:"))])
-    # имя в выгрузке 1 не было (пусто), проверим, что координатор получает его при изменении
+    # имя в выгрузке 1 не было (пусто), проверим, что администратор получает его при изменении
     pg.click("nav button[data-tab=cases]")
     pg.wait_for_timeout(200); pg.locator(".case", has_text="B-1").locator("button:not(.pri)").click(); pg.click(".modal >> text=Изменить"); pg.wait_for_selector("#c_card")
     pg.click("details.opt summary"); pg.fill("#c_name", "Азимова Нилуфар"); save_modal(pg)
@@ -129,22 +134,19 @@ with sync_playwright() as p:
     with pg.expect_download() as d5: pg.click("#deltaExp")
     exp4 = d5.value.path()
 
-    # ---------- координатор принимает выгрузки по порядку ----------
-    cx, pc, rc, ec = ctx_page(br, "coord", mobile=False); pc.wait_for_selector("#app:not(.hidden)")
+    # ---------- администратор принимает выгрузки по порядку ----------
     def imp(path, expect):
-        pc.click("nav button[data-tab=set]"); pc.set_input_files("#casesIn", path)
-        if path == exp1: pc.wait_for_selector("#ipw"); pc.fill("#ipw", XP); pc.click(".modal button.pri")   # первый файл: код вводится один раз и запоминается
-        pc.wait_for_selector("text=" + expect)
+        pc.click("nav button[data-tab=set]"); pc.set_input_files("#casesIn", path); pc.wait_for_selector("text=" + expect)
     imp(exp1, "новых 2"); imp(exp2, "обновлено 1"); imp(exp3, "обновлено 1"); imp(exp4, "обновлено 1")
     pc.click("nav button[data-tab=cases]")
     pc.wait_for_timeout(300); c = pc.locator(".case", has_text="B-1")
-    check("координатор: Ф.И.О. сохранилось после выгрузки без личных полей", "Азимова Нилуфар" in c.inner_text(), c.inner_text())
+    check("администратор: Ф.И.О. сохранилось после выгрузки без личных полей", "Азимова Нилуфар" in c.inner_text(), c.inner_text())
     c.locator("button:not(.pri)").click(); pc.wait_for_selector(".modal .visit")
     m = pc.inner_text(".modal")
-    check("координатор: видно, от кого запись, и оба визита", "СВП №3 · Бригада 2 · Каримова Д." in m and "Повторный" in m and "АД 110/70" in m, m[:900])
+    check("администратор: видно, от кого запись, и оба визита", "СВП №3 · Бригада 2 · Каримова Д." in m and "Повторный" in m and "АД 110/70" in m, m[:900])
     pc.click(".modal >> nth=-1 >> button.pri")
-    check("координатор: вкладки руководителя", tabs(pc)[:2] == ["Сводка", "Пациенты"] and "Отчёт" in tabs(pc), tabs(pc))
-    check("координатор: нет ошибок JS", not ec, ec)
+    check("администратор: вкладки руководителя", tabs(pc)[:2] == ["Сводка", "Пациенты"] and "Отчёт" in tabs(pc), tabs(pc))
+    check("администратор: нет ошибок JS", not ec, ec)
     cx.close(); ctx.close()
 
     # ---------- патронажная доя ----------

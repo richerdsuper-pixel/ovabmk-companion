@@ -99,3 +99,4 @@ details.opt{margin:.6rem 0;color:var(--mute)}details.opt summary{cursor:pointer;
 .rrow.late{border-left-color:var(--bad)}.rrow.today{border-left-color:var(--warn)}.rrow .rmain{flex:1 1 220px;min-width:0}
 .bad-t{color:var(--bad)}
 .bigacts{display:flex;flex-direction:column;gap:.35rem}.bigacts .wide{width:100%;min-height:52px;font-size:1.05rem;text-align:left}.bigacts p{margin:0 0 .5rem}
+.alert.ok{background:var(--okbg);color:var(--ok)}

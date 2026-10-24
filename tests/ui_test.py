@@ -62,7 +62,7 @@ window.__MOCK.rpc = {
   admin_task_status: function(){ return [{user_id:'u1', full_name:'Иванова Мария', user_position:'Доя', notified_at:'2026-10-24T05:00:00Z', seen_at:'2026-10-24T06:00:00Z', done_at:null, note:''}]; },
   admin_create_task: function(){ return 't-new'; }, admin_delete_task: function(){ return null; },
   anc_schedule_list: function(){ return [
-    {visit_no:1, label:'1-й визит (до 12 нед.)', from_week:0, until_week:12, tests:['Общий анализ крови','ВИЧ, RW'], notes:'Оценить факторы риска.'},
+    {visit_no:1, label:'1-й визит (до 12 нед.)', from_week:0, until_week:12, tests:['Общий анализ крови','ВИЧ, RW'], notes:'Оценить факторы риска.', label_uz:'1-кўрик (12 ҳафтагача)', tests_uz:['Умумий қон таҳлили','ОИВ, RW'], notes_uz:'Хавф омилларини баҳолаш.'},
     {visit_no:2, label:'2-й визит (18–20 нед.)', from_week:16, until_week:22, tests:['УЗИ плода'], notes:'Аномалии развития.'},
     {visit_no:3, label:'3-й визит (24–26 нед.)', from_week:23, until_week:28, tests:[], notes:''}]; },
   list_pregnancies: function(){ return window.__PG || []; },
@@ -737,11 +737,11 @@ with sync_playwright() as p:
     pg.screenshot(path=str(SHOTS / "c_broadcasts_mobile.png"), full_page=True); b.close()
 
     # --- беременные по неделям (приказ №180)
-    PGD = [{"id": "p1", "card_no": "A-123", "birth_year": 1995, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-06-01", "weeks": 20, "risk": True,
+    PGD = [{"id": "p1", "card_no": "A-123", "age_group": "18_34", "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-06-01", "weeks": 20, "risk": True,
             "outcome": None, "state": "overdue", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"},
-           {"id": "p2", "card_no": "B-9", "birth_year": 1990, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-08-01", "weeks": 12, "risk": False,
+           {"id": "p2", "card_no": "B-9", "age_group": "35plus", "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-08-01", "weeks": 12, "risk": False,
             "outcome": None, "state": "due", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"},
-           {"id": "p3", "card_no": "C-5", "birth_year": 1992, "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-09-20", "weeks": 5, "risk": False,
+           {"id": "p3", "card_no": "C-5", "age_group": "18_34", "mahalla_id": None, "institution_id": 1, "owner_id": S_, "owner_name": "Сотрудник Тест", "lmp": "2026-09-20", "weeks": 5, "risk": False,
             "outcome": None, "state": "ok", "visit_no": 1, "due_from": 0, "due_until": 12, "done": [], "last_visit": None, "created_at": "2026-10-01T05:00:00Z"}]
     def pg_ctx(uid, roles, w=1100, h_=900, mob=False):
         sc_ = scenario(uid, roles, my_folders=(1,))
@@ -771,12 +771,12 @@ with sync_playwright() as p:
     ok("беременные: без номера карты не добавляется", "Укажите номер карты" in pg.inner_text("#toast"))
     pg.fill("#pg_card", "Z-77"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(200)
     ok("беременные: без даты менструации не добавляется", "последней менструации" in pg.inner_text("#toast"))
-    pg.fill("#pg_year", "1999"); pg.fill("#pg_lmp", "2026-09-01"); pg.check("#pg_riskcb")
+    pg.select_option("#pg_age", "18_34"); pg.fill("#pg_lmp", "2026-09-01"); pg.check("#pg_riskcb")
     pg.evaluate("window.__pgErr = 'card_exists'"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(300)
     ok("беременные: дубль карты — понятное сообщение", "уже есть" in pg.inner_text("#toast"), pg.inner_text("#toast"))
     pg.evaluate("window.__pgErr = null"); pg.click("#pg_form button[type=submit]"); pg.wait_for_timeout(400)
     ap = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "add_pregnancy"]
-    ok("беременные: добавление отправляет только карту, год, ДПМ и риск", ap and ap[-1][2]["_card"] == "Z-77" and ap[-1][2]["_birth_year"] == 1999 and ap[-1][2]["_lmp"] == "2026-09-01" and ap[-1][2]["_risk"] is True and set(ap[-1][2]) == {"_card", "_birth_year", "_mahalla", "_lmp", "_risk"}, ap)
+    ok("беременные: добавление отправляет только карту, возрастную группу, махаллю, ДПМ и риск", ap and ap[-1][2]["_card"] == "Z-77" and ap[-1][2]["_age_group"] == "18_34" and ap[-1][2]["_lmp"] == "2026-09-01" and ap[-1][2]["_risk"] is True and set(ap[-1][2]) == {"_card", "_age_group", "_mahalla", "_lmp", "_risk"}, ap)
     # поиск и фильтр
     pg.fill("input[type=search]", "B-9"); pg.dispatch_event("input[type=search]", "change"); pg.wait_for_timeout(400)
     ok("беременные: поиск по номеру карты", pg.locator("details.fcard").count() == 1 and "B-9" in pg.inner_text("details.fcard"), pg.locator("details.fcard").count())
@@ -797,6 +797,15 @@ with sync_playwright() as p:
     ok("беременные: у сотрудника нет кнопки сводки и редактирования окон", pg.locator("button:has-text('Отправить сводку')").count() == 0 and pg.locator("details.panel >> nth=1").locator("input[type=number]").count() == 0)
     pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(200)
     ok("беременные: узбекский интерфейс", "Ҳомиладорлар" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(300)
+    ok("беременные: латиница — меню и заметка", "Homiladorlar" in pg.inner_text("nav.nav") and pg.evaluate("document.documentElement.lang") == "uz-Latn", pg.inner_text("nav.nav"))
+    pg.locator("details.fcard summary").first.click(); pg.wait_for_timeout(200)
+    c1 = pg.text_content("details.fcard >> nth=0")
+    ok("беременные: латиница — анализы и заметка из базы переведены", "Umumiy qon tahlili" in c1 and "Xavf omillarini baholash" in c1 and "Общий анализ" not in c1, c1[:400])
+    ok("латиница: язык запоминается", pg.evaluate("localStorage.getItem('ovabmk-lang')") == "uzl")
+    pg.click(".seg button:nth-child(1)"); pg.wait_for_timeout(300)
+    c1 = pg.text_content("details.fcard >> nth=0")
+    ok("беременные: русский — тексты на русском", "Общий анализ крови" in c1 and "Оценить факторы риска" in c1)
     ok("ошибок JS нет (беременные: сотрудник)", not errs, errs); b.close()
 
     b, ctx = pg_ctx(A, ("admin",))

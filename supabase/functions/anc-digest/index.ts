@@ -1,5 +1,5 @@
 // Ежедневная сводка по беременным в Telegram. В сообщении только числа («пора на осмотр — 3, просрочено — 1») и ссылка на сайт:
-// ни номеров карт, ни имён, ни сроков. Подробности видны на сайте после входа.
+// ни номеров карт, ни имён, ни сроков. Подробности видны на сайте после входа. Текст: русский, узбекский (кириллица), узбекский (латиница).
 // Запускается двумя способами: администратором с сайта (кнопка «Отправить сводку сейчас») или планировщиком (заголовок x-cron-secret).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -7,7 +7,6 @@ const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const SITE = Deno.env.get("SITE_URL") ?? "https://richerdsuper-pixel.github.io/ovabmk-companion/";
 const ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://richerdsuper-pixel.github.io").split(",").map((s) => s.trim());
 
@@ -27,8 +26,10 @@ function reply(body: unknown, status: number, origin: string): Response {
 type Row = { user_id: string; telegram_id: number; due: number; overdue: number; is_admin: boolean };
 
 export function digestText(r: Row): string {
-  const head = r.is_admin ? "Сводка по району / Туман бўйича маълумот" : "Беременные / Ҳомиладорлар";
-  return `${head}:\nпора на осмотр / кўрикка вақти — ${r.due}\nпросрочено / муддати ўтган — ${r.overdue}\nПодробности на сайте: ${SITE}#/pregnant`;
+  const ru = (r.is_admin ? "Сводка по району" : "Беременные") + `:\nпора на осмотр — ${r.due}\nпросрочено — ${r.overdue}`;
+  const uz = (r.is_admin ? "Туман бўйича маълумот" : "Ҳомиладорлар") + `:\nкўрикка вақти келган — ${r.due}\nмуддати ўтган — ${r.overdue}`;
+  const lat = (r.is_admin ? "Tuman bo\u02bbyicha ma\u02bclumot" : "Homiladorlar") + `:\nko\u02bbrikka vaqti kelgan — ${r.due}\nmuddati o\u02bbtgan — ${r.overdue}`;
+  return `${ru}\n\n${uz}\n\n${lat}\n\n${SITE}#/pregnant`;
 }
 
 async function send(chat: number, text: string): Promise<boolean> {
@@ -49,10 +50,11 @@ Deno.serve(async (req: Request) => {
 
   let rows: Row[] = [];
   const cron = req.headers.get("x-cron-secret") ?? "";
-  if (CRON_SECRET && cron && cron === CRON_SECRET) {
+  if (cron) {   // планировщик: секрет сверяет база (private.cron_secret), в настройках функции он не хранится
+    if (!SERVICE_KEY) return reply({ error: "server_config" }, 500, origin);
     const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data, error } = await admin.rpc("cron_anc_digest");
-    if (error) return reply({ error: "failed" }, 500, origin);
+    const { data, error } = await admin.rpc("cron_anc_digest", { _secret: cron });
+    if (error) { const f = /forbidden|permission/i.test(error.message); return reply({ error: f ? "forbidden" : "failed" }, f ? 403 : 500, origin); }
     rows = (data ?? []) as Row[];
   } else {
     const auth = req.headers.get("authorization") ?? "";

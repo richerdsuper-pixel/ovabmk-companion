@@ -26,12 +26,12 @@ function reply(body: unknown, status: number, origin: string): Response {
 type Target = { user_id: string; telegram_id: number; title: string; urgent: boolean; due_date: string | null };
 
 export function messageFor(kind: string, t: Target, remind: boolean): string {
-  const hot = t.urgent ? "🔴 СРОЧНО / ШОШИЛИНЧ\n" : "";
-  const due = t.due_date ? `\nСрок / Муддат: ${t.due_date.split("-").reverse().join(".")}` : "";
+  const hot = t.urgent ? "🔴 СРОЧНО / ШОШИЛИНЧ / SHOSHILINCH\n" : "";
+  const due = t.due_date ? `\nСрок / Муддат / Muddat: ${t.due_date.split("-").reverse().join(".")}` : "";
   if (kind === "task") {
-    return `${hot}${remind ? "Напоминание — задание / Эслатма — топшириқ" : "Новое задание / Янги топшириқ"}:\n«${t.title}»${due}\nОткройте сайт: ${SITE}#/tasks`;
+    return `${hot}${remind ? "Напоминание — задание / Эслатма — топшириқ / Eslatma — topshiriq" : "Новое задание / Янги топшириқ / Yangi topshiriq"}:\n«${t.title}»${due}\nОткройте сайт: ${SITE}#/tasks`;
   }
-  return `${hot}${remind ? "Напоминание — файл не открыт / Эслатма — файл очилмаган" : "Новый файл / Янги файл"}:\n«${t.title}»\nОткройте сайт: ${SITE}#/broadcasts`;
+  return `${hot}${remind ? "Напоминание — файл не открыт / Эслатма — файл очилмаган / Eslatma — fayl ochilmagan" : "Новый файл / Янги файл / Yangi fayl"}:\n«${t.title}»\nОткройте сайт: ${SITE}#/broadcasts`;
 }
 
 async function send(chat: number, text: string): Promise<{ ok: boolean; blocked: boolean }> {

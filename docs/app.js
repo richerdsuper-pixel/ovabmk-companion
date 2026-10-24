@@ -13,7 +13,7 @@
 
   // ------------------------------------------------------------------ state
   var S = {
-    lang: store("ovabmk-lang") || "ru",
+    lang: (function () { var l = store("ovabmk-lang"); return l === "uz" || l === "uzl" ? l : "ru"; })(),
     session: null,
     roleState: "idle",        // idle | loading | ok | none | error
     roles: [],
@@ -46,7 +46,9 @@
 
   // ------------------------------------------------------------------ helpers
   function t(k, vars) {
-    var s = (window.I18N[S.lang] && window.I18N[S.lang][k]) || window.I18N.ru[k] || k;
+    var L = S.lang === "uzl" ? "uz" : S.lang, own = window.I18N[L] && window.I18N[L][k];
+    var s = own || window.I18N.ru[k] || k;
+    if (own && S.lang === "uzl") s = window.uzLat(s);
     if (vars) Object.keys(vars).forEach(function (n) { s = s.split("{" + n + "}").join(String(vars[n])); });
     return s;
   }
@@ -74,8 +76,8 @@
     var el = document.getElementById("toast"); el.textContent = m; el.classList.add("on");
     clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove("on"); }, 3200);
   }
-  function fmtDate(s) { if (!s) return ""; var d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString(S.lang === "uz" ? "uz-Cyrl" : "ru-RU"); }
-  function fmtDT(s) { var d = new Date(s); return isNaN(d) ? "" : d.toLocaleString(S.lang === "uz" ? "uz-Cyrl" : "ru-RU", { dateStyle: "short", timeStyle: "short" }); }
+  function fmtDate(s) { if (!s) return ""; var d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString(S.lang === "uz" ? "uz-Cyrl" : S.lang === "uzl" ? "uz-Latn" : "ru-RU"); }
+  function fmtDT(s) { var d = new Date(s); return isNaN(d) ? "" : d.toLocaleString(S.lang === "uz" ? "uz-Cyrl" : S.lang === "uzl" ? "uz-Latn" : "ru-RU", { dateStyle: "short", timeStyle: "short" }); }
   function fmtSize(n) { if (!n && n !== 0) return ""; return n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + " КБ" : (n / 1024 / 1024).toFixed(1) + " МБ"; }
   function errMsg(e) { return (e && (e.message || e.error_description || e.error)) || String(e); }
   function uuid() {
@@ -153,9 +155,11 @@
     var x = String(txt || "").trim().toLowerCase();
     return !x ? null : posList().filter(function (p) { return p.code !== "other" && (p.ru.toLowerCase() === x || p.uz.toLowerCase() === x); })[0] || null;
   }
-  function posTitle(p) { return S.lang === "uz" ? p.uz : p.ru; }
-  function folderTitle(f) { return S.lang === "uz" ? f.title_uz : f.title_ru; }
-  function folderSub(f) { return S.lang === "uz" ? f.title_ru : f.title_uz; }
+  var LANGTAG = { ru: "ru", uz: "uz-Cyrl", uzl: "uz-Latn" };
+  function uzT(x) { return S.lang === "uzl" ? window.uzLat(x) : x; }
+  function posTitle(p) { return S.lang === "ru" ? p.ru : uzT(p.uz); }
+  function folderTitle(f) { return S.lang === "ru" ? f.title_ru : uzT(f.title_uz); }
+  function folderSub(f) { return S.lang === "ru" ? uzT(f.title_uz) : f.title_ru; }
 
   // ------------------------------------------------------------------ auth
   window.onTelegramAuth = function (user) { telegramLogin(user); };
@@ -271,10 +275,10 @@
   function hero(navEl) { return h("div", { class: "hero" }, header(), navEl); }
   function langSwitch() {
     return h("div", { class: "seg", role: "group", "aria-label": t("lang") },
-      ["ru", "uz"].map(function (l) {
+      ["ru", "uz", "uzl"].map(function (l) {
         return h("button", { type: "button", class: S.lang === l ? "on" : "", "aria-pressed": S.lang === l ? "true" : "false",
-          onclick: function () { S.lang = l; store("ovabmk-lang", l); document.documentElement.lang = l === "uz" ? "uz-Cyrl" : "ru"; render(); },
-          text: l === "ru" ? "Рус" : "Ўзб" });
+          onclick: function () { S.lang = l; store("ovabmk-lang", l); document.documentElement.lang = LANGTAG[l]; render(); },
+          text: l === "ru" ? "Рус" : l === "uz" ? "Ўзб" : "O\u02bbzb" });
       }));
   }
   function nav(cur) {
@@ -394,7 +398,7 @@
     s.setAttribute("data-size", "large");
     s.setAttribute("data-radius", "10");
     s.setAttribute("data-request-access", "write");
-    s.setAttribute("data-lang", S.lang === "uz" ? "uz" : "ru");
+    s.setAttribute("data-lang", S.lang === "ru" ? "ru" : "uz");
     s.setAttribute("data-onauth", "onTelegramAuth(user)");
     s.onerror = function () { box.textContent = t("widget_fail"); };
     box.appendChild(s);
@@ -521,7 +525,7 @@
         var inp = h("input", { type: "text", inputmode: "decimal", autocomplete: "off", maxlength: "14", value: val, id: "ind" + i.n, "aria-label": i.ru });
         inputs[i.n] = inp;
         grid.appendChild(h("div", { class: "indrow" },
-          h("label", { class: "indlab", for: "ind" + i.n }, h("span", { class: "no", text: i.n + "." }), h("span", null, h("b", { text: i.ru }), h("span", { class: "sub", text: i.uz }))),
+          h("label", { class: "indlab", for: "ind" + i.n }, h("span", { class: "no", text: i.n + "." }), h("span", null, h("b", { text: i.ru }), h("span", { class: "sub", text: uzT(i.uz) }))),
           h("div", { class: "indval" }, stepBtn(inp, -1, i.unit), inp, stepBtn(inp, 1, i.unit), h("span", { class: "unit", text: unitLabel(i.unit) }))));
       });
     }
@@ -1676,8 +1680,12 @@
     return h("span", { class: "chip " + c, text: t("pg_st_" + st) });
   }
   function ancRow(no) { return (S.anc || []).filter(function (x) { return x.visit_no === no; })[0] || null; }
+  // тексты графика: русский, узбекский (кириллица) или он же латиницей
+  function ancLabel(r) { return S.lang === "ru" || !r.label_uz ? r.label : uzT(r.label_uz); }
+  function ancNotes(r) { return S.lang === "ru" || !r.notes_uz ? (r.notes || "") : uzT(r.notes_uz); }
+  function ancTestLabel(r, i) { var u = r.tests_uz || []; return S.lang === "ru" || !u[i] ? r.tests[i] : uzT(u[i]); }
   function testsList(row) {
-    var tests = (row && row.tests) || [];
+    var tests = ((row && row.tests) || []).map(function (_, i) { return ancTestLabel(row, i); });
     return tests.length ? h("ul", { class: "small", style: "margin:4px 0 0 18px" }, tests.map(function (x) { return h("li", { text: x }); })) : h("p", { class: "mute small", text: t("pg_no_tests") });
   }
   function pgCard(p) {
@@ -1686,19 +1694,19 @@
     var sum = h("summary", { style: "cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap" },
       h("b", { text: t("pg_card") + " " + p.card_no }), pgChip(p.state), h("span", { class: "chip", text: t("pg_weeks", { w: p.weeks }) }), p.risk ? h("span", { class: "chip bad", text: t("pg_risk") }) : null,
       p.mahalla_id ? h("span", { class: "mute small", text: mahName(p.mahalla_id) }) : null,
-      row && p.state !== "closed" ? h("span", { class: "mute small", text: row.label + " · " + t("pg_window", { a: p.due_from, b: p.due_until }) }) : null);
+      row && p.state !== "closed" ? h("span", { class: "mute small", text: ancLabel(row) + " · " + t("pg_window", { a: p.due_from, b: p.due_until }) }) : null);
     // что нужно на ближайшем визите
     var need = h("div", null, h("b", { class: "small", text: t("pg_need") }), row ? testsList(row) : h("p", { class: "mute small", text: t("pg_no_tests") }),
-      row && row.notes ? h("p", { class: "small", text: row.notes }) : null);
+      row && row.notes ? h("p", { class: "small", text: ancNotes(row) }) : null);
     var done = h("p", { class: "small mute", text: t("pg_done_visits") + ": " + ((p.done || []).length ? p.done.join(", ") : "—") + (p.last_visit ? " · " + t("pg_last") + " " + fmtDate(p.last_visit) : "") });
     // запись визита
-    var vSel = h("select", { "aria-label": t("pg_visit_no") }, [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return h("option", { value: String(n), text: n === 0 ? t("pg_extra") : (ancRow(n) ? ancRow(n).label : String(n)) }); }));
+    var vSel = h("select", { "aria-label": t("pg_visit_no") }, [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return h("option", { value: String(n), text: n === 0 ? t("pg_extra") : (ancRow(n) ? ancLabel(ancRow(n)) : String(n)) }); }));
     vSel.value = String(p.visit_no && p.state !== "closed" ? p.visit_no : 0);
     var dIn = h("input", { type: "date", value: pgToday(), max: pgToday(), "aria-label": t("pg_visit_date") });
     var tBox = h("div", { class: "fold-picks wide" });
     function drawTests() {
       tBox.textContent = "";
-      var r = ancRow(+vSel.value); ((r && r.tests) || []).forEach(function (x) { tBox.appendChild(h("label", null, h("input", { type: "checkbox", value: x }), x)); });
+      var r = ancRow(+vSel.value); ((r && r.tests) || []).forEach(function (x, i) { tBox.appendChild(h("label", null, h("input", { type: "checkbox", value: x }), ancTestLabel(r, i))); });
     }
     vSel.addEventListener("change", drawTests); drawTests();
     var rec = h("button", { class: "btn pri", type: "button", text: t("pg_record") });
@@ -1737,13 +1745,14 @@
   }
   function pgAddForm(onDone) {
     var card = h("input", { type: "text", id: "pg_card", maxlength: "30", autocomplete: "off", "aria-label": t("pg_card_no") });
-    var yr = h("input", { type: "number", id: "pg_year", min: "1950", max: "2020", inputmode: "numeric", "aria-label": t("pg_year") });
+    var yr = h("select", { id: "pg_age", "aria-label": t("pg_age") }, h("option", { value: "", text: t("pg_age_none") }),
+      ["lt18", "18_34", "35plus"].map(function (k) { return h("option", { value: k, text: t("pg_age_" + k) }); }));
     var myMah = S.mahallas.filter(function (m) { return !S.profile || S.profile.institution_id == null || mahInsts(m.id).indexOf(S.profile.institution_id) >= 0; });
     var mah = h("select", { id: "pg_mah", "aria-label": t("mah_label") }, h("option", { value: "", text: t("mah_whole_short") }), myMah.map(function (m) { return h("option", { value: String(m.id), text: m.name }); }));
     var lmp = h("input", { type: "date", id: "pg_lmp", max: pgToday(), "aria-label": t("pg_lmp") });
     var risk = h("input", { type: "checkbox", id: "pg_riskcb" }), btn = h("button", { class: "btn pri", type: "submit", text: t("pg_add") });
     var form = h("form", { class: "stack", id: "pg_form" }, h("div", { class: "notice warn", text: t("pg_privacy") }),
-      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("pg_card_no"), card), h("label", { class: "f" }, t("pg_year"), yr),
+      h("div", { class: "grid-f" }, h("label", { class: "f" }, t("pg_card_no"), card), h("label", { class: "f" }, t("pg_age"), yr),
         S.mahallas.length ? h("label", { class: "f" }, t("mah_label"), mah) : null, h("label", { class: "f" }, t("pg_lmp"), lmp)),
       h("label", { class: "row", style: "align-items:center" }, risk, t("pg_risk_label")), h("div", { class: "row" }, btn));
     form.addEventListener("submit", async function (e) {
@@ -1751,7 +1760,7 @@
       if (!card.value.trim()) { toast(t("pg_need_card")); return; }
       if (!lmp.value) { toast(t("pg_need_lmp")); return; }
       btn.disabled = true;
-      var x = await sb.rpc("add_pregnancy", { _card: card.value, _birth_year: yr.value ? +yr.value : null, _mahalla: mah.value ? +mah.value : null, _lmp: lmp.value, _risk: risk.checked });
+      var x = await sb.rpc("add_pregnancy", { _card: card.value, _age_group: yr.value || null, _mahalla: mah.value ? +mah.value : null, _lmp: lmp.value, _risk: risk.checked });
       btn.disabled = false;
       if (x.error) { var m = errMsg(x.error); toast(/card_exists/.test(m) ? t("pg_card_exists") : /bad_lmp/.test(m) ? t("pg_bad_lmp") : t("err_action", { msg: m })); return; }
       toast(t("pg_added")); onDone();
@@ -1770,9 +1779,9 @@
         if (x.error) { toast(/bad_window/.test(errMsg(x.error)) ? t("pg_bad_window") : t("err_action", { msg: errMsg(x.error) })); return; }
         toast(t("u_saved")); pregnantView();
       });
-      return h("tr", null, h("td", { text: r.label }),
+      return h("tr", null, h("td", { text: ancLabel(r) }),
         h("td", null, isAdmin() ? h("div", { class: "row" }, fr, un, sv) : r.from_week + "–" + r.until_week),
-        h("td", null, testsList(r)), h("td", { class: "small", text: r.notes || "" }));
+        h("td", null, testsList(r)), h("td", { class: "small", text: ancNotes(r) }));
     });
     return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:700", text: t("pg_schedule") }),
       h("p", { class: "mute small", style: "margin-top:8px", text: t("pg_schedule_hint") }),
@@ -1987,7 +1996,7 @@
   }
 
   // ------------------------------------------------------------------ start
-  document.documentElement.lang = S.lang === "uz" ? "uz-Cyrl" : "ru";
+  document.documentElement.lang = LANGTAG[S.lang] || "ru";
   window.addEventListener("hashchange", function () { if (S.session && S.roleState === "ok") render(); });
   sb.auth.onAuthStateChange(function (event, session) {
     // без await внутри обработчика: работа откладывается, чтобы не блокировать клиент Supabase

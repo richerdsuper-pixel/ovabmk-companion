@@ -18,3 +18,10 @@ out = d/"dist"/"OvaBMQ_Offline.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(t, encoding="utf-8")
 print(out, len(t)//1024, "KB")
+
+# копия для скачивания с сайта: HTML (открывается сразу) и ZIP (скачивается как файл на любом телефоне)
+import zipfile
+docs = d.parent/"docs"
+(docs/"OvaBMQ_Offline.html").write_text(t, encoding="utf-8")
+with zipfile.ZipFile(docs/"OvaBMQ_Offline.zip", "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("OvaBMQ_Offline.html", t.encode("utf-8"))

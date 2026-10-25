@@ -1,4 +1,4 @@
-// Telegram-уведомления о рассылках и заданиях. Вызывает администратор с сайта.
+// Telegram-уведомления о рассылках, заданиях и несданных подпапках. Вызывает администратор с сайта.
 // В сообщении только название рассылки/задания и ссылка на сайт — никаких данных пациентов.
 // Кому слать, определяет база (admin_notify_targets проверяет, что вызывает администратор); после отправки функция отмечает получателей.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -34,6 +34,14 @@ export function messageFor(kind: string, t: Target, remind: boolean): string {
   return `${hot}${remind ? "Напоминание — файл не открыт / Эслатма — файл очилмаган / Eslatma — fayl ochilmagan" : "Новый файл / Янги файл / Yangi fayl"}:\n«${t.title}»\nОткройте сайт: ${SITE}#/broadcasts`;
 }
 
+const SUB = /^[0-9]{1,2}\.[0-9]{1,2}$/;
+const DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+export function subfolderMessage(title: string, due: string): string {
+  const d = due ? `\nСрок / Муддат / Muddat: ${due.split("-").reverse().join(".")}` : "";
+  return `Напоминание — не сдано / Эслатма — топширилмаган / Eslatma — topshirilmagan:\n«${title}»${d}\nОткройте сайт: ${SITE}#/due`;
+}
+
 async function send(chat: number, text: string): Promise<{ ok: boolean; blocked: boolean }> {
   try {
     const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -53,8 +61,26 @@ Deno.serve(async (req: Request) => {
   const auth = req.headers.get("authorization") ?? "";
   if (!auth.toLowerCase().startsWith("bearer ")) return reply({ error: "unauthorized" }, 401, origin);
 
-  let body: { kind?: unknown; id?: unknown; remind?: unknown };
+  let body: { kind?: unknown; id?: unknown; remind?: unknown; sub?: unknown; due?: unknown; users?: unknown };
   try { body = await req.json(); } catch { return reply({ error: "bad_request" }, 400, origin); }
+
+  if (body.kind === "subfolder") {   // напоминание несдавшим по подпапке; список проверяет база (только администратор, только с доступом к папке)
+    const sub = typeof body.sub === "string" ? body.sub : "";
+    const due = typeof body.due === "string" && DAY.test(body.due) ? body.due : "";
+    const users = Array.isArray(body.users) ? body.users.filter((u) => typeof u === "string" && UUID.test(u)).slice(0, 500) : [];
+    if (!SUB.test(sub) || !users.length) return reply({ error: "bad_request" }, 400, origin);
+    const cl = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } }, auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await cl.rpc("admin_subfolder_targets", { _sub: sub, _users: users });
+    if (error) return reply({ error: /forbidden|permission/i.test(error.message) ? "forbidden" : "failed" }, /forbidden|permission/i.test(error.message) ? 403 : 500, origin);
+    const list = (data ?? []) as { user_id: string; telegram_id: number; title: string }[];
+    let sent = 0, blocked = 0, failed = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = await send(list[i].telegram_id, subfolderMessage(list[i].title, due));
+      if (r.ok) sent++; else if (r.blocked) blocked++; else failed++;
+      if (i % 20 === 19) await new Promise((res) => setTimeout(res, 1000));
+    }
+    return reply({ total: list.length, sent, blocked, failed }, 200, origin);
+  }
   const kind = body.kind === "task" ? "task" : body.kind === "broadcast" ? "broadcast" : "";
   const id = typeof body.id === "string" ? body.id.toLowerCase() : "";
   if (!kind || !UUID.test(id)) return reply({ error: "bad_request" }, 400, origin);

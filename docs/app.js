@@ -282,7 +282,7 @@
       }));
   }
   function nav(cur) {
-    var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"],
+    var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/due", "nav_due", "due"], ["#/indicators", "nav_ind", "ind"],
       ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/leaves", "nav_leaves", "leaves", "lv"], ["#/offline", "nav_offline", "offline"]];
     if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
@@ -305,7 +305,8 @@
     if (S.roleState === "none") return mount(h("div", null, hero(null), h("div", { class: "notice warn" }, t("roles_none"), h("p", { text: t("roles_none_long") }))));
 
     var m;
-    if ((m = /^\/folder\/(\d{1,2})$/.exec(route))) return folderView(+m[1]);
+    if ((m = /^\/folder\/(\d{1,2})(?:\/(\d{1,2}\.\d{1,2}))?$/.exec(route))) return folderView(+m[1], m[2]);
+    if (route === "/due") return dueView();
     if (route === "/folders") return foldersView();
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return canSummary() ? indSummaryView() : forbidden("indsum");
@@ -975,6 +976,7 @@
     shell("folders", loadingBox());
     var f = await sb.from("folders").select("id, title_ru, title_uz, hint_ru, restricted").order("id");
     var c = await sb.rpc("folder_counts");
+    var subN = {}; try { (await loadSubs()).forEach(function (x) { subN[x.folder_id] = (subN[x.folder_id] || 0) + 1; }); } catch (e) {}
     if (my !== renderToken) return;
     if (f.error) return shell("folders", failBox(f.error));
     var counts = {}; (c.data || []).forEach(function (x) { counts[x.folder_id] = x.docs; });
@@ -987,7 +989,7 @@
         h("span", { class: "uz", text: folderSub(fd) }),
         h("div", { class: "ft" },
           fd.restricted ? h("span", { class: "chip bad", text: "🔒 " + t("locked") })
-            : open ? h("span", { class: "chip", text: t("docs_count", { n: counts[fd.id] || 0 }) })
+            : open ? [h("span", { class: "chip", text: t("docs_count", { n: counts[fd.id] || 0 }) }), subN[fd.id] ? h("span", { class: "chip", text: t("sf_count", { n: subN[fd.id] }) }) : null]
             : h("span", { class: "chip", text: t("no_access") })),
         open && !fd.restricted ? h("div", { class: "fc-m", "aria-hidden": "true" }, CH.meter((counts[fd.id] || 0) * 100 / mxc, { tone: (counts[fd.id] || 0) ? "acc" : "mute" })) : null
       ];
@@ -997,9 +999,10 @@
     })));
   }
 
-  // --- одна папка
-  async function folderView(id) {
+  // --- одна папка: подпапки (разделы) и документы без подпапки
+  async function folderView(id, openSub) {
     var my = renderToken;
+    if (openSub) SF_OPEN[openSub] = true;
     shell("folders", loadingBox());
     var fr = await sb.from("folders").select("id, title_ru, title_uz, hint_ru, restricted").eq("id", id).maybeSingle();
     if (my !== renderToken) return;
@@ -1014,8 +1017,15 @@
     if (f.restricted) return shell("folders", h("div", { class: "stack" }, back, head, h("div", { class: "notice bad", text: "🔒 " + t("locked_long") })));
     if (!canOpenFolder(f)) return shell("folders", h("div", { class: "stack" }, back, head, h("div", { class: "notice warn", text: t("no_access_long") })));
 
-    var d = await sb.from("documents").select("id, title, doc_number, doc_date, note, storage_path, file_name, file_size, uploaded_by, created_at")
+    var subs = [], marks = [], people = [];
+    try { subs = (await loadSubs()).filter(function (x) { return x.folder_id === id; }); } catch (e) { subs = []; }
+    var d = await sb.from("documents").select("id, title, doc_number, doc_date, note, storage_path, file_name, file_size, uploaded_by, created_at, subfolder_id, period_key")
       .eq("folder_id", id).order("created_at", { ascending: false });
+    if (subs.length) {
+      var mk = await sb.from("subfolder_marks").select("subfolder_id, period_key, user_id, value, submitted_at, paper_at").in("subfolder_id", subs.map(function (x) { return x.id; }));
+      marks = mk.data || [];
+      if (isManager()) { try { people = await loadPeople(); } catch (e) { people = []; } }
+    }
     if (my !== renderToken) return;
     var names = {};
     if (!d.error && d.data.length) {
@@ -1024,22 +1034,18 @@
       (p.data || []).forEach(function (x) { names[x.id] = x.full_name; });
       if (my !== renderToken) return;
     }
-    var list = d.error ? failBox(d.error) : !d.data.length ? h("p", { class: "mute", text: t("empty") }) :
-      h("div", { class: "tbl" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", { text: t("f_title") }), h("th", { class: "hide-sm", text: t("f_number") + " / " + t("f_date") }),
-          h("th", { class: "hide-sm", text: t("uploaded_by") }), h("th"))),
-        h("tbody", null, d.data.map(function (doc) {
-          return h("tr", null,
-            h("td", null, h("b", { text: doc.title }), doc.note ? h("div", { class: "sub", text: doc.note }) : null,
-              doc.file_name ? h("div", { class: "sub mono", text: doc.file_name + " · " + fmtSize(doc.file_size) }) : null),
-            h("td", { class: "hide-sm" }, [doc.doc_number || "", doc.doc_date ? " · " + fmtDate(doc.doc_date) : ""].join("")),
-            h("td", { class: "hide-sm" }, names[doc.uploaded_by] || "—", h("div", { class: "sub", text: fmtDT(doc.created_at) })),
-            h("td", null, h("div", { class: "row" },
-              doc.storage_path ? h("button", { class: "btn sm", type: "button", onclick: function () { openFile(doc.storage_path); }, text: t("open") }) : null,
-              isAdmin() ? deleteButton(doc, id) : null)));
-        }))));
-    shell("folders", h("div", { class: "stack" }, back, head, uploadForm(id), bulkForm(id),
-      h("section", { class: "panel stack" }, h("h3", { text: t("docs") }), list)));
+    if (d.error) return shell("folders", h("div", { class: "stack" }, back, head, failBox(d.error)));
+    var docs = d.data || [];
+    var ctx = { subs: subs, docs: docs, names: names, people: people, dm: subDoneMap(docs, marks), reload: function () { folderView(id); } };
+    var other = docs.filter(function (x) { return !x.subfolder_id; });
+    var subPanel = !subs.length ? null : h("section", { class: "panel stack" },
+      h("h3", { text: t("sf_title", { n: subs.length }) }), h("p", { class: "small mute", text: t("sf_hint") }),
+      h("div", { class: "stack sf-list" }, subs.map(function (s) { return subItem(f, s, ctx); })));
+    var list = !other.length ? h("p", { class: "mute", text: t("empty") }) : docTable(other, ctx, id);
+    shell("folders", h("div", { class: "stack" }, back, head, subPanel,
+      h("section", { class: "panel stack" }, h("h3", { text: subs.length ? t("sf_other_docs") : t("docs") }), list),
+      uploadForm(id), bulkForm(id)));
+    if (openSub) { var el = document.getElementById("sf-" + openSub); if (el && el.scrollIntoView) el.scrollIntoView({ block: "start" }); }
   }
 
   async function openFile(path) {
@@ -1066,7 +1072,8 @@
     return b;
   }
 
-  function uploadForm(folderId) {
+  function uploadForm(folderId, sub, ctx) {
+    var cyc = sub ? periodSelect(sub, ctx.dm, S.session.user.id) : null;
     var title = h("input", { type: "text", maxlength: "300", required: true });
     var num = h("input", { type: "text", maxlength: "100" });
     var date = h("input", { type: "date" });
@@ -1078,6 +1085,7 @@
     var form = h("form", { class: "stack", novalidate: true },
       h("div", { class: "notice warn", text: t("pd_warning") }),
       h("div", { class: "grid-f" },
+        cyc ? h("label", { class: "f" }, t("sf_cycle"), cyc) : null,
         h("label", { class: "f" }, t("f_title"), title),
         h("label", { class: "f" }, t("f_number"), num),
         h("label", { class: "f" }, t("f_date"), date)),
@@ -1099,12 +1107,13 @@
       var ins = await sb.from("documents").insert({
         folder_id: folderId, title: title.value.trim(), doc_number: num.value.trim() || null, doc_date: date.value || null,
         note: note.value.trim() || null, storage_path: path, file_name: fl.name.slice(0, 200), file_size: fl.size,
-        mime_type: (fl.type || "").slice(0, 150) || null, no_patient_data: true, uploaded_by: S.session.user.id
+        mime_type: (fl.type || "").slice(0, 150) || null, no_patient_data: true, uploaded_by: S.session.user.id,
+        subfolder_id: sub ? sub.id : null, period_key: cyc ? cyc.value : null
       });
-      if (ins.error) { btn.disabled = false; btn.textContent = t("save"); msg.appendChild(h("div", { class: "notice bad", text: t("err_action", { msg: errMsg(ins.error) }) })); return; }
+      if (ins.error) { await sb.storage.from("documents").remove([path]); btn.disabled = false; btn.textContent = t("save"); msg.appendChild(h("div", { class: "notice bad", text: subErr(ins.error) })); return; }
       toast(t("added")); folderView(folderId);
     });
-    return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("add_doc") }),
+    return h("details", { class: sub ? "sf-up" : "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t(sub ? "sf_upload" : "add_doc") }),
       h("div", { style: "margin-top:12px" }, form));
   }
 
@@ -1162,6 +1171,348 @@
     });
     return h("details", { class: "panel" }, h("summary", { style: "cursor:pointer;font-weight:800;color:var(--head)", text: t("b_add") }),
       h("div", { style: "margin-top:12px" }, form));
+  }
+
+  // ------------------------------------------------------------------ подпапки (разделы папок-дел)
+  // Названия подпапок: русский и узбекский латиницей (узбекской кириллицы у подпапок нет).
+  // Цикл сдачи обозначается датой срока: ежемесячно — 5 число, ежеквартально — 10 число первого месяца квартала, ежегодно — 15 января.
+  var SUB_START = "2026-11-01";   // более ранние сроки не считаются просроченными (подпапки запущены 25.10.2026)
+  var SUBS = null, SF_OPEN = {}, DUE = { folder: "", missing: true };
+  async function loadSubs(force) {
+    if (SUBS && !force) return SUBS;
+    var r = await sb.from("subfolders").select("id, folder_id, no, title_uz, title_ru, storage, positions, period, paper, note_ru");
+    if (r.error) throw r.error;
+    SUBS = (r.data || []).slice().sort(function (a, b) { return a.folder_id - b.folder_id || a.no - b.no; });
+    return SUBS;
+  }
+  function subTitle(s) { return S.lang === "ru" ? s.title_ru : s.title_uz; }
+  function subOther(s) { return S.lang === "ru" ? s.title_uz : s.title_ru; }
+  function subPeriodic(s) { return s.period === "month" || s.period === "quarter" || s.period === "year"; }
+  function fmtD(s) { return s && s.length === 10 ? s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) : ""; }
+  function subDues(period, from, to) {
+    var out = [];
+    for (var y = +from.slice(0, 4) - 1; y <= +to.slice(0, 4) + 1; y++) {
+      if (period === "month") for (var m = 1; m <= 12; m++) out.push(y + "-" + p2(m) + "-05");
+      else if (period === "quarter") [1, 4, 7, 10].forEach(function (q) { out.push(y + "-" + p2(q) + "-10"); });
+      else if (period === "year") out.push(y + "-01-15");
+    }
+    return out.filter(function (d) { return d >= from && d <= to; });
+  }
+  function subLast(s) {   // последний прошедший срок (день срока ещё не просрочен)
+    if (!subPeriodic(s)) return "";
+    var t0 = todayS(), l = subDues(s.period, addDays(t0, -400), addDays(t0, -1)), d = l[l.length - 1] || "";
+    return d >= SUB_START ? d : "";
+  }
+  function subNext(s) { if (!subPeriodic(s)) return ""; var t0 = todayS(); return subDues(s.period, t0, addDays(t0, 400))[0] || ""; }
+  function subAfter(s, d) { return d ? subDues(s.period, addDays(d, 1), addDays(d, 400))[0] || "" : ""; }
+  function perText(s) { var n = subNext(s); return t("sf_per_" + s.period) + (n ? " · " + t("sf_next", { d: fmtD(n) }) : ""); }
+  function storageChip(s) { return h("span", { class: "chip " + (s.storage === "site" ? "ok" : s.storage === "numbers" ? "warn" : "bad"), text: t("sf_st_" + s.storage) }); }
+  function subErr(e) {
+    var m = errMsg(e), k = /(subfolder_no_files|period_required|value_required)/.exec(m);
+    return k ? t("err_" + k[1]) : /forbidden/.test(m) ? t("err_sub_forbidden") : t("err_action", { msg: m });
+  }
+  // Кто что сдал: ключ «подпапка|срок» → { id сотрудника: { files, mark, value, paper, at } }
+  function subDoneMap(docs, marks) {
+    var m = {};
+    function get(k, uid) { m[k] = m[k] || {}; return (m[k][uid] = m[k][uid] || {}); }
+    docs.forEach(function (d) {
+      if (!d.subfolder_id) return;
+      var x = get(d.subfolder_id + "|" + (d.period_key || ""), d.uploaded_by);
+      x.files = (x.files || 0) + 1; if (!x.at || d.created_at > x.at) x.at = d.created_at;
+    });
+    marks.forEach(function (r) {
+      var x = get(r.subfolder_id + "|" + r.period_key, r.user_id);
+      if (r.submitted_at) { x.mark = true; x.value = r.value; if (!x.at || r.submitted_at > x.at) x.at = r.submitted_at; }
+      if (r.paper_at) x.paper = r.paper_at;
+    });
+    return m;
+  }
+  function isDone(x) { return !!(x && (x.files || x.mark || x.paper)); }
+  function doneBy(dm, s, key, uid) { return isDone((dm[s.id + "|" + key] || {})[uid]); }
+  function myPosCodes() {
+    var c = [], p = S.profile && posByText(S.profile.position);
+    if (p) c.push(p.code);
+    if (S.roles.indexOf("deputy") >= 0 || S.roles.indexOf("admin") >= 0) c.push("orinbosar");
+    return c;
+  }
+  function isMySub(s) { var c = myPosCodes(); return (s.positions || []).some(function (p) { return c.indexOf(p) >= 0; }); }
+  function subMyState(s, dm, uid) {
+    if (s.period === "incoming" || s.period === "case") return { tone: "", text: t("sf_per_" + s.period), order: 3 };
+    if (s.period === "once") return doneBy(dm, s, "once", uid) ? { tone: "ok", text: "✓ " + t("sf_done"), order: 4 } : { tone: "warn", text: t("sf_not_yet"), order: 1 };
+    var L = subLast(s), N = subNext(s);
+    if (L && !doneBy(dm, s, L, uid)) return { tone: "bad", text: t("sf_overdue", { d: fmtD(L) }), order: 0 };
+    if (N && doneBy(dm, s, N, uid)) return { tone: "ok", text: "✓ " + t("sf_done_for", { d: fmtD(N) }), order: 4 };
+    return { tone: N && dayDiff(N, todayS()) <= 5 ? "warn" : "", text: t("sf_until", { d: fmtD(N) }), order: N && dayDiff(N, todayS()) <= 5 ? 1 : 2 };
+  }
+  function periodSelect(s, dm, uid) {
+    if (!subPeriodic(s)) return null;
+    var L = subLast(s), N = subNext(s), opts = (L ? [L] : []).concat([N, subAfter(s, N)]).filter(Boolean);
+    var sel = h("select", { "aria-label": t("sf_cycle") }, opts.map(function (d) { return h("option", { value: d, text: t("sf_cycle_opt", { d: fmtD(d) }) }); }));
+    sel.value = L && !doneBy(dm, s, L, uid) ? L : N;
+    return sel;
+  }
+  function subKey(s, sel) { return sel ? sel.value : s.period === "once" ? "once" : todayS(); }
+  // Люди (только руководителям): профиль, коды должности, открытые папки.
+  async function loadPeople() {
+    var rs = await Promise.all([sb.from("profiles").select("id, full_name, position, removed_at"), sb.from("user_roles").select("user_id, role"),
+      sb.from("folder_members").select("folder_id, user_id")]);
+    var roles = {}, fold = {};
+    (rs[1].data || []).forEach(function (x) { (roles[x.user_id] = roles[x.user_id] || []).push(x.role); });
+    (rs[2].data || []).forEach(function (x) { (fold[x.user_id] = fold[x.user_id] || {})[x.folder_id] = 1; });
+    return (rs[0].data || []).filter(function (p) { return !p.removed_at && roles[p.id]; }).map(function (p) {
+      var r = roles[p.id], pos = posByText(p.position), codes = pos ? [pos.code] : [];
+      if (r.indexOf("deputy") >= 0 || r.indexOf("admin") >= 0) codes.push("orinbosar");
+      return { id: p.id, name: p.full_name || "—", codes: codes, mgr: r.some(function (x) { return x !== "staff"; }), folders: fold[p.id] || {} };
+    });
+  }
+  function expectedFor(s, people) {
+    return people.filter(function (u) { return (s.positions || []).some(function (c) { return u.codes.indexOf(c) >= 0; }) && (u.mgr || u.folders[s.folder_id]); });
+  }
+  function posName(c) { var p = posByCode(c); return p ? posTitle(p) : c; }
+
+  // Подпапка на странице папки: свёрнутый блок, внутри — кто сдаёт, файлы, отметка, контроль руководителя.
+  function subItem(f, s, ctx) {
+    var uid = S.session.user.id, mine = isMySub(s), st = subMyState(s, ctx.dm, uid);
+    var sdocs = ctx.docs.filter(function (d) { return d.subfolder_id === s.id; });
+    var body = h("div", { class: "stack sf-body" });
+    var det = h("details", { class: "sf" + (mine ? " mine" : ""), id: "sf-" + s.id },
+      h("summary", { class: "sf-sum" },
+        h("span", { class: "sf-no", text: s.id }),
+        h("span", { class: "sf-t" }, h("b", { text: subTitle(s) }), h("span", { class: "small mute", text: subOther(s) })),
+        h("span", { class: "sf-chips" }, storageChip(s),
+          mine ? h("span", { class: "chip " + st.tone, text: st.text }) : h("span", { class: "chip", text: perText(s) }),
+          sdocs.length ? h("span", { class: "chip acc", text: t("sf_files", { n: sdocs.length }) }) : null)),
+      body);
+    function fill() {
+      if (body.childNodes.length) return;
+      add(body, [
+        h("div", { class: "small" },
+          h("div", null, h("b", { text: t("sf_who") + ": " }), (s.positions || []).map(posName).join(", ") || "—"),
+          h("div", null, h("b", { text: t("sf_set_period") + ": " }), perText(s)),
+          h("div", { text: t(s.paper ? "sf_paper_yes" : "sf_paper_no") }),
+          s.note_ru ? h("div", { class: "mute", text: s.note_ru }) : null),
+        h("div", { class: "notice " + (s.storage === "site" ? "ok" : "warn"), text: t("sf_" + s.storage + "_hint") })]);
+      if (s.storage === "site") {
+        body.appendChild(h("h4", { text: t("sf_docs") }));
+        body.appendChild(sdocs.length ? docTable(sdocs, ctx, f.id) : h("p", { class: "mute small", text: t("sf_no_docs") }));
+        body.appendChild(uploadForm(f.id, s, ctx));
+      } else body.appendChild(markForm(s, ctx));
+      if (isManager()) { var pt = peopleTable(s, ctx); if (pt) body.appendChild(pt); }
+      if (isAdmin()) body.appendChild(subSettings(s, ctx));
+    }
+    det.addEventListener("toggle", function () { SF_OPEN[s.id] = det.open; if (det.open) fill(); });
+    if (SF_OPEN[s.id]) { det.open = true; fill(); }
+    return det;
+  }
+
+  function markForm(s, ctx) {
+    var uid = S.session.user.id, sel = periodSelect(s, ctx.dm, uid);
+    var val = s.storage === "numbers" ? h("input", { type: "number", min: "0", max: "1000000", step: "1", inputmode: "numeric" }) : null;
+    var cur = h("div"), msg = h("div");
+    var btn = h("button", { class: "btn pri", type: "submit", text: t(s.storage === "numbers" ? "sf_mark_num" : "sf_mark_paper") });
+    function showCur() {
+      cur.textContent = ""; if (val) val.value = "";
+      var key = subKey(s, sel), x = (ctx.dm[s.id + "|" + key] || {})[uid];
+      if (!x || !(x.mark || x.paper)) return;
+      if (val && x.value != null) val.value = x.value;
+      cur.appendChild(h("div", { class: "notice ok row" },
+        h("span", { text: (x.mark ? t("sf_marked", { d: fmtDT(x.at) }) : "") + (x.value != null ? " · " + t("sf_value", { n: x.value }) : "") + (x.paper ? " · " + t("sf_paper_got") : "") }),
+        x.mark && !x.paper ? h("button", { class: "btn sm", type: "button", text: t("sf_unmark"), onclick: async function () {
+          var r = await sb.rpc("subfolder_unreport", { _sub: s.id, _period: key });
+          if (r.error) toast(subErr(r.error)); else { toast(t("saved")); ctx.reload(); }
+        } }) : null));
+    }
+    if (sel) sel.addEventListener("change", showCur);
+    var form = h("form", { class: "stack", novalidate: true },
+      h("div", { class: "grid-f" },
+        sel ? h("label", { class: "f" }, t("sf_cycle"), sel) : null,
+        val ? h("label", { class: "f" }, t("sf_value_label"), val) : null),
+      cur, msg, h("div", null, btn));
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault(); msg.textContent = "";
+      if (val && (val.value === "" || !(+val.value >= 0))) { msg.appendChild(h("div", { class: "notice bad", text: t("sf_need_value") })); return; }
+      btn.disabled = true;
+      var r = await sb.rpc("subfolder_report", { _sub: s.id, _period: subKey(s, sel), _value: val ? Math.round(+val.value) : null });
+      btn.disabled = false;
+      if (r.error) { msg.appendChild(h("div", { class: "notice bad", text: subErr(r.error) })); return; }
+      toast(t("saved")); ctx.reload();
+    });
+    showCur();
+    return form;
+  }
+
+  function peopleTable(s, ctx) {
+    var keys = subPeriodic(s) ? [subLast(s), subNext(s)].filter(Boolean) : s.period === "once" ? ["once"] : [];
+    if (!keys.length) return null;   // «по поступлению» и «по случаю» — без контроля сроков
+    var exp = expectedFor(s, ctx.people), canPaper = S.roles.indexOf("admin") >= 0 || S.roles.indexOf("deputy") >= 0;
+    var sel = h("select", { "aria-label": t("sf_cycle") }, keys.map(function (k) { return h("option", { value: k, text: k === "once" ? t("sf_per_once") : t("sf_cycle_opt", { d: fmtD(k) }) }); }));
+    var box = h("div", { class: "stack" });
+    function draw() {
+      box.textContent = "";
+      var k = sel.value, map = ctx.dm[s.id + "|" + k] || {}, rows = exp.slice();
+      Object.keys(map).forEach(function (id) {
+        if (rows.some(function (u) { return u.id === id; })) return;
+        var u = ctx.people.filter(function (p) { return p.id === id; })[0]; if (u) rows.push(u);
+      });
+      if (!rows.length) { box.appendChild(h("p", { class: "mute small", text: t("sf_nobody") })); return; }
+      var miss = rows.filter(function (u) { return !isDone(map[u.id]); }), past = k !== "once" && k < todayS();
+      box.appendChild(h("p", { class: "small" }, h("b", { text: t("sf_people_sum", { a: rows.length - miss.length, b: rows.length }) })));
+      box.appendChild(h("div", { class: "tbl" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", { text: t("sf_col_person") }), h("th", { text: t("sf_col_state") }), s.paper ? h("th", { text: t("sf_col_paper") }) : null)),
+        h("tbody", null, rows.map(function (u) {
+          var x = map[u.id], done = isDone(x), pc = null;
+          if (s.paper) {
+            if (canPaper) {
+              var cb = h("input", { type: "checkbox", "aria-label": t("sf_col_paper") }); cb.checked = !!(x && x.paper);
+              cb.addEventListener("change", async function () {
+                cb.disabled = true;
+                var r = await sb.rpc("subfolder_paper", { _sub: s.id, _period: k, _user: u.id, _on: cb.checked });
+                cb.disabled = false;
+                if (r.error) { cb.checked = !cb.checked; toast(subErr(r.error)); return; }
+                var y = ((ctx.dm[s.id + "|" + k] = ctx.dm[s.id + "|" + k] || {})[u.id] = ctx.dm[s.id + "|" + k][u.id] || {});
+                y.paper = cb.checked ? new Date().toISOString() : null; toast(t("saved")); draw();
+              });
+              pc = h("td", null, h("label", { class: "check" }, cb, h("span", { text: x && x.paper ? fmtD(String(x.paper).slice(0, 10)) : "" })));
+            } else pc = h("td", { text: x && x.paper ? "✓ " + fmtD(String(x.paper).slice(0, 10)) : "—" });
+          }
+          return h("tr", null, h("td", { text: u.name }),
+            h("td", null, done ? h("span", { class: "chip ok", text: "✓ " + (x.at ? fmtDT(x.at) : "") + (x.value != null ? " · " + x.value : "") + (x.files ? " · " + t("sf_files", { n: x.files }) : "") })
+              : h("span", { class: "chip " + (past ? "bad" : ""), text: t("sf_missing") })), pc);
+        })))));
+      if (isAdmin() && miss.length) box.appendChild(h("div", null, h("button", { class: "btn", type: "button", text: t("sf_remind", { n: miss.length }), onclick: async function (ev) {
+        var b = ev.currentTarget; b.disabled = true;
+        var r = await callFn("tg-notify", { kind: "subfolder", sub: s.id, due: k === "once" ? "" : k, users: miss.map(function (u) { return u.id; }) });
+        b.disabled = false;
+        toast(r.error ? fnErr(r.error) : t("sf_reminded", { sent: r.data.sent, total: miss.length }));
+      } })));
+    }
+    sel.addEventListener("change", draw); draw();
+    return h("div", { class: "stack sf-ctl" }, h("h4", { text: t("sf_people") }), keys.length > 1 ? h("label", { class: "f" }, t("sf_cycle"), sel) : null, box);
+  }
+
+  function subSettings(s, ctx) {
+    var st = h("select", null, ["site", "numbers", "offline"].map(function (x) { return h("option", { value: x, text: t("sf_st_" + x) }); })); st.value = s.storage;
+    var per = h("select", null, ["once", "month", "quarter", "year", "incoming", "case"].map(function (x) { return h("option", { value: x, text: t("sf_per_" + x) }); })); per.value = s.period;
+    var paper = h("input", { type: "checkbox" }); paper.checked = !!s.paper;
+    var note = h("input", { type: "text", maxlength: "300", value: s.note_ru || "" });
+    var picks = h("div", { class: "fold-picks wide" }, posList().filter(function (p) { return p.code !== "other"; }).map(function (p) {
+      var cb = h("input", { type: "checkbox", value: p.code }); cb.checked = (s.positions || []).indexOf(p.code) >= 0;
+      return h("label", null, cb, h("span", { text: posTitle(p) }));
+    }));
+    var save = h("button", { class: "btn sm pri", type: "button", text: t("save"), onclick: async function () {
+      save.disabled = true;
+      var r = await sb.rpc("admin_set_subfolder", { _id: s.id, _storage: st.value, _period: per.value, _paper: paper.checked, _note: note.value,
+        _positions: Array.from(picks.querySelectorAll("input:checked")).map(function (x) { return x.value; }) });
+      save.disabled = false;
+      if (r.error) { toast(subErr(r.error)); return; }
+      SUBS = null; toast(t("saved")); ctx.reload();
+    } });
+    return h("details", { class: "sf-set" }, h("summary", { text: t("sf_settings") }),
+      h("div", { class: "stack", style: "margin-top:10px" },
+        h("div", { class: "grid-f" }, h("label", { class: "f" }, t("sf_set_storage"), st), h("label", { class: "f" }, t("sf_set_period"), per), h("label", { class: "f" }, t("sf_set_note"), note)),
+        h("label", { class: "check" }, paper, h("span", { text: t("sf_set_paper") })),
+        h("div", { class: "f" }, h("span", { text: t("sf_set_who") }), picks), h("div", null, save)));
+  }
+
+  // Таблица документов (в подпапке или без неё). Администратор может перенести документ в подпапку.
+  function docTable(list, ctx, folderId) {
+    var siteSubs = ctx.subs.filter(function (s) { return s.storage === "site"; });
+    return h("div", { class: "tbl" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", { text: t("f_title") }), h("th", { class: "hide-sm", text: t("f_number") + " / " + t("f_date") }),
+        h("th", { class: "hide-sm", text: t("uploaded_by") }), h("th"))),
+      h("tbody", null, list.map(function (doc) {
+        var mv = null;
+        if (isAdmin() && siteSubs.length) {
+          mv = h("select", { "aria-label": t("sf_move") }, [h("option", { value: "", text: t("sf_move_none") })].concat(siteSubs.map(function (s) {
+            return h("option", { value: s.id, text: s.id + " " + subTitle(s).slice(0, 50) }); })));
+          mv.value = doc.subfolder_id || "";
+          mv.addEventListener("change", async function () {
+            var s = siteSubs.filter(function (x) { return x.id === mv.value; })[0];
+            var r = await sb.rpc("admin_move_document", { _doc: doc.id, _sub: mv.value, _period: s && subPeriodic(s) ? (subLast(s) || subNext(s)) : "" });
+            if (r.error) { mv.value = doc.subfolder_id || ""; toast(subErr(r.error)); return; }
+            toast(t("sf_moved")); ctx.reload();
+          });
+        }
+        return h("tr", null,
+          h("td", null, h("b", { text: doc.title }), doc.note ? h("div", { class: "sub", text: doc.note }) : null,
+            doc.file_name ? h("div", { class: "sub mono", text: doc.file_name + " · " + fmtSize(doc.file_size) }) : null,
+            doc.period_key && doc.period_key !== "once" ? h("div", { class: "sub", text: t("sf_cycle_opt", { d: fmtD(doc.period_key) }) }) : null),
+          h("td", { class: "hide-sm" }, [doc.doc_number || "", doc.doc_date ? " · " + fmtDate(doc.doc_date) : ""].join("")),
+          h("td", { class: "hide-sm" }, ctx.names[doc.uploaded_by] || "—", h("div", { class: "sub", text: fmtDT(doc.created_at) })),
+          h("td", null, h("div", { class: "row" },
+            doc.storage_path ? h("button", { class: "btn sm", type: "button", onclick: function () { openFile(doc.storage_path); }, text: t("open") }) : null,
+            mv, isAdmin() ? deleteButton(doc, folderId) : null)));
+      }))));
+  }
+
+  // --- сроки сдачи: мои подпапки и контроль по району
+  async function dueView() {
+    var my = renderToken;
+    shell("due", loadingBox());
+    var subs, docs, marks, people = null;
+    try {
+      subs = await loadSubs(true);
+      var rs = await Promise.all([sb.from("documents").select("id, subfolder_id, period_key, uploaded_by, created_at").not("subfolder_id", "is", null),
+        sb.from("subfolder_marks").select("subfolder_id, period_key, user_id, value, submitted_at, paper_at")]);
+      if (rs[0].error) throw rs[0].error;
+      docs = rs[0].data || []; marks = rs[1].data || [];
+      if (isManager()) people = await loadPeople();
+    } catch (e) { if (my === renderToken) shell("due", failBox(e)); return; }
+    if (my !== renderToken) return;
+    var uid = S.session.user.id, dm = subDoneMap(docs, marks);
+    function link(s) { return h("a", { href: "#/folder/" + s.folder_id + "/" + s.id, text: s.id }); }
+    var mine = subs.filter(isMySub).map(function (s) { return { s: s, st: subMyState(s, dm, uid) }; })
+      .sort(function (a, b) { return a.st.order - b.st.order || a.s.folder_id - b.s.folder_id || a.s.no - b.s.no; });
+    var nOver = mine.filter(function (x) { return x.st.order === 0; }).length, nSoon = mine.filter(function (x) { return x.st.order === 1; }).length;
+    var minePanel = h("section", { class: "panel stack" }, h("h3", { text: t("due_mine") }),
+      !myPosCodes().length ? h("div", { class: "notice warn", text: t("due_no_pos") })
+        : !mine.length ? h("p", { class: "mute", text: t("due_mine_none") })
+        : [h("div", { class: "row" }, h("span", { class: "chip " + (nOver ? "bad" : "ok"), text: t("due_k_overdue") + ": " + nOver }),
+            h("span", { class: "chip " + (nSoon ? "warn" : ""), text: t("due_k_soon") + ": " + nSoon })),
+          h("div", { class: "tbl" }, h("table", null,
+            h("thead", null, h("tr", null, h("th", { text: "№" }), h("th", { text: t("due_col_sub") }), h("th", { class: "hide-sm", text: t("sf_set_storage") }), h("th", { text: t("sf_col_cycle") }))),
+            h("tbody", null, mine.map(function (x) {
+              return h("tr", null, h("td", null, link(x.s)), h("td", null, h("b", { text: subTitle(x.s) }), h("div", { class: "sub", text: subOther(x.s) })),
+                h("td", { class: "hide-sm" }, storageChip(x.s)), h("td", null, h("span", { class: "chip " + x.st.tone, text: x.st.text })));
+            }))))]);
+    var parts = [h("section", { class: "panel" }, h("h2", { text: t("due_title") }), h("p", { class: "small mute", text: t("due_note") })), minePanel];
+    if (people) {
+      var fsel = h("select", { "aria-label": t("nav_folders") }, [h("option", { value: "", text: t("due_all_folders") })].concat(
+        Array.from(new Set(subs.map(function (s) { return s.folder_id; }))).map(function (n) { return h("option", { value: String(n), text: t("folder_no", { n: n }) }); })));
+      fsel.value = DUE.folder; fsel.addEventListener("change", function () { DUE.folder = fsel.value; dueView(); });
+      var onlyMiss = h("input", { type: "checkbox" }); onlyMiss.checked = DUE.missing;
+      onlyMiss.addEventListener("change", function () { DUE.missing = onlyMiss.checked; dueView(); });
+      var total = 0;
+      var rows = subs.filter(function (s) { return (subPeriodic(s) || s.period === "once") && (!DUE.folder || String(s.folder_id) === DUE.folder); }).map(function (s) {
+        var exp = expectedFor(s, people), L = s.period === "once" ? "once" : subLast(s), N = subNext(s);
+        function cnt(k) { var mp = dm[s.id + "|" + k] || {}; return exp.filter(function (u) { return isDone(mp[u.id]); }).length; }
+        var missL = L ? exp.filter(function (u) { return !doneBy(dm, s, L, u.id); }) : [];
+        total += missL.length;
+        return { s: s, exp: exp, L: L, N: N, aL: L ? cnt(L) : 0, aN: N ? cnt(N) : 0, missL: missL };
+      }).filter(function (r) { return r.exp.length && (!DUE.missing || r.missL.length || (r.N && r.aN < r.exp.length)); })
+        .sort(function (a, b) { return b.missL.length - a.missL.length || a.s.folder_id - b.s.folder_id || a.s.no - b.s.no; });
+      parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("due_control") }),
+        h("div", { class: "row" }, fsel, h("label", { class: "check" }, onlyMiss, h("span", { text: t("due_only_missing") })),
+          h("span", { class: "chip " + (total ? "bad" : "ok"), text: t("due_overdue_total", { n: total }) })),
+        !rows.length ? h("p", { class: "mute", text: t("due_none") }) :
+        h("div", { class: "tbl" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", { text: "№" }), h("th", { text: t("due_col_sub") }), h("th", { class: "hide-sm", text: t("due_col_who") }),
+            h("th", { text: t("due_col_last") }), h("th", { text: t("due_col_next") }), isAdmin() ? h("th") : null)),
+          h("tbody", null, rows.map(function (r) {
+            var lastTxt = !r.L ? "—" : t("due_cell", { d: r.L === "once" ? t("sf_per_once") : fmtD(r.L), a: r.aL, b: r.exp.length });
+            return h("tr", null, h("td", null, link(r.s)),
+              h("td", null, h("b", { text: subTitle(r.s) }), r.missL.length ? h("div", { class: "sub bad", text: r.missL.map(function (u) { return u.name; }).join(", ") }) : null),
+              h("td", { class: "hide-sm", text: r.exp.length + " " + t("due_people") }),
+              h("td", null, h("span", { class: "chip " + (!r.L ? "" : r.missL.length ? "bad" : "ok"), text: lastTxt })),
+              h("td", null, r.N ? h("span", { class: "chip " + (r.aN < r.exp.length ? "" : "ok"), text: t("due_cell", { d: fmtD(r.N), a: r.aN, b: r.exp.length }) }) : "—"),
+              isAdmin() ? h("td", null, r.missL.length ? h("button", { class: "btn sm", type: "button", title: t("sf_remind", { n: r.missL.length }), text: t("due_remind", { n: r.missL.length }), onclick: async function (ev) {
+                var b = ev.currentTarget; b.disabled = true;
+                var x = await callFn("tg-notify", { kind: "subfolder", sub: r.s.id, due: r.L === "once" ? "" : r.L, users: r.missL.map(function (u) { return u.id; }) });
+                b.disabled = false; toast(x.error ? fnErr(x.error) : t("sf_reminded", { sent: x.data.sent, total: r.missL.length }));
+              } }) : null) : null);
+          }))))));
+    }
+    shell("due", h("div", { class: "stack" }, parts));
   }
 
   // --- администратор: заявки на доступ

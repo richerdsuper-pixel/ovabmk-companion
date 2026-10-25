@@ -8,6 +8,7 @@
   Q.prototype.select = function (s) { if (this.op === "select") this.op = "select"; this.sel = s; return this; };
   Q.prototype.eq = function (k, v) { this.f.push(function (r) { return r[k] === v; }); return this; };
   Q.prototype.in = function (k, v) { this.f.push(function (r) { return v.indexOf(r[k]) >= 0; }); return this; };
+  Q.prototype.not = function (k, op, v) { this.f.push(function (r) { return op === "is" && v === null ? r[k] !== null && r[k] !== undefined : r[k] !== v; }); return this; };
   Q.prototype.order = function () { return this; };
   Q.prototype.limit = function () { return this; };
   Q.prototype.maybeSingle = function () { this.single = true; return this; };

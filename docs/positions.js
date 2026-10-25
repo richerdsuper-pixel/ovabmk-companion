@@ -5,7 +5,7 @@
 window.POSITIONS = [
   { code: "doya_qvp",            ru: "Акушерка СВП (кабинет доя)",                 uz: "ОШП доя хонаси (акушерка)",              role: "staff", folders: [9, 10, 12, 13] },
   { code: "akusher_ginekolog",   ru: "Врач акушер-гинеколог",                      uz: "Акушер-гинеколог шифокор",              role: "staff", folders: [7, 9, 10, 12, 13, 14] },
-  { code: "oilaviy_shifokor",    ru: "Семейный врач (СВП)",                        uz: "Оилавий шифокор (ОШП)",                 role: "staff", folders: [5, 8, 9, 10, 13] },
+  { code: "oilaviy_shifokor",    ru: "Семейный врач (СВП)",                        uz: "Оилавий шифокор (ОШП)",                 role: "staff", folders: [5, 8, 9, 10, 12, 13, 19] },
   { code: "patronaj_hamshira",   ru: "Патронажная медсестра",                      uz: "Патронаж ҳамшира",                       role: "staff", folders: [5, 9, 10] },
   { code: "pediatr",             ru: "Врач-педиатр",                               uz: "Педиатр шифокор",                        role: "staff", folders: [4, 5, 17] },
   { code: "neonatolog",          ru: "Врач-неонатолог",                            uz: "Неонатолог шифокор",                     role: "staff", folders: [7, 11, 14, 17] },
@@ -18,7 +18,7 @@ window.POSITIONS = [
   { code: "bosh_akusher",        ru: "Главный акушер-гинеколог",                   uz: "Бош акушер-гинеколог",                   role: "staff", folders: [1, 3, 7, 9, 10, 11, 12, 13, 14, 16] },
   { code: "bosh_pediatr",        ru: "Главный педиатр",                            uz: "Бош педиатр",                            role: "staff", folders: [1, 3, 4, 5, 11, 16, 17] },
   { code: "bosh_terapevt",       ru: "Главный терапевт",                           uz: "Бош терапевт",                           role: "staff", folders: [7, 8, 13] },
-  { code: "statistik",           ru: "Статистик",                                  uz: "Статистик",                              role: "staff", folders: [2, 17] },
+  { code: "statistik",           ru: "Статистик",                                  uz: "Статистик",                              role: "staff", folders: [2, 7, 12, 17] },
   { code: "kadrlar",             ru: "Отдел кадров",                               uz: "Кадрлар бўлими",                         role: "staff", folders: [16] },
   { code: "ombor_dorixona",      ru: "Склад / аптека",                             uz: "Омбор / дорихона",                       role: "staff", folders: [14, 18] },
   { code: "arxiv",               ru: "Медицинский архив",                          uz: "Тиббиёт архиви",                         role: "staff", folders: [20] },

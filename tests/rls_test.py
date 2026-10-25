@@ -426,6 +426,31 @@ expect_ok("на сервере нет таблиц беременных и ви�
 expect_ok("на сервере нет функций для ведения беременных и сводки", "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public', 'private') and p.proname ~ 'pregnan|anc_digest|record_anc|remove_anc|can_see_preg'", out="0")
 expect_ok("секрета планировщика в базе больше нет", "select to_regclass('private.cron_secret') is null", out="t")
 
+# ---------------- активация офлайн-программы (миграция 0014)
+KX = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; KY = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+expect_err("офлайн: без назначенной должности ключа нет", "select public.my_offline_activation()", "authenticated", S, "no_offline_role")
+expect_err("офлайн: staff не назначает должность", f"select public.admin_set_offline_role('{S}', 'cab')", "authenticated", S, "forbidden")
+expect_err("офлайн: неверная должность", f"select public.admin_set_offline_role('{S}', 'boss')", "authenticated", A, "bad_role")
+expect_err("офлайн: «администратор» только для админа", f"select public.admin_set_offline_role('{S}', 'coord')", "authenticated", A, "coord_admin_only")
+expect_ok("офлайн: админ назначил доя кабинета", f"select public.admin_set_offline_role('{S}', 'cab')", "authenticated", A)
+expect_err("офлайн: без ключа администратора доя ключ не получает", "select public.my_offline_activation()", "authenticated", S, "no_admin_key")
+expect_ok("офлайн: админ назначил себе «администратор»", f"select public.admin_set_offline_role('{A}', 'coord')", "authenticated", A)
+expect_ok("офлайн: администратор получает ключ и без ключа шифрования", "select public.my_offline_activation()->>'role'", "authenticated", A, out="coord")
+expect_err("офлайн: staff не ставит ключ шифрования", f"select public.admin_set_offline_key('{KX}', '{KY}')", "authenticated", S, "forbidden")
+expect_err("офлайн: неверный ключ шифрования", "select public.admin_set_offline_key('short', 'x')", "authenticated", A, "bad_key")
+expect_ok("офлайн: админ сохранил ключ шифрования", f"select public.admin_set_offline_key('{KX}', '{KY}')", "authenticated", A)
+expect_ok("офлайн: доя получает должность и ключ администратора", "select (public.my_offline_activation()->>'role') || '/' || (public.my_offline_activation()->'k'->>'x')", "authenticated", S, out="cab/" + KX)
+expect_err("офлайн: не участник не получает ключ", "select public.my_offline_activation()", "authenticated", N, "forbidden")
+expect_err("офлайн: настройки закрыты для чтения", "select * from public.app_settings", "authenticated", A, "permission denied")
+expect_ok("офлайн: список должностей для админа", "select count(*) from public.admin_offline_roles()", "authenticated", A, out="2")
+expect_err("офлайн: список должностей не для staff", "select * from public.admin_offline_roles()", "authenticated", S, "forbidden")
+expect_ok("офлайн: админ выдаёт ключ сотруднику", f"select public.admin_offline_activation('{S}')->>'role'", "authenticated", A, out="cab")
+expect_err("офлайн: staff не выдаёт ключ другому", f"select public.admin_offline_activation('{S}')", "authenticated", S, "forbidden")
+expect_err("офлайн: ключ подписи не читается пользователем", "select public.offline_sign_jwk()", "authenticated", A, "permission denied")
+expect_err("офлайн: таблица ключа подписи закрыта", "select * from private.offline_sign_key", "authenticated", A, "permission denied")
+expect_ok("офлайн: снять должность", f"select public.admin_set_offline_role('{S}', null)", "authenticated", A)
+expect_ok("офлайн: назначения в журнале", "select count(*) >= 3 from public.audit_log where action = 'offline_role'", out="t")
+
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",

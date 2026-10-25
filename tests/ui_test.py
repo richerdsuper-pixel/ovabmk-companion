@@ -66,12 +66,15 @@ window.__MOCK.rpc = {
     {visit_no:2, label:'2-й визит (18–20 нед.)', from_week:16, until_week:22, tests:['УЗИ плода'], notes:'Аномалии развития.'},
     {visit_no:3, label:'3-й визит (24–26 нед.)', from_week:23, until_week:28, tests:[], notes:''}]; },
   admin_save_anc_row: function(){ return window.__ancErr ? {error:{message:window.__ancErr}} : null; },
+  admin_offline_roles: function(){ return [{user_id:'%s', offline_role:'cab'}]; }, admin_set_offline_role: function(a){ return a._role==='coord' ? {error:{message:'coord_admin_only'}} : null; },
+  admin_get_offline_key: function(){ return window.__AKEY || null; }, admin_set_offline_key: function(){ window.__AKEY = {x:'x', y:'y'}; return null; },
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
-};""" % (A, S_, A)
+};""" % (A, S_, S_, A)
 
 FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
   'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; },
-  'anc-digest': function(){ return {total:4, sent:3, blocked:1, failed:0}; } };"""
+  'anc-digest': function(){ return {total:4, sent:3, blocked:1, failed:0}; },
+  'offline-key': function(b){ return window.__offErr ? {error:{message:window.__offErr}} : {token:'eyJ2IjoxfQ.c2ln' + (b && b.uid ? 'U' : ''), role:'cab', exp:1}; } };"""
 
 def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None, hash="#/folders"):
     b = p.chromium.launch()
@@ -803,6 +806,47 @@ with sync_playwright() as p:
     set_lmp(pg, lmp_ago(20))
     ok("помощник на телефоне: нет горизонтальной прокрутки", not hscroll(pg))
     pg.screenshot(path=str(SHOTS / "c_pregnant_mobile.png"), full_page=True); b.close()
+
+    # --- офлайн-программа: ключ активации с сайта, должность назначает администратор
+    b, ctx = pg_ctx(S_, ("staff",))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/offline"); pg.wait_for_timeout(500)
+    ok("офлайн: пункт меню у сотрудника", "Офлайн-программа" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    ok("офлайн: сотрудник не видит ключ шифрования администратора", pg.locator("#off_akey").count() == 0)
+    pg.click("#off_get"); pg.wait_for_timeout(300); t = pg.inner_text("#off_res")
+    ok("офлайн: ключ получен, ссылка на программу с ключом", "Доя кабинета" in t and "/app/#a=eyJ2IjoxfQ.c2ln" in t, t)
+    ok("офлайн: кнопка «Открыть программу»", (pg.get_attribute("#off_res a.btn", "href") or "").endswith("/app/#a=eyJ2IjoxfQ.c2ln"))
+    pg.evaluate("window.__offErr = 'no_offline_role'"); pg.click("#off_get"); pg.wait_for_timeout(300)
+    ok("офлайн: без назначенной должности — понятное сообщение", "не назначил" in pg.inner_text("#off_res"), pg.inner_text("#off_res"))
+    pg.evaluate("window.__offErr = 'no_admin_key'"); pg.click("#off_get"); pg.wait_for_timeout(300)
+    ok("офлайн: без ключа администратора — понятное сообщение", "ключ шифрования" in pg.inner_text("#off_res"), pg.inner_text("#off_res"))
+    ok("ошибок JS нет (офлайн: сотрудник)", not errs, errs); b.close()
+    b, ctx = pg_ctx(A, ("admin",))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/offline"); pg.wait_for_timeout(500)
+    ok("офлайн (админ): ключ шифрования ещё не сохранён", "не сохранён" in pg.inner_text("#off_akey_state"), pg.inner_text("#off_akey_state"))
+    pg.fill("#off_akey", "не ключ"); pg.click("#off_akey ~ div button"); pg.wait_for_timeout(200)
+    ok("офлайн (админ): неверный ключ не сохраняется", "Это не ключ" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.fill("#off_akey", "A" * 43 + "." + "B" * 43); pg.click("#off_akey ~ div button"); pg.wait_for_timeout(500)
+    sk = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_offline_key"]
+    ok("офлайн (админ): ключ сохранён (две половины)", sk and sk[-1][2]["_x"] == "A" * 43 and sk[-1][2]["_y"] == "B" * 43 and "Ключ сохранён" in pg.inner_text("#off_akey_state"), sk)
+    pg.goto(SITE + "#/admin/users"); pg.wait_for_timeout(500)
+    rows = pg.locator("table tbody tr")
+    sel_a, sel_s = rows.nth(0).locator("td").nth(4).locator("select"), rows.nth(1).locator("td").nth(4).locator("select")
+    ok("сотрудники: колонка офлайн-программы, у сотрудника — доя кабинета", sel_s.input_value() == "cab" and sel_a.input_value() == "")
+    ok("сотрудники: «Администратор» есть только у админа", sel_a.locator("option[value=coord]").count() == 1 and sel_s.locator("option[value=coord]").count() == 0)
+    sel_s.select_option("pat"); pg.wait_for_timeout(300)
+    so = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_offline_role"]
+    ok("сотрудники: должность в офлайн-программе назначена", so and so[-1][2]["_role"] == "pat" and so[-1][2]["_uid"] == "%s" % S_, so)
+    rows.nth(1).locator("td").nth(4).locator("button").click(); pg.wait_for_timeout(300)
+    fk = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "fn" and x[1] == "offline-key"]
+    ok("сотрудники: администратор выдаёт ключ сотруднику", fk and fk[-1][2]["uid"] == S_ and "/app/#a=eyJ2IjoxfQ.c2lnU" in rows.nth(1).inner_text(), fk)
+    rows.nth(0).locator("td").nth(4).locator("button").click(); pg.wait_for_timeout(300)
+    ok("сотрудники: без должности ключ не выдаётся", "Сначала выберите должность" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(300)
+    ok("латиница: офлайн-программа в меню", "Oflayn-dastur" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    pg.click(".seg button:nth-child(1)"); pg.wait_for_timeout(200)
+    ok("ошибок JS нет (офлайн: админ)", not errs, errs); b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

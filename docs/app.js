@@ -283,7 +283,7 @@
   }
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"],
-      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"]];
+      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/offline", "nav_offline", "offline"]];
     if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
@@ -312,6 +312,7 @@
     if (route === "/pregnant") return pregnantView();
     if (route === "/broadcasts") return broadcastsView();
     if (route === "/tasks") return tasksView();
+    if (route === "/offline") return offlineView();
     if (route === "/mahallas") return canSummary() ? mahallasView() : forbidden("mahallas");
     if (route === "/admin/institutions") return isAdmin() ? institutionsView() : forbidden("institutions");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
@@ -1278,8 +1279,10 @@
     shell("users", loadingBox());
     var r = await sb.rpc("admin_list_users");
     await loadInstitutions(true);
+    var orl = await sb.rpc("admin_offline_roles");
     if (my !== renderToken) return;
     if (r.error) return shell("users", failBox(r.error));
+    var offRole = {}; (orl.data || []).forEach(function (x) { offRole[x.user_id] = x.offline_role; });
     var rows = r.data.map(function (u) {
       var nameIn = h("input", { type: "text", value: u.full_name || "", maxlength: "200", "aria-label": t("u_name") });
       var posIn = h("input", { type: "text", value: u.user_position || "", maxlength: "200", "aria-label": t("u_position") });
@@ -1322,12 +1325,78 @@
           h("div", { class: "sub", text: (u.telegram_username ? "@" + u.telegram_username + " · " : "") + fmtDate(u.created_at) })),
         h("td", null, h("div", { class: "stack", style: "gap:4px" }, roleBoxes)),
         h("td", { style: "min-width:220px" }, picks, h("div", { style: "margin-top:8px" }, byPos)),
-        h("td", { style: "min-width:240px" }, scopeEditor(u)));
+        h("td", { style: "min-width:240px" }, scopeEditor(u)),
+        h("td", { style: "min-width:200px" }, offlineCell(u, offRole[u.user_id] || "")));
     });
     shell("users", h("section", { class: "panel stack" }, h("h2", { text: t("u_title") }), h("p", { class: "mute small", text: t("u_folders_hint") }),
       h("div", { class: "tbl" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", { text: t("u_name") + " / " + t("u_position") }), h("th", { text: t("u_roles") }), h("th", { text: t("u_folders") }), h("th", { text: t("u_scope") }))),
+        h("thead", null, h("tr", null, h("th", { text: t("u_name") + " / " + t("u_position") }), h("th", { text: t("u_roles") }), h("th", { text: t("u_folders") }), h("th", { text: t("u_scope") }), h("th", { text: t("off_col") }))),
         h("tbody", null, rows)))));
+  }
+
+  // --- офлайн-программа: должность назначает администратор, ключ активации подписывает сервер (функция offline-key)
+  function appUrl() { return CFG.siteUrl.replace(/\/?$/, "/") + "app/"; }
+  function offErr(e) {
+    var m = errMsg(e);
+    return /no_offline_role/.test(m) ? t("off_no_role") : /no_admin_key/.test(m) ? t("off_no_akey") : /coord_admin_only/.test(m) ? t("off_coord_admin") : t("err_action", { msg: m });
+  }
+  function keyBox(token) {
+    var link = appUrl() + "#a=" + token, code = h("code", { text: link });
+    return h("div", { class: "stack", style: "gap:6px" },
+      h("div", { class: "linkbox" }, code, h("button", { class: "btn sm", type: "button", text: t("copy"), onclick: function () {
+        var sel = function () { var rg = document.createRange(); rg.selectNodeContents(code); var x = getSelection(); x.removeAllRanges(); x.addRange(rg); };
+        try { navigator.clipboard.writeText(link).then(function () { toast(t("copied")); }, sel); } catch (er) { sel(); }
+      } })),
+      h("p", { class: "mute small", text: t("off_link_hint") }));
+  }
+  function offlineCell(u, cur) {
+    var sel = h("select", { "aria-label": t("off_col") }, [["", "off_role_none"], ["cab", "off_role_cab"], ["pat", "off_role_pat"]].concat((u.roles || []).indexOf("admin") >= 0 ? [["coord", "off_role_coord"]] : [])
+      .map(function (x) { return h("option", { value: x[0], text: t(x[1]) }); }));
+    sel.value = cur;
+    var out = h("div");
+    sel.addEventListener("change", async function () {
+      var x = await sb.rpc("admin_set_offline_role", { _uid: u.user_id, _role: sel.value || null });
+      if (x.error) { sel.value = cur; toast(offErr(x.error)); return; }
+      cur = sel.value; toast(t("u_saved"));
+    });
+    var btn = h("button", { class: "btn sm", type: "button", text: t("off_key_btn"), onclick: async function () {
+      if (!cur) { toast(t("off_no_role_u")); return; }
+      btn.disabled = true; var r = await callFn("offline-key", { uid: u.user_id }); btn.disabled = false;
+      if (r.error) { toast(offErr(r.error)); return; }
+      out.textContent = ""; out.appendChild(keyBox(r.data.token));
+    } });
+    return h("div", { class: "stack", style: "gap:6px" }, sel, btn, out);
+  }
+  async function offlineView() {
+    var my = renderToken;
+    shell("offline", loadingBox());
+    var ak = isAdmin() ? await sb.rpc("admin_get_offline_key") : null;
+    if (my !== renderToken) return;
+    var res = h("div", { id: "off_res" });
+    var get = h("button", { class: "btn pri", type: "button", id: "off_get", text: t("off_get"), onclick: async function () {
+      get.disabled = true; var r = await callFn("offline-key", {}); get.disabled = false;
+      res.textContent = "";
+      if (r.error) { res.appendChild(h("div", { class: "notice warn", text: offErr(r.error) })); return; }
+      res.appendChild(h("div", { class: "notice", text: t("off_got", { role: t("off_role_" + r.data.role) }) }));
+      res.appendChild(keyBox(r.data.token));
+      res.appendChild(h("a", { class: "btn pri", href: appUrl() + "#a=" + r.data.token, target: "_blank", rel: "noopener", text: t("off_open") }));
+    } });
+    var parts = [h("section", { class: "panel stack" }, h("h2", { text: t("off_title") }), h("p", { text: t("off_intro") }),
+      h("ol", { class: "small" }, ["off_s1", "off_s2", "off_s3"].map(function (k) { return h("li", { text: t(k) }); })), h("div", null, get), res)];
+    if (isAdmin()) {
+      var cur = ak && ak.data;
+      var ta = h("textarea", { id: "off_akey", rows: 3, placeholder: t("off_akey_ph"), spellcheck: "false" });
+      var save = h("button", { class: "btn sm pri", type: "button", text: t("save"), onclick: async function () {
+        var m = /^\s*([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})\s*$/.exec(ta.value);
+        if (!m) { toast(t("off_akey_bad")); return; }
+        var x = await sb.rpc("admin_set_offline_key", { _x: m[1], _y: m[2] });
+        if (x.error) { toast(t("err_action", { msg: errMsg(x.error) })); return; }
+        toast(t("u_saved")); offlineView();
+      } });
+      parts.push(h("section", { class: "panel stack" }, h("h2", { text: t("off_akey_title") }), h("p", { class: "mute small", text: t("off_akey_hint") }),
+        h("div", { class: cur ? "notice" : "notice warn", id: "off_akey_state", text: cur ? t("off_akey_set") : t("off_akey_none") }), ta, h("div", null, save)));
+    }
+    shell("offline", h("div", { class: "stack" }, parts));
   }
 
   // Учреждение сотрудника и область видимости заведующего (по учреждениям и по специальностям)

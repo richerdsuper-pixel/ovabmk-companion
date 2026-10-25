@@ -399,11 +399,14 @@ function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S
 
 async function enter() {
   await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
-  if (S.prof && S.prof.role && TABS[S.prof.role]) setRole(S.prof.role);
-  if (!PROF.role) await chooseRole(true);
-  await ensureCoordKey();
-  var pk = null; try { pk = JSON.parse(localStorage.getItem("ovabmk_pendkey") || "null"); } catch (e) { }
-  if (pk && PROF.role !== "coord") { await acceptKey(pk); try { localStorage.removeItem("ovabmk_pendkey"); } catch (e) { } }
+  // ключ активации хранится и в зашифрованных данных: если браузер очистил настройки, должность восстановится
+  if (!PROF.role && S.prof && S.prof.tok) await applyToken(S.prof.tok, false);
+  while (!PROF.role) {   // хранилище создано до активации: попросить ключ один раз
+    var f = actForm("");
+    if (!(await modal(L("act_title"), [f.node], [[L("act_go"), true, "pri"]]))) continue;
+    var r = await applyToken(f.get(), true); if (r.err) toast(actErr(r), true);
+  }
+  if ((S.prof || {}).tok !== PROF.tok) await afterActivation(); else { await ensureCoordKey(); if (PROF.act.k && PROF.act.k.x) PROF.act.kid = await keyId(PROF.act.k); }
   if (PROF.role === "coord") S.tab = !Object.keys(S.senders).length && activeCases().length ? "cases" : "home";
   else S.tab = "today";
   render();
@@ -411,7 +414,18 @@ async function enter() {
 }
 async function showAuth() {
   var box = $("auth"); box.classList.remove("hidden"); box.textContent = "";
-  var has = await Vault.hasVault(), err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? L("au_pw") : L("au_newpw") });
+  var has = await Vault.hasVault();
+  // ключ активации: сначала из ссылки (#a=…), затем сохранённый; без него программа не открывается (кроме уже созданного хранилища — там ключ внутри)
+  if (!PROF.role) { var saved = null; try { saved = localStorage.getItem("ovabmk_tok"); } catch (e) { } if (saved) await applyToken(saved, false); }
+  if (!PROF.role && UI.pendTok) { var pr = await applyToken(UI.pendTok, true); UI.pendTok = null; if (pr.err) UI.actErr = actErr(pr); }
+  if (!PROF.role && !has) {
+    var f = actForm(""), err0 = h("div", { class: "err", text: UI.actErr || "" }), go0 = h("button", { class: "pri", type: "button", id: "actGo" }, L("act_go"));
+    go0.onclick = async function () { var r = await applyToken(f.get(), true); if (r.err) { err0.textContent = actErr(r); return; } UI.actErr = ""; showAuth(); };
+    box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), h("h2", { text: L("act_title") }), f.node, go0, err0,
+      h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))])]));
+    return;
+  }
+  var err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? L("au_pw") : L("au_newpw") });
   var p2i = h("input", { type: "password", id: "pwB", autocomplete: "off", placeholder: L("au_rep") });
   var btn = h("button", { class: "pri", type: "button", id: "authGo" }, has ? L("au_open") : L("au_create"));
   async function go1() {
@@ -427,7 +441,10 @@ async function showAuth() {
     } catch (e) { err.textContent = L("au_err", { m: e.message }); }
   }
   btn.onclick = go1; [p1, p2i].forEach(function (i) { i.addEventListener("keydown", function (e) { if (e.key === "Enter") go1(); }); });
-  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), UI.pendKey ? h("div", { class: "alert ok", id: "pendKeyNote", text: L("key_pending") }) : null, h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
+  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }),
+    PROF.role ? h("div", { class: "alert ok", id: "actNote", text: L("role_" + PROF.role) + (PROF.act && PROF.act.name ? " · " + PROF.act.name : "") }) : null,
+    UI.actErr ? h("div", { class: "err", text: UI.actErr }) : null,
+    h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
     p1, has ? null : p2i, btn, err,
     h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))]),
     Vault.isMem() ? h("p", { class: "small warnt", text: L("sec_mem") }) : null]));
@@ -445,9 +462,9 @@ async function onRestore(file) {
 }
 async function boot() {
   try { var m = localStorage.getItem("ovabmk_min"); if (m != null && m !== "" && !isNaN(+m) && +m !== 10 && +m !== 30) UI.minutes = +m; } catch (e) { }
-  // ссылка-приглашение координатора: #k=<открытый ключ>. Ключ не секретный; запоминаем до входа и убираем из адреса
-  var mk = /[#&]k=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/.exec(location.hash || "");
-  if (mk) { try { localStorage.setItem("ovabmk_pendkey", JSON.stringify({ x: mk[1], y: mk[2] })); } catch (e) { } try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { } UI.pendKey = true; }
+  // ссылка с сайта: #a=<ключ активации> — применяем и убираем из адреса
+  var ma = /[#&]a=([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/.exec(location.hash || "");
+  if (ma) { UI.pendTok = ma[1]; try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { } }
   setLang(PROF.lang);
   $("casesIn").addEventListener("change", function () { onCasesImport(this.files[0]); this.value = ""; });
   $("restoreIn").addEventListener("change", function () { onRestore(this.files[0]); this.value = ""; });

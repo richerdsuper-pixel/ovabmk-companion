@@ -1,5 +1,6 @@
 import os, time, re, sys, json
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from tok import init_script, token, PUB
 HERE=os.path.dirname(os.path.abspath(__file__)); D=HERE+"/data/"; URL="file://"+os.path.abspath(HERE+"/../dist/OvaBMQ_Offline.html")
 PW="Testpass123!"
 ok=0; fails=[]
@@ -18,7 +19,7 @@ t=time.time()
 os.utime(D+"Baza_01_Doya_QVP_SVP3.xlsx",(t-5000,t-5000)); os.utime(D+"Baza_01_Doya_QVP_SVP3_v2.xlsx",(t-100,t-100))
 with sync_playwright() as p:
     br=p.chromium.launch(); ctx=br.new_context(viewport={"width":1100,"height":900},accept_downloads=True)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','coord')}catch(e){}")
+    ctx.add_init_script(init_script("coord"))
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url))
     pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e))); pg.on("console",lambda m: errs.append(m.text) if m.type=="error" and "Content Security" not in m.text else None)
@@ -135,7 +136,7 @@ with sync_playwright() as p:
     r=pg.evaluate("fetch('https://example.com').then(()=>'sent').catch(e=>'blocked')"); check("fetch blocked by CSP", r=="blocked", r)
     check("no JS errors", not errs, errs)
     # --- мобильный вид
-    m=br.new_context(viewport={"width":390,"height":780},is_mobile=True,has_touch=True); m.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','coord')}catch(e){}")
+    m=br.new_context(viewport={"width":390,"height":780},is_mobile=True,has_touch=True); m.add_init_script(init_script("coord"))
     mp=m.new_page(); mp.goto(URL); mp.screenshot(path=HERE+"/shot_auth_mobile.png")
     pg.click("nav >> text=Сводка"); pg.screenshot(path=HERE+"/shot_home_desktop.png")
     br.close()

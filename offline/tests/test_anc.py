@@ -1,6 +1,7 @@
 """Беременные по стандарту (приказ №180) в модуле «Визиты»: срок, окна, пропущенные визиты, напоминания, шифрование. Запуск: python3 offline/tests/test_anc.py"""
 import os, sys, json, time
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from tok import init_script, token, PUB
 HERE=os.path.dirname(os.path.abspath(__file__)); URL="file://"+os.path.abspath(HERE+"/../dist/OvaBMQ_Offline.html")
 PW="Testpass123!"; ok=0; fails=[]
 def check(name,cond,extra=""):
@@ -16,7 +17,7 @@ def until(fn,t=15):
 LMP="2026-06-06"   # на 2026-10-24 ровно 20 нед. 0 дн.
 with sync_playwright() as p:
     br=p.chromium.launch(); ctx=br.new_context(viewport={"width":390,"height":780},accept_downloads=True)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{localStorage.setItem('ovabmk_role','cab')}catch(e){}")
+    ctx.add_init_script(init_script("cab"))
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url)); pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e)))
     pg.goto(URL); pg.fill("#pwA",PW); pg.fill("#pwB",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")

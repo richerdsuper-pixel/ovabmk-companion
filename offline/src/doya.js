@@ -159,25 +159,39 @@ function exportCasesIcs() {
 }
 
 /* --- Должность и язык --- */
-var ROLE_OPTS = [["cab", "role_cab"], ["pat", "role_pat"], ["coord", "role_coord"]];
+var SITE_URL = "https://richerdsuper-pixel.github.io/ovabmk-companion/";
 function langButtons(after, id) {
   return h("div", { class: "seg", id: id || "langSeg" }, [["ru", "Рус"], ["uz", "Ўзб"], ["uzl", "Oʻzb"]].map(function (x) {
     return h("button", { type: "button", class: "sm" + (PROF.lang === x[0] ? " on" : ""), "data-lang": x[0], onclick: function () { setLang(x[0]); if (after) after(); } }, x[1]);
   }));
 }
-async function chooseRole(first) {
-  var sel = h("select", { id: "roleSel" }, ROLE_OPTS.map(function (x) { return h("option", { value: x[0], text: L(x[1]) }); }));
-  sel.value = PROF.role || "cab";
-  var ok = await modal(L("role_title"), [h("p", { class: "small muted", text: L("role_hint") }), sel], first ? [[L("role_go"), true, "pri"]] : [[L("cancel"), false, ""], [L("save"), true, "pri"]]);
-  if (!ok) return false;
-  setRole(sel.value);
-  // должность хранится и в зашифрованном хранилище: так она не потеряется, если браузер очистит свои настройки
-  if (Vault.isOpen()) { var np = JSON.parse(JSON.stringify(S.prof || {})); np.role = sel.value; await saveProf(np); }
-  return true;
+// поле для ключа активации (вставить из сайта); ключ из ссылки подставляется сам
+function actForm(pre) {
+  var ta = h("textarea", { id: "actIn", rows: 4, placeholder: L("act_ph"), autocomplete: "off", spellcheck: "false" }, pre || "");
+  return { node: h("div", { class: "stack" }, [h("p", { class: "small muted", text: L("act_hint") }), ta, h("a", { href: SITE_URL + "#/offline", target: "_blank", rel: "noopener", class: "small", text: L("act_site") })]), get: function () { return ta.value.trim(); } };
+}
+function actErr(r) { return L(r.err === "expired" ? "act_expired" : "act_bad"); }
+async function newKey() {
+  var f = actForm("");
+  if (!(await modal(L("act_new"), [f.node], [[L("cancel"), false, ""], [L("act_go"), true, "pri"]]))) return;
+  var r = await applyToken(f.get(), true); if (r.err) return toast(actErr(r), true);
+  await afterActivation(); toast(L("act_done", { r: L("role_" + PROF.role) })); S.tab = tabs()[0][0]; render();
+}
+// после активации: администратор получает свою пару ключей, у доя — отпечаток ключа администратора; Ф.И.О. и учреждение подставляются в «Кто я»
+async function afterActivation() {
+  if (!Vault.isOpen()) return;
+  await ensureCoordKey();
+  if (PROF.act && PROF.act.k && PROF.act.k.x) PROF.act.kid = await keyId(PROF.act.k);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np.tok = PROF.tok;
+  if (!np.who && PROF.act.name) np.who = PROF.act.name; if (!np.inst && PROF.act.inst) np.inst = PROF.act.inst;
+  await saveProf(np);
 }
 function roleLangPanel() {
-  var cur = (ROLE_OPTS.filter(function (x) { return x[0] === PROF.role; })[0] || ROLE_OPTS[0])[1];
+  var a = PROF.act || {};
   return h("div", { class: "panel" }, [h("h2", { text: L("set_role_lang") }),
-    h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L(cur) }), h("button", { type: "button", id: "roleChange", onclick: async function () { if (await chooseRole(false)) { S.tab = tabs()[0][0]; render(); } } }, L("change"))]),
+    h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L("role_" + PROF.role) })]),
+    a.name ? h("div", { class: "small muted", text: a.name + (a.inst ? " · " + a.inst : "") }) : null,
+    h("p", { class: "small muted", text: L("role_locked") }),
+    h("div", { class: "bar" }, [h("button", { type: "button", id: "newKey", onclick: newKey }, L("act_new"))]),
     h("div", { class: "bar" }, [h("span", { text: L("lang") + ": " }), langButtons(function () { render(); })])]);
 }

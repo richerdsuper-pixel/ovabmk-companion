@@ -473,10 +473,35 @@ function mergeCase(local, inc) {
   return m;
 }
 function personalHash(c) { return PERSONAL.map(function (f) { return c[f] == null ? "" : String(c[f]); }).join("\u0001"); }
+// ----- ключ активации: подписан сервером сайта (ECDSA P-256). Программа проверяет подпись и по ключу узнаёт должность — сменить её здесь нельзя -----
+function unb64url(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; return unb64(s); }
+async function verifyToken(tok) {
+  var m = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(tok || "").trim()); if (!m) return null;
+  var keys = [SIGN_PUB].concat(window.__TEST_SIGN_PUB ? [window.__TEST_SIGN_PUB] : []);
+  for (var i = 0; i < keys.length; i++) {
+    try {
+      var k = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", x: keys[i].x, y: keys[i].y, ext: true }, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+      if (await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, unb64url(m[2]), new TextEncoder().encode(m[1]))) {
+        var p = JSON.parse(new TextDecoder().decode(unb64url(m[1])));
+        if (p && p.v === 1 && TABS_ROLES.indexOf(p.role) >= 0) return p;
+      }
+    } catch (e) { }
+  }
+  return null;
+}
+var TABS_ROLES = ["cab", "pat", "coord"];
+// применить ключ: при активации проверяется и срок; при каждом запуске — только подпись (чтобы программа не перестала работать через месяц)
+async function applyToken(tok, fresh) {
+  var p = await verifyToken(tok); if (!p) return { err: "bad" };
+  if (fresh && p.exp && p.exp * 1000 < nowD().getTime()) return { err: "expired" };
+  PROF.role = p.role; PROF.act = p; PROF.tok = String(tok).trim();
+  if (fresh) try { localStorage.setItem("ovabmk_tok", PROF.tok); } catch (e) { }
+  return { ok: p };
+}
 // код ключа: короткий отпечаток открытого ключа координатора (виден в настройках у координатора и у доя — можно сверить)
 async function keyId(pub) { var hsh = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pub.x + "." + pub.y))); return b64(hsh).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase(); }
 // чей ключ использовать: доя — ключ координатора (из ссылки-приглашения), координатор — свой
-function sendKey() { var p = S.prof || {}; return PROF.role === "coord" ? (p.ckp && p.ckp.pub) : p.ckey; }
+function sendKey() { var p = S.prof || {}; if (PROF.role === "coord") return p.ckp && p.ckp.pub; var k = PROF.act && PROF.act.k; return k && k.x ? { x: k.x, y: k.y, kid: PROF.act.kid || "" } : null; }
 async function ensureCoordKey() {
   if (PROF.role !== "coord" || (S.prof && S.prof.ckp)) return;
   var kp = await Vault.newKeyPair(); kp.pub.kid = await keyId(kp.pub);

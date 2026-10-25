@@ -266,7 +266,7 @@ details.opt{margin:.6rem 0;color:var(--mute)}details.opt summary{cursor:pointer;
   "tests_uz": [],
   "notes_uz": "Муддатдан ўтган ҳомиладорликда туғруқни қўзғатишга йўлланма, мониторинг."
  }
-];</script>
+];var SIGN_PUB={"kty":"EC","crv":"P-256","x":"Bfulls4vL1m2clJKWzu548Zh10po9zTxmO4wXcpCV3Q","y":"Gn6WNxqWbOHzmZB27UAIjIZhrwyPV8lO4NM9nhTQRPw"};</script>
 <script>// Чтение и запись .xlsx без внешних библиотек (всё работает в браузере, без интернета).
 var XL = (function () {
   var td = new TextDecoder("utf-8"), te = new TextEncoder();
@@ -460,12 +460,10 @@ var PROF = { role: "", lang: "ru" };
 (function () {
   try {
     var l = localStorage.getItem("ovabmk_lang"); if (l === "uz" || l === "uzl" || l === "ru") PROF.lang = l;
-    var r = localStorage.getItem("ovabmk_role"); if (r === "cab" || r === "pat" || r === "coord") PROF.role = r;
-    else if (localStorage.getItem("ovabmk_mode") === "all") PROF.role = "coord";
   } catch (e) { }
 })();
 function setLang(l) { PROF.lang = l; try { localStorage.setItem("ovabmk_lang", l); } catch (e) { } document.documentElement.lang = l === "ru" ? "ru" : l === "uz" ? "uz-Cyrl" : "uz-Latn"; }
-function setRole(r) { PROF.role = r; try { localStorage.setItem("ovabmk_role", r); } catch (e) { } }
+
 function L(k, v) {
   var s = (PROF.lang === "ru" ? TR.ru : TR.uz)[k];
   if (s == null) s = TR.ru[k];
@@ -480,7 +478,9 @@ function Ld(ru, uz) { return PROF.lang === "ru" || !uz ? ru : PROF.lang === "uzl
 
 var TR = {
   ru: {
-    key_title: "Ключ администратора", key_ok: "получен", key_none: "не получен", key_code: "код ключа", key_hint: "Файлы «Отправить администратору» шифруются ключом администратора: открыть их может только его программа. Паролей вводить не нужно. Ключ приходит один раз — по ссылке-приглашению от администратора.", key_need: "Сначала откройте ссылку-приглашение от администратора (один раз). После этого кнопка «Отправить администратору» будет работать без паролей.", key_got: "Ключ администратора получен (код {k})", key_pending: "Ключ администратора принят — войдите, и он сохранится.",
+    act_title: "Активация программы", act_hint: "Вставьте ключ активации. Его выдаёт сайт после того, как администратор подтвердил вас и назначил должность: войдите на сайт → «Офлайн-программа» → «Получить ключ». По ключу программа сама откроет нужные разделы.", act_ph: "Ключ активации", act_site: "Открыть сайт", act_go: "Активировать", act_bad: "Ключ не подходит: скопируйте его с сайта полностью.", act_expired: "Срок ключа истёк — получите новый на сайте.", act_new: "Ввести новый ключ активации", act_done: "Программа активирована: {r}", role_locked: "Должность назначает администратор на сайте. Чтобы сменить её, получите на сайте новый ключ активации.",
+    ak_title: "Ключ шифрования администратора", ak_hint: "Скопируйте этот ключ и вставьте на сайте: раздел «Офлайн-программа» → «Мой ключ шифрования». После этого ключи активации доя будут содержать его, и их файлы будут открываться только у вас.", ak_copy: "Скопировать ключ",
+    key_title: "Ключ администратора", key_ok: "получен", key_none: "не получен", key_code: "код ключа", key_hint: "Файлы «Отправить администратору» шифруются ключом администратора: открыть их может только его программа. Паролей вводить не нужно. Ключ приходит вместе с ключом активации с сайта.", key_need: "В вашем ключе активации нет ключа администратора. Получите на сайте новый ключ активации (после того как администратор сохранил свой ключ) и введите его в «Настройках».", key_got: "Ключ администратора получен (код {k})", key_pending: "Ключ администратора принят — войдите, и он сохранится.",
     inv_title: "Пригласить доя", inv_hint: "Отправьте доя эту ссылку (например, в Telegram). Доя открывает её один раз — программа запоминает ваш ключ, и все их файлы открываются только у вас, без паролей. Ссылка не секретная.", inv_btn: "Отправить ссылку-приглашение", inv_file: "Ключ файлом", inv_msg: "OvaBMQ: откройте ссылку в Chrome, чтобы подключить программу к администратору",
     import_old: "Это файл старой версии — он зашифрован паролем. Введите пароль этого файла.", e_other_key: "Этот файл зашифрован для другого администратора (или повреждён).", lock_never: "не блокировать", lock_min: "мин.", sec_lock: "Блокировать без действий:",
     xk_title: "Код отправки", xk_first: "Задайте код один раз — им шифруются файлы для администратора. Код знают администратор и доя района (получите его у администратора). Программа его запомнит и больше не спросит.", xk_hint: "Новый код отправки. Сообщите его администратору лично или по телефону.", xk_saved: "Код запомнен", xk_now: "Код отправки", xk_set: "задан", xk_unset: "не задан",
@@ -552,7 +552,9 @@ var TR = {
     prof_title: "Кто я", prof_hint: "Учреждение и бригада попадают в файлы выгрузки, чтобы администратор видел, от кого они.", f_inst: "Учреждение", f_unit: "Бригада / участок", f_who: "Ф.И.О. (необязательно)", ph_inst: "Например: СВП №3", ph_unit: "Например: бригада 2, махалля Қўшон", ph_who: "Ф.И.О."
   },
   uz: {
-    key_title: "Администратор калити", key_ok: "олинган", key_none: "олинмаган", key_code: "калит коди", key_hint: "«Администраторга юбориш» файллари администратор калити билан шифрланади: уларни фақат унинг дастури очади. Парол киритиш шарт эмас. Калит бир марта — администратордан келган таклиф ҳаволаси орқали келади.", key_need: "Аввал администратордан келган таклиф ҳаволасини (бир марта) очинг. Шундан кейин «Администраторга юбориш» паролсиз ишлайди.", key_got: "Администратор калити олинди (код {k})", key_pending: "Администратор калити қабул қилинди — киринг, у сақланади.",
+    act_title: "Дастурни фаоллаштириш", act_hint: "Фаоллаштириш калитини қўйинг. Уни сайт беради — администратор сизни тасдиқлаб, лавозим белгилагандан кейин: сайтга киринг → «Офлайн-дастур» → «Калитни олиш». Калит бўйича дастур керакли бўлимларни ўзи очади.", act_ph: "Фаоллаштириш калити", act_site: "Сайтни очиш", act_go: "Фаоллаштириш", act_bad: "Калит мос эмас: уни сайтдан тўлиқ нусха олинг.", act_expired: "Калит муддати тугаган — сайтдан янгисини олинг.", act_new: "Янги фаоллаштириш калитини киритиш", act_done: "Дастур фаоллаштирилди: {r}", role_locked: "Лавозимни сайтда администратор белгилайди. Ўзгартириш учун сайтдан янги фаоллаштириш калитини олинг.",
+    ak_title: "Администраторнинг шифрлаш калити", ak_hint: "Бу калитдан нусха олиб, сайтга қўйинг: «Офлайн-дастур» бўлими → «Менинг шифрлаш калитим». Шундан кейин доялар фаоллаштириш калитида у бўлади ва уларнинг файллари фақат сизда очилади.", ak_copy: "Калитдан нусха олиш",
+    key_title: "Администратор калити", key_ok: "олинган", key_none: "олинмаган", key_code: "калит коди", key_hint: "«Администраторга юбориш» файллари администратор калити билан шифрланади: уларни фақат унинг дастури очади. Парол киритиш шарт эмас. Калит сайтдан фаоллаштириш калити билан бирга келади.", key_need: "Фаоллаштириш калитингизда администратор калити йўқ. Сайтдан янги фаоллаштириш калитини олинг (администратор ўз калитини сақлагандан кейин) ва уни «Созламалар»да киритинг.", key_got: "Администратор калити олинди (код {k})", key_pending: "Администратор калити қабул қилинди — киринг, у сақланади.",
     inv_title: "Дояларни таклиф қилиш", inv_hint: "Бу ҳаволани дояларга юборинг (масалан, Telegramда). Доя уни бир марта очади — дастур калитингизни эслаб қолади ва уларнинг барча файллари фақат сизда, паролсиз очилади. Ҳавола махфий эмас.", inv_btn: "Таклиф ҳаволасини юбориш", inv_file: "Калит файл билан", inv_msg: "OvaBMQ: дастурни администраторга улаш учун ҳаволани Chromeда очинг",
     import_old: "Бу эски версия файли — у парол билан шифрланган. Шу файлнинг паролини киритинг.", e_other_key: "Бу файл бошқа администратор учун шифрланган (ёки бузилган).", lock_never: "қулфламаслик", lock_min: "дақ.", sec_lock: "Ҳаракатсиз қулфлаш:",
     xk_title: "Юбориш коди", xk_first: "Кодни бир марта киритинг — у билан администратор учун файллар шифрланади. Кодни администратор ва туман доялари билади (администратордан олинг). Дастур уни эслаб қолади ва бошқа сўрамайди.", xk_hint: "Янги юбориш коди. Уни администраторга шахсан ёки телефонда айтинг.", xk_saved: "Код эслаб қолинди", xk_now: "Юбориш коди", xk_set: "киритилган", xk_unset: "киритилмаган",
@@ -1100,10 +1102,35 @@ function mergeCase(local, inc) {
   return m;
 }
 function personalHash(c) { return PERSONAL.map(function (f) { return c[f] == null ? "" : String(c[f]); }).join("\u0001"); }
+// ----- ключ активации: подписан сервером сайта (ECDSA P-256). Программа проверяет подпись и по ключу узнаёт должность — сменить её здесь нельзя -----
+function unb64url(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; return unb64(s); }
+async function verifyToken(tok) {
+  var m = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(tok || "").trim()); if (!m) return null;
+  var keys = [SIGN_PUB].concat(window.__TEST_SIGN_PUB ? [window.__TEST_SIGN_PUB] : []);
+  for (var i = 0; i < keys.length; i++) {
+    try {
+      var k = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", x: keys[i].x, y: keys[i].y, ext: true }, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+      if (await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, unb64url(m[2]), new TextEncoder().encode(m[1]))) {
+        var p = JSON.parse(new TextDecoder().decode(unb64url(m[1])));
+        if (p && p.v === 1 && TABS_ROLES.indexOf(p.role) >= 0) return p;
+      }
+    } catch (e) { }
+  }
+  return null;
+}
+var TABS_ROLES = ["cab", "pat", "coord"];
+// применить ключ: при активации проверяется и срок; при каждом запуске — только подпись (чтобы программа не перестала работать через месяц)
+async function applyToken(tok, fresh) {
+  var p = await verifyToken(tok); if (!p) return { err: "bad" };
+  if (fresh && p.exp && p.exp * 1000 < nowD().getTime()) return { err: "expired" };
+  PROF.role = p.role; PROF.act = p; PROF.tok = String(tok).trim();
+  if (fresh) try { localStorage.setItem("ovabmk_tok", PROF.tok); } catch (e) { }
+  return { ok: p };
+}
 // код ключа: короткий отпечаток открытого ключа координатора (виден в настройках у координатора и у доя — можно сверить)
 async function keyId(pub) { var hsh = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pub.x + "." + pub.y))); return b64(hsh).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase(); }
 // чей ключ использовать: доя — ключ координатора (из ссылки-приглашения), координатор — свой
-function sendKey() { var p = S.prof || {}; return PROF.role === "coord" ? (p.ckp && p.ckp.pub) : p.ckey; }
+function sendKey() { var p = S.prof || {}; if (PROF.role === "coord") return p.ckp && p.ckp.pub; var k = PROF.act && PROF.act.k; return k && k.x ? { x: k.x, y: k.y, kid: PROF.act.kid || "" } : null; }
 async function ensureCoordKey() {
   if (PROF.role !== "coord" || (S.prof && S.prof.ckp)) return;
   var kp = await Vault.newKeyPair(); kp.pub.kid = await keyId(kp.pub);
@@ -1483,30 +1510,19 @@ async function shareOrSave(name, blob, type) {
   } catch (e) { if (e && e.name === "AbortError") return "cancel"; }
   download(name, blob); return "saved";
 }
-// приглашение доя: ссылка с открытым ключом координатора (ключ не секретный — по нему можно только зашифровать файл для координатора)
-var APP_URL = "https://richerdsuper-pixel.github.io/ovabmk-companion/app/";
-function inviteLink() { var k = S.prof && S.prof.ckp && S.prof.ckp.pub; return k ? APP_URL + "#k=" + k.x + "." + k.y : ""; }
-async function acceptKey(pub, quiet) {
-  if (!pub || !pub.x || !pub.y) return false;
-  pub = { x: pub.x, y: pub.y }; pub.kid = await keyId(pub);
-  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckey = pub; await saveProf(np);
-  if (!quiet) toast(L("key_got", { k: pub.kid })); return true;
-}
+// панель ключей: администратор копирует свой открытый ключ на сайт; у доя — ключ администратора из ключа активации
 function keyPanel() {
   var p = S.prof || {};
   if (PROF.role === "coord") {
-    var link = inviteLink();
-    return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("inv_title") }), h("p", { class: "small muted", text: L("inv_hint") }),
+    var k = p.ckp ? p.ckp.pub.x + "." + p.ckp.pub.y : "";
+    return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("ak_title") }), h("p", { class: "small muted", text: L("ak_hint") }),
       h("p", null, [h("span", { text: L("key_code") + ": " }), h("b", { id: "myKid", text: p.ckp ? p.ckp.pub.kid : "—" })]),
-      h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "invShare", onclick: async function () {
-        try { if (navigator.share) { await navigator.share({ title: "OvaBMQ", text: L("inv_msg"), url: link }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
-        copyText(L("inv_msg") + "\n" + link);
-      } }, L("inv_btn")),
-        h("button", { type: "button", id: "invFile", onclick: function () { download("OvaBMQ_kalit_" + p.ckp.pub.kid + ".ovabmkc", new Blob([JSON.stringify({ app: "ovabmk-key", v: 1, x: p.ckp.pub.x, y: p.ckp.pub.y })], { type: "application/octet-stream" })); } }, L("inv_file"))]),
-      h("input", { type: "text", id: "invLink", readonly: true, value: link, class: "small" })]);
+      h("textarea", { id: "myPub", readonly: true, rows: 3, class: "small" }, k),
+      h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "copyPub", onclick: function () { copyText(k); } }, L("ak_copy"))])]);
   }
+  var a = PROF.act && PROF.act.k;
   return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("key_title") }),
-    p.ckey ? h("p", null, [h("span", { class: "badge ok", text: L("key_ok") }), " ", h("span", { text: L("key_code") + ": " }), h("b", { id: "keyKid", text: p.ckey.kid })]) : h("p", { class: "badge warn", id: "keyKid", text: L("key_none") }),
+    a ? h("p", null, [h("span", { class: "badge ok", text: L("key_ok") }), " ", h("span", { text: L("key_code") + ": " }), h("b", { id: "keyKid", text: PROF.act.kid || "" })]) : h("p", { class: "badge warn", id: "keyKid", text: L("key_none") }),
     h("p", { class: "small muted", text: L("key_hint") })]);
 }
 async function exportCasesUi(delta) {
@@ -1522,7 +1538,6 @@ async function onCasesImport(file) {
   if (!file) return;
   var text = await file.text(), j = null;
   try { j = JSON.parse(text); } catch (e) { }
-  if (j && j.app === "ovabmk-key") { if (await acceptKey(j)) render(); return; }
   try {
     var r = await importCases(text);
     if (r && r.needPw) {   // старый файл, зашифрованный паролем
@@ -1696,26 +1711,40 @@ function exportCasesIcs() {
 }
 
 /* --- Должность и язык --- */
-var ROLE_OPTS = [["cab", "role_cab"], ["pat", "role_pat"], ["coord", "role_coord"]];
+var SITE_URL = "https://richerdsuper-pixel.github.io/ovabmk-companion/";
 function langButtons(after, id) {
   return h("div", { class: "seg", id: id || "langSeg" }, [["ru", "Рус"], ["uz", "Ўзб"], ["uzl", "Oʻzb"]].map(function (x) {
     return h("button", { type: "button", class: "sm" + (PROF.lang === x[0] ? " on" : ""), "data-lang": x[0], onclick: function () { setLang(x[0]); if (after) after(); } }, x[1]);
   }));
 }
-async function chooseRole(first) {
-  var sel = h("select", { id: "roleSel" }, ROLE_OPTS.map(function (x) { return h("option", { value: x[0], text: L(x[1]) }); }));
-  sel.value = PROF.role || "cab";
-  var ok = await modal(L("role_title"), [h("p", { class: "small muted", text: L("role_hint") }), sel], first ? [[L("role_go"), true, "pri"]] : [[L("cancel"), false, ""], [L("save"), true, "pri"]]);
-  if (!ok) return false;
-  setRole(sel.value);
-  // должность хранится и в зашифрованном хранилище: так она не потеряется, если браузер очистит свои настройки
-  if (Vault.isOpen()) { var np = JSON.parse(JSON.stringify(S.prof || {})); np.role = sel.value; await saveProf(np); }
-  return true;
+// поле для ключа активации (вставить из сайта); ключ из ссылки подставляется сам
+function actForm(pre) {
+  var ta = h("textarea", { id: "actIn", rows: 4, placeholder: L("act_ph"), autocomplete: "off", spellcheck: "false" }, pre || "");
+  return { node: h("div", { class: "stack" }, [h("p", { class: "small muted", text: L("act_hint") }), ta, h("a", { href: SITE_URL + "#/offline", target: "_blank", rel: "noopener", class: "small", text: L("act_site") })]), get: function () { return ta.value.trim(); } };
+}
+function actErr(r) { return L(r.err === "expired" ? "act_expired" : "act_bad"); }
+async function newKey() {
+  var f = actForm("");
+  if (!(await modal(L("act_new"), [f.node], [[L("cancel"), false, ""], [L("act_go"), true, "pri"]]))) return;
+  var r = await applyToken(f.get(), true); if (r.err) return toast(actErr(r), true);
+  await afterActivation(); toast(L("act_done", { r: L("role_" + PROF.role) })); S.tab = tabs()[0][0]; render();
+}
+// после активации: администратор получает свою пару ключей, у доя — отпечаток ключа администратора; Ф.И.О. и учреждение подставляются в «Кто я»
+async function afterActivation() {
+  if (!Vault.isOpen()) return;
+  await ensureCoordKey();
+  if (PROF.act && PROF.act.k && PROF.act.k.x) PROF.act.kid = await keyId(PROF.act.k);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np.tok = PROF.tok;
+  if (!np.who && PROF.act.name) np.who = PROF.act.name; if (!np.inst && PROF.act.inst) np.inst = PROF.act.inst;
+  await saveProf(np);
 }
 function roleLangPanel() {
-  var cur = (ROLE_OPTS.filter(function (x) { return x[0] === PROF.role; })[0] || ROLE_OPTS[0])[1];
+  var a = PROF.act || {};
   return h("div", { class: "panel" }, [h("h2", { text: L("set_role_lang") }),
-    h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L(cur) }), h("button", { type: "button", id: "roleChange", onclick: async function () { if (await chooseRole(false)) { S.tab = tabs()[0][0]; render(); } } }, L("change"))]),
+    h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L("role_" + PROF.role) })]),
+    a.name ? h("div", { class: "small muted", text: a.name + (a.inst ? " · " + a.inst : "") }) : null,
+    h("p", { class: "small muted", text: L("role_locked") }),
+    h("div", { class: "bar" }, [h("button", { type: "button", id: "newKey", onclick: newKey }, L("act_new"))]),
     h("div", { class: "bar" }, [h("span", { text: L("lang") + ": " }), langButtons(function () { render(); })])]);
 }
 </script>
@@ -2120,11 +2149,14 @@ function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S
 
 async function enter() {
   await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
-  if (S.prof && S.prof.role && TABS[S.prof.role]) setRole(S.prof.role);
-  if (!PROF.role) await chooseRole(true);
-  await ensureCoordKey();
-  var pk = null; try { pk = JSON.parse(localStorage.getItem("ovabmk_pendkey") || "null"); } catch (e) { }
-  if (pk && PROF.role !== "coord") { await acceptKey(pk); try { localStorage.removeItem("ovabmk_pendkey"); } catch (e) { } }
+  // ключ активации хранится и в зашифрованных данных: если браузер очистил настройки, должность восстановится
+  if (!PROF.role && S.prof && S.prof.tok) await applyToken(S.prof.tok, false);
+  while (!PROF.role) {   // хранилище создано до активации: попросить ключ один раз
+    var f = actForm("");
+    if (!(await modal(L("act_title"), [f.node], [[L("act_go"), true, "pri"]]))) continue;
+    var r = await applyToken(f.get(), true); if (r.err) toast(actErr(r), true);
+  }
+  if ((S.prof || {}).tok !== PROF.tok) await afterActivation(); else { await ensureCoordKey(); if (PROF.act.k && PROF.act.k.x) PROF.act.kid = await keyId(PROF.act.k); }
   if (PROF.role === "coord") S.tab = !Object.keys(S.senders).length && activeCases().length ? "cases" : "home";
   else S.tab = "today";
   render();
@@ -2132,7 +2164,18 @@ async function enter() {
 }
 async function showAuth() {
   var box = $("auth"); box.classList.remove("hidden"); box.textContent = "";
-  var has = await Vault.hasVault(), err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? L("au_pw") : L("au_newpw") });
+  var has = await Vault.hasVault();
+  // ключ активации: сначала из ссылки (#a=…), затем сохранённый; без него программа не открывается (кроме уже созданного хранилища — там ключ внутри)
+  if (!PROF.role) { var saved = null; try { saved = localStorage.getItem("ovabmk_tok"); } catch (e) { } if (saved) await applyToken(saved, false); }
+  if (!PROF.role && UI.pendTok) { var pr = await applyToken(UI.pendTok, true); UI.pendTok = null; if (pr.err) UI.actErr = actErr(pr); }
+  if (!PROF.role && !has) {
+    var f = actForm(""), err0 = h("div", { class: "err", text: UI.actErr || "" }), go0 = h("button", { class: "pri", type: "button", id: "actGo" }, L("act_go"));
+    go0.onclick = async function () { var r = await applyToken(f.get(), true); if (r.err) { err0.textContent = actErr(r); return; } UI.actErr = ""; showAuth(); };
+    box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), h("h2", { text: L("act_title") }), f.node, go0, err0,
+      h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))])]));
+    return;
+  }
+  var err = h("div", { class: "err" }), p1 = h("input", { type: "password", id: "pwA", autocomplete: "off", placeholder: has ? L("au_pw") : L("au_newpw") });
   var p2i = h("input", { type: "password", id: "pwB", autocomplete: "off", placeholder: L("au_rep") });
   var btn = h("button", { class: "pri", type: "button", id: "authGo" }, has ? L("au_open") : L("au_create"));
   async function go1() {
@@ -2148,7 +2191,10 @@ async function showAuth() {
     } catch (e) { err.textContent = L("au_err", { m: e.message }); }
   }
   btn.onclick = go1; [p1, p2i].forEach(function (i) { i.addEventListener("keydown", function (e) { if (e.key === "Enter") go1(); }); });
-  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }), UI.pendKey ? h("div", { class: "alert ok", id: "pendKeyNote", text: L("key_pending") }) : null, h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
+  box.appendChild(h("div", { class: "authbox" }, [langButtons(function () { showAuth(); }, "langSegAuth"), h("h1", { text: L("app") }),
+    PROF.role ? h("div", { class: "alert ok", id: "actNote", text: L("role_" + PROF.role) + (PROF.act && PROF.act.name ? " · " + PROF.act.name : "") }) : null,
+    UI.actErr ? h("div", { class: "err", text: UI.actErr }) : null,
+    h("p", { class: "muted", text: has ? L("au_hint") : L("au_first") }),
     p1, has ? null : p2i, btn, err,
     h("div", { class: "small muted", style: "margin-top:1em" }, [h("a", { href: "#", onclick: function (e) { e.preventDefault(); $("restoreIn").click(); } }, L("bk_restore"))]),
     Vault.isMem() ? h("p", { class: "small warnt", text: L("sec_mem") }) : null]));
@@ -2166,9 +2212,9 @@ async function onRestore(file) {
 }
 async function boot() {
   try { var m = localStorage.getItem("ovabmk_min"); if (m != null && m !== "" && !isNaN(+m) && +m !== 10 && +m !== 30) UI.minutes = +m; } catch (e) { }
-  // ссылка-приглашение координатора: #k=<открытый ключ>. Ключ не секретный; запоминаем до входа и убираем из адреса
-  var mk = /[#&]k=([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/.exec(location.hash || "");
-  if (mk) { try { localStorage.setItem("ovabmk_pendkey", JSON.stringify({ x: mk[1], y: mk[2] })); } catch (e) { } try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { } UI.pendKey = true; }
+  // ссылка с сайта: #a=<ключ активации> — применяем и убираем из адреса
+  var ma = /[#&]a=([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/.exec(location.hash || "");
+  if (ma) { UI.pendTok = ma[1]; try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { } }
   setLang(PROF.lang);
   $("casesIn").addEventListener("change", function () { onCasesImport(this.files[0]); this.value = ""; });
   $("restoreIn").addEventListener("change", function () { onRestore(this.files[0]); this.value = ""; });

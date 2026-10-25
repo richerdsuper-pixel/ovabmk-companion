@@ -2,6 +2,7 @@
 «Сегодня», отчётные числа (файл для сайта), выгрузка «только изменения» и приём у администратора. Запуск: python3 offline/tests/test_doya.py"""
 import os, sys, json, time
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from tok import init_script, token, PUB
 HERE = os.path.dirname(os.path.abspath(__file__)); URL = "file://" + os.path.abspath(HERE + "/../dist/OvaBMQ_Offline.html")
 PW = "Testpass123!"; XP = "Export-pass-77"; ok = 0; fails = []
 def check(name, cond, extra=""):
@@ -14,14 +15,15 @@ def until(fn, t=15):
         if fn(): return
         time.sleep(0.1)
     raise Exception("timeout")
-def ctx_page(br, role=None, mobile=True):
+def ctx_page(br, role=None, mobile=True, login=True):
     vp = {"width": 390, "height": 800} if mobile else {"width": 1200, "height": 900}
     ctx = br.new_context(viewport=vp, accept_downloads=True, is_mobile=mobile, has_touch=mobile)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';" + ("try{localStorage.setItem('ovabmk_role','%s')}catch(e){}" % role if role else ""))
+    ctx.add_init_script(init_script(role))
     reqs = []; ctx.on("request", lambda r: reqs.append(r.url))
     pg = ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "Content Security" not in m.text else None)
-    pg.goto(URL); pg.fill("#pwA", PW); pg.fill("#pwB", PW); pg.click("#authGo")
+    pg.goto(URL)
+    if login: pg.fill("#pwA", PW); pg.fill("#pwB", PW); pg.click("#authGo")
     return ctx, pg, reqs, errs
 def tabs(pg): return [b.inner_text() for b in pg.query_selector_all("nav button")]
 def save_modal(pg): pg.click(".modal >> nth=-1 >> button.pri"); pg.wait_for_timeout(350)
@@ -40,10 +42,16 @@ def num_file(pg):
 with sync_playwright() as p:
     br = p.chromium.launch()
     # ---------- доя кабинета ----------
-    ctx, pg, reqs, errs = ctx_page(br)
-    pg.wait_for_selector("#roleSel")
-    check("первый вход: выбор должности", pg.locator("#roleSel option").count() == 3)
-    pg.select_option("#roleSel", "cab"); pg.click(".modal button.pri"); pg.wait_for_selector("nav button[data-tab=screen]")
+    ctx, pg, reqs, errs = ctx_page(br, login=False)
+    pg.wait_for_selector("#actIn")
+    check("первый вход: без ключа активации программа не открывается", pg.query_selector("#pwA") is None and pg.query_selector("#roleSel") is None)
+    pg.fill("#actIn", "eyJ2IjoxfQ.AAAA"); pg.click("#actGo"); pg.wait_for_selector("text=Ключ не подходит")
+    check("поддельный ключ: ошибка", True)
+    pg.fill("#actIn", token("cab", iat=time.time() - 60 * 86400)); pg.click("#actGo"); pg.wait_for_selector("text=Срок ключа истёк")
+    check("просроченный ключ: ошибка", True)
+    pg.fill("#actIn", token("cab", name="Каримова Дилноза", inst="СВП №3")); pg.click("#actGo"); pg.wait_for_selector("#pwA")
+    check("ключ принят: видно должность и Ф.И.О.", "Доя кабинета" in pg.inner_text("#actNote") and "Каримова Дилноза" in pg.inner_text("#actNote"), pg.inner_text("#actNote"))
+    pg.fill("#pwA", PW); pg.fill("#pwB", PW); pg.click("#authGo"); pg.wait_for_selector("nav button[data-tab=screen]")
     check("кабинет: вкладки", tabs(pg) == ["Сегодня", "Пациенты", "Скрининг", "Отчёт", "Настройки"], tabs(pg))
     check("кабинет: открывается «Сегодня»", pg.query_selector("nav button.on").inner_text() == "Сегодня")
     # беременная 20 нед., 17 лет, преэклампсия
@@ -76,8 +84,7 @@ with sync_playwright() as p:
             if c and c[0] == name: return c[1]
     check("отчёт: беременных 1, до 18 лет 1, в группе риска 1, пропустили визит 1", row("Беременных под наблюдением") == "1" and row("Беременных до 18 лет") == "1" and row("Беременных в группе риска") == "1" and row("Пропустили визит по №180") == "1", t[:900])
     check("отчёт: скрининг — осмотр нужен 1, молочная железа 0, скринингов за месяц 1", row("Пора на осмотр 15–49 лет") == "1" and row("Пора на скрининг молочной железы") == "0" and row("Скринингов за месяц") == "1", t[:1200])
-    pg.click("#numExp"); pg.wait_for_timeout(200)
-    check("числа: без учреждения — подсказка заполнить «Кто я»", "Кто я" in pg.inner_text("#toasts"), pg.inner_text("#toasts"))
+    check("«Кто я» заполнено из ключа активации", pg.input_value("#pr_inst") == "СВП №3" and pg.input_value("#pr_who") == "Каримова Дилноза", (pg.input_value("#pr_inst"), pg.input_value("#pr_who")))
     pg.fill("#pr_inst", "СВП №3"); pg.fill("#pr_unit", "Бригада 2"); pg.fill("#pr_who", "Каримова Д."); pg.click("#pr_save"); pg.wait_for_timeout(300)
     nf = num_file(pg); nj = json.loads(nf)
     check("файл чисел: формат и учреждение", nj["fmt"] == "ovabmk-numbers" and nj["inst"] == "СВП №3" and nj["numbers"]["preg_total"] == 1 and nj["numbers"]["preg_lt18"] == 1, nf[:300])
@@ -97,9 +104,8 @@ with sync_playwright() as p:
     # выгрузка «только изменения» — 1-я
     # ключ администратора (как из ссылки-приглашения) — дальше отправка без паролей
     cx, pc, rc, ec = ctx_page(br, "coord", mobile=False); pc.wait_for_selector("#app:not(.hidden)")
-    pc.click("nav button[data-tab=set]")
-    with pc.expect_download() as dk: pc.click("#invFile")
-    pg.click("nav button[data-tab=set]"); pg.set_input_files("#casesIn", dk.value.path()); pg.wait_for_selector("text=Ключ администратора получен")
+    pc.click("nav button[data-tab=set]"); pub = pc.evaluate("S.prof.ckp.pub")
+    pg.click("nav button[data-tab=set]"); pg.click("#newKey"); pg.wait_for_selector("#actIn"); pg.fill("#actIn", token("cab", k={"x": pub["x"], "y": pub["y"]})); pg.click(".modal button.pri"); pg.wait_for_selector("text=Программа активирована")
     pg.click("nav button[data-tab=report]")
     with pg.expect_download() as d1: pg.click("#deltaExp")
     check("отправка без вопроса о пароле", pg.query_selector("#ex1") is None)

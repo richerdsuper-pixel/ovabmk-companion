@@ -316,30 +316,19 @@ async function shareOrSave(name, blob, type) {
   } catch (e) { if (e && e.name === "AbortError") return "cancel"; }
   download(name, blob); return "saved";
 }
-// приглашение доя: ссылка с открытым ключом координатора (ключ не секретный — по нему можно только зашифровать файл для координатора)
-var APP_URL = "https://richerdsuper-pixel.github.io/ovabmk-companion/app/";
-function inviteLink() { var k = S.prof && S.prof.ckp && S.prof.ckp.pub; return k ? APP_URL + "#k=" + k.x + "." + k.y : ""; }
-async function acceptKey(pub, quiet) {
-  if (!pub || !pub.x || !pub.y) return false;
-  pub = { x: pub.x, y: pub.y }; pub.kid = await keyId(pub);
-  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckey = pub; await saveProf(np);
-  if (!quiet) toast(L("key_got", { k: pub.kid })); return true;
-}
+// панель ключей: администратор копирует свой открытый ключ на сайт; у доя — ключ администратора из ключа активации
 function keyPanel() {
   var p = S.prof || {};
   if (PROF.role === "coord") {
-    var link = inviteLink();
-    return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("inv_title") }), h("p", { class: "small muted", text: L("inv_hint") }),
+    var k = p.ckp ? p.ckp.pub.x + "." + p.ckp.pub.y : "";
+    return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("ak_title") }), h("p", { class: "small muted", text: L("ak_hint") }),
       h("p", null, [h("span", { text: L("key_code") + ": " }), h("b", { id: "myKid", text: p.ckp ? p.ckp.pub.kid : "—" })]),
-      h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "invShare", onclick: async function () {
-        try { if (navigator.share) { await navigator.share({ title: "OvaBMQ", text: L("inv_msg"), url: link }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
-        copyText(L("inv_msg") + "\n" + link);
-      } }, L("inv_btn")),
-        h("button", { type: "button", id: "invFile", onclick: function () { download("OvaBMQ_kalit_" + p.ckp.pub.kid + ".ovabmkc", new Blob([JSON.stringify({ app: "ovabmk-key", v: 1, x: p.ckp.pub.x, y: p.ckp.pub.y })], { type: "application/octet-stream" })); } }, L("inv_file"))]),
-      h("input", { type: "text", id: "invLink", readonly: true, value: link, class: "small" })]);
+      h("textarea", { id: "myPub", readonly: true, rows: 3, class: "small" }, k),
+      h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", id: "copyPub", onclick: function () { copyText(k); } }, L("ak_copy"))])]);
   }
+  var a = PROF.act && PROF.act.k;
   return h("div", { class: "panel", id: "keyPanel" }, [h("h2", { text: L("key_title") }),
-    p.ckey ? h("p", null, [h("span", { class: "badge ok", text: L("key_ok") }), " ", h("span", { text: L("key_code") + ": " }), h("b", { id: "keyKid", text: p.ckey.kid })]) : h("p", { class: "badge warn", id: "keyKid", text: L("key_none") }),
+    a ? h("p", null, [h("span", { class: "badge ok", text: L("key_ok") }), " ", h("span", { text: L("key_code") + ": " }), h("b", { id: "keyKid", text: PROF.act.kid || "" })]) : h("p", { class: "badge warn", id: "keyKid", text: L("key_none") }),
     h("p", { class: "small muted", text: L("key_hint") })]);
 }
 async function exportCasesUi(delta) {
@@ -355,7 +344,6 @@ async function onCasesImport(file) {
   if (!file) return;
   var text = await file.text(), j = null;
   try { j = JSON.parse(text); } catch (e) { }
-  if (j && j.app === "ovabmk-key") { if (await acceptKey(j)) render(); return; }
   try {
     var r = await importCases(text);
     if (r && r.needPw) {   // старый файл, зашифрованный паролем

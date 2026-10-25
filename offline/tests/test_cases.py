@@ -2,6 +2,7 @@
 import os, sys, io, time, json
 from PIL import Image
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from tok import init_script, token, PUB
 HERE=os.path.dirname(os.path.abspath(__file__)); URL="file://"+os.path.abspath(HERE+"/../dist/OvaBMQ_Offline.html")
 PW="Testpass123!"; XP="Export-pass-77"
 ok=0; fails=[]
@@ -13,7 +14,7 @@ def jpg(color):
     b=io.BytesIO(); Image.new("RGB",(1600,1200),color).save(b,"JPEG"); return {"name":"ph.jpg","mimeType":"image/jpeg","buffer":b.getvalue()}
 def start(br,vp,role="cab",url=None):
     ctx=br.new_context(viewport=vp,accept_downloads=True,is_mobile=vp["width"]<500,has_touch=vp["width"]<500)
-    ctx.add_init_script("window.__NOW='2026-10-24T10:00:00';try{if(!localStorage.getItem('ovabmk_role'))localStorage.setItem('ovabmk_role','%s')}catch(e){}" % role)
+    ctx.add_init_script(init_script(role))
     reqs=[]; ctx.on("request",lambda r: reqs.append(r.url))
     pg=ctx.new_page(); errs=[]
     pg.on("pageerror",lambda e: errs.append(str(e))); pg.on("console",lambda m: errs.append(m.text) if m.type=="error" and "Content Security" not in m.text else None)
@@ -79,19 +80,20 @@ with sync_playwright() as p:
     ics=open(d.value.path(),encoding="utf-8").read()
     check("ics has counts only", "Визитов: " in ics and "1234/5" not in ics and "Навоий" not in ics and "Беременность" not in ics and "778/2" not in ics, ics[:300])
     # без ключа администратора отправить нельзя — понятное объяснение, без паролей
-    pg.click("nav >> text=Настройки"); pg.click("#expCases"); pg.wait_for_selector(".modal >> text=ссылку-приглашение")
-    check("без ключа: просьба открыть ссылку-приглашение", "Отправить администратору" in pg.inner_text(".modal") or "ссылку-приглашение" in pg.inner_text(".modal")); pg.click(".modal button.pri")
+    pg.click("nav >> text=Настройки"); pg.click("#expCases"); pg.wait_for_selector(".modal >> text=нет ключа администратора")
+    check("без ключа администратора: просьба получить новый ключ активации", "новый ключ активации" in pg.inner_text(".modal")); pg.click(".modal button.pri")
     # --- администратор (второе устройство): ключ создаётся сам, приглашение — ссылкой или файлом
     ctxB,pb,reqsB,errsB=start(br,{"width":1100,"height":800},"coord")
-    pb.click("nav >> text=Настройки"); kidB=pb.inner_text("#myKid"); link=pb.input_value("#invLink")
-    check("администратор: ключ создан, ссылка-приглашение", len(kidB)==8 and "/app/#k=" in link, (kidB, link))
-    with pb.expect_download() as dk: pb.click("#invFile")
-    pg.set_input_files("#casesIn",dk.value.path()); pg.wait_for_selector("text=Ключ администратора получен")
-    check("доя: ключ принят, код совпадает", pg.inner_text("#keyKid")==kidB, pg.inner_text("#keyKid"))
-    # ссылка-приглашение: ключ из адреса запоминается до входа и сохраняется после
-    ctxL,pl,_,errsL=start(br,{"width":390,"height":780},"pat",URL+"#k="+link.split("#k=")[1])
-    pl.click("nav >> text=Настройки")
-    check("ссылка-приглашение: ключ сохранён, адрес очищен", pl.inner_text("#keyKid")==kidB and "#k=" not in pl.url, (pl.inner_text("#keyKid"), pl.url)); ctxL.close()
+    pb.click("nav >> text=Настройки"); kidB=pb.inner_text("#myKid"); pubB=pb.evaluate("S.prof.ckp.pub"); txt=pb.input_value("#myPub")
+    check("администратор: ключ шифрования создан, виден для сайта", len(kidB)==8 and txt==pubB["x"]+"."+pubB["y"], (kidB, txt))
+    # доя вводит новый ключ активации с ключом администратора (как выдаст сайт)
+    pg.click("#newKey"); pg.wait_for_selector("#actIn"); pg.fill("#actIn", token("cab", k={"x":pubB["x"],"y":pubB["y"]})); pg.click(".modal button.pri"); pg.wait_for_selector("text=Программа активирована")
+    pg.click("nav >> text=Настройки")
+    check("доя: ключ администратора получен, код совпадает", pg.inner_text("#keyKid")==kidB, pg.inner_text("#keyKid"))
+    # ссылка с сайта #a=<ключ>: активирует новую программу сразу
+    ctxL,pl,_,errsL=start(br,{"width":390,"height":780},None,URL+"#a="+token("pat",k={"x":pubB["x"],"y":pubB["y"]}))
+    pl.wait_for_selector("nav button[data-tab=today]"); pl.click("nav >> text=Настройки")
+    check("ссылка с ключом: патронажная доя, ключ администратора, адрес очищен", pl.inner_text("#keyKid")==kidB and "#a=" not in pl.url and pl.inner_text("#roleNow")=="Патронажная доя (визиты на дом)", (pl.inner_text("#keyKid"), pl.url)); ctxL.close()
     # выгрузка: без паролей
     with pg.expect_download() as d2: pg.click("#expCases")
     check("выгрузка без вопроса о пароле", pg.query_selector("#ex1") is None)
@@ -127,7 +129,11 @@ with sync_playwright() as p:
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
     check("доя: открывается «Сегодня»", pg.query_selector("nav button.on").inner_text()=="Сегодня")
     # режим «специалист»
-    pg.click("nav >> text=Настройки"); pg.click("#roleChange"); pg.wait_for_selector("#roleSel"); pg.select_option("#roleSel","pat"); pg.click(".modal button.pri"); pg.wait_for_timeout(300)
+    pg.click("nav >> text=Настройки")
+    check("должность нельзя выбрать в программе", pg.query_selector("#roleSel") is None and pg.query_selector("#roleChange") is None)
+    pg.click("#newKey"); pg.wait_for_selector("#actIn"); pg.fill("#actIn", "abc.def"); pg.click(".modal button.pri"); pg.wait_for_selector("text=Ключ не подходит")
+    check("поддельный ключ не принимается", "Доя кабинета" in pg.inner_text("#roleNow"))
+    pg.wait_for_timeout(300); pg.click("#newKey"); pg.wait_for_selector("#actIn"); pg.fill("#actIn", token("pat")); pg.click(".modal button.pri"); pg.wait_for_timeout(400)
     check("field mode tabs", [b.inner_text() for b in pg.query_selector_all("nav button")]==["Сегодня","Пациенты","Отчёт","Настройки"], [b.inner_text() for b in pg.query_selector_all("nav button")])
     pg.reload(); pg.fill("#pwA",PW); pg.click("#authGo"); pg.wait_for_selector("#app:not(.hidden)")
     check("field mode persists + starts on cases", pg.query_selector("nav button.on").inner_text()=="Сегодня" and len(pg.query_selector_all("nav button"))==4, [b.inner_text() for b in pg.query_selector_all("nav button")])

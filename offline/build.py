@@ -4,7 +4,7 @@ t = (d/"src/template.html").read_text(encoding="utf-8")
 roles = (d/"roles.json").read_text(encoding="utf-8").replace("</", "<\\/")
 parts = {"/*CSS*/": (d/"src/style.css").read_text(encoding="utf-8"),
          "/*ROLES*/": "var ROLES=" + roles + ";",
-         "/*ANC*/": "var ANC=" + (d/"anc.json").read_text(encoding="utf-8").replace("</", "<\\/") + ";",
+         "/*ANC*/": "var ANC=" + (d/"anc.json").read_text(encoding="utf-8").replace("</", "<\\/") + ";var SIGN_PUB=" + (d/"sign_pub.json").read_text(encoding="utf-8").strip() + ";",
          "/*XLSX*/": (d/"src/xlsx.js").read_text(encoding="utf-8"),
          "/*I18N*/": (d/"src/i18n.js").read_text(encoding="utf-8"),
          "/*CORE*/": (d/"src/core.js").read_text(encoding="utf-8"),

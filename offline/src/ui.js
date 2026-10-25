@@ -400,7 +400,11 @@ function lockNow() { clearTimeout(UI.lockTimer); Vault.lock(); S.senders = {}; S
 async function enter() {
   await loadAll(); $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); armLock();
   // ключ активации хранится и в зашифрованных данных: если браузер очистил настройки, должность восстановится
-  if (!PROF.role && S.prof && S.prof.tok) await applyToken(S.prof.tok, false);
+  // если в хранилище ключ новее, чем в настройках браузера (например, браузер не успел их сохранить) — берём его
+  if (S.prof && S.prof.tok && S.prof.tok !== PROF.tok) {
+    var vp = await verifyToken(S.prof.tok);
+    if (vp && (!PROF.act || (vp.iat || 0) >= (PROF.act.iat || 0))) { await applyToken(S.prof.tok, false); try { localStorage.setItem("ovabmk_tok", PROF.tok); } catch (e) { } }
+  }
   while (!PROF.role) {   // хранилище создано до активации: попросить ключ один раз
     var f = actForm("");
     if (!(await modal(L("act_title"), [f.node], [[L("act_go"), true, "pri"]]))) continue;

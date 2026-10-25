@@ -1,6 +1,6 @@
 // Ключ активации офлайн-программы. Вызывает принятый на сайте сотрудник; должность в офлайн-программе назначил администратор.
 // Ключ подписан закрытым ключом сервера (ECDSA P-256; хранится в закрытой таблице базы, читается от имени сервиса); офлайн-программа проверяет подпись открытым ключом,
-// поэтому подделать должность нельзя. В ключе нет данных пациентов: только должность, Ф.И.О., учреждение и открытый ключ администратора.
+// поэтому подделать должность нельзя. extra — должности на время замещения (до даты), handover — кому передать пациенток на время отпуска. В ключе нет данных пациентов: только должность, Ф.И.О., учреждение и открытый ключ администратора.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -49,12 +49,12 @@ Deno.serve(async (req: Request) => {
     const code = /no_offline_role/.test(m) ? "no_offline_role" : /no_admin_key/.test(m) ? "no_admin_key" : /no_user/.test(m) ? "no_user" : /forbidden|permission/i.test(m) ? "forbidden" : "failed";
     return reply({ error: code }, code === "failed" ? 500 : 403, origin);
   }
-  const d = data as { uid: string; role: string; name: string; pos: string; inst: string; k: { x: string; y: string } | null };
+  const d = data as { uid: string; role: string; name: string; pos: string; inst: string; k: { x: string; y: string } | null; extra?: unknown[]; handover?: unknown[] };
   const now = Math.floor(Date.now() / 1000);
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const sk = await admin.rpc("offline_sign_jwk");
   const jwk = sk.data as JsonWebKey | null;
   if (sk.error || !jwk || !(jwk as { d?: string }).d) return reply({ error: "server_config" }, 500, origin);
-  const token = await signToken({ v: 1, uid: d.uid, role: d.role, name: d.name, pos: d.pos, inst: d.inst, k: d.k, iat: now, exp: now + DAYS * 86400 }, jwk);
+  const token = await signToken({ v: 1, uid: d.uid, role: d.role, name: d.name, pos: d.pos, inst: d.inst, k: d.k, extra: d.extra ?? [], handover: d.handover ?? [], iat: now, exp: now + DAYS * 86400 }, jwk);
   return reply({ token, role: d.role, exp: now + DAYS * 86400 }, 200, origin);
 });

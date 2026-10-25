@@ -406,8 +406,8 @@ function patState(c) {
 function planStates(c) {
   if (!c || c.closed) return [];
   var out = [];
-  if (PROF.role !== "pat") { var a = ancState(c); if (a && a.date) out.push({ src: "anc", s: a }); }
-  if (PROF.role !== "cab") { var p = patState(c); if (p && p.date) out.push({ src: "pat", s: p }); }
+  if (doesAnc()) { var a = ancState(c); if (a && a.date) out.push({ src: "anc", s: a }); }
+  if (doesPat()) { var p = patState(c); if (p && p.date) out.push({ src: "pat", s: p }); }
   return out;
 }
 // ближайшая дата визита: самая ранняя из назначенной вручную и вычисленной по плану
@@ -498,14 +498,34 @@ async function applyToken(tok, fresh) {
   if (fresh) try { localStorage.setItem("ovabmk_tok", PROF.tok); } catch (e) { }
   return { ok: p };
 }
+// должности: основная + временные (замещение отсутствующего — только в даты его отпуска)
+function extraRoles() { var t = todayStr(); return ((PROF.act && PROF.act.extra) || []).filter(function (x) { return x && x.role && x.from <= t && t <= x.until; }); }
+function activeRoles() { var r = PROF.role ? [PROF.role] : []; extraRoles().forEach(function (x) { if (r.indexOf(x.role) < 0) r.push(x.role); }); return r; }
+function hasRole(x) { return activeRoles().indexOf(x) >= 0; }
+function doesAnc() { return hasRole("cab") || hasRole("coord"); }   // визиты беременных по №180
+function doesPat() { return hasRole("pat") || hasRole("coord"); }   // патронаж по №210
 // код ключа: короткий отпечаток открытого ключа координатора (виден в настройках у координатора и у доя — можно сверить)
 async function keyId(pub) { var hsh = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pub.x + "." + pub.y))); return b64(hsh).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase(); }
 // чей ключ использовать: доя — ключ координатора (из ссылки-приглашения), координатор — свой
 function sendKey() { var p = S.prof || {}; if (PROF.role === "coord") return p.ckp && p.ckp.pub; var k = PROF.act && PROF.act.k; return k && k.x ? { x: k.x, y: k.y, kid: PROF.act.kid || "" } : null; }
+// пара ключей устройства: у администратора — для файлов доя (ckp), у доя — для передачи пациенток при замещении (dkp)
 async function ensureCoordKey() {
-  if (PROF.role !== "coord" || (S.prof && S.prof.ckp)) return;
+  var fld = PROF.role === "coord" ? "ckp" : "dkp";
+  if (!PROF.role || (S.prof && S.prof[fld])) return;
   var kp = await Vault.newKeyPair(); kp.pub.kid = await keyId(kp.pub);
-  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckp = kp; await saveProf(np);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np[fld] = kp; await saveProf(np);
+}
+function myKeys() { var p = S.prof || {}; return [p.ckp, p.dkp].filter(Boolean); }
+// передача пациенток при замещении: файл шифруется ключом устройства получателя (из ключа активации), открыть может только он
+async function exportTo(target, cases, kind) {
+  var key = { x: target.k.x, y: target.k.y }; key.kid = await keyId(key);
+  var prof = S.prof || {}, me = (PROF.act && PROF.act.uid) || "", photos = {};
+  var list = cases.map(function (c) { var x = JSON.parse(JSON.stringify(c)); if (!x.owner && me) x.owner = me; return x; });
+  for (var i = 0; i < list.length; i++) for (var a = 0; a < (list[i].visits || []).length; a++) for (var b = 0; b < (list[i].visits[a].ph || []).length; b++) {
+    var id = list[i].visits[a].ph[b], f = await Vault.load("f:" + id); if (f) photos[id] = f.data;
+  }
+  var blob = await Vault.sealPub(key, { fmt: "ovabmk-cases", v: 3, kind: kind, exported: Date.now(), from: { inst: prof.inst || "", unit: prof.unit || "", who: prof.who || "", role: PROF.role, uid: me }, cases: list, photos: photos });
+  return { blob: blob, n: list.length };
 }
 async function exportCases(withPhotos, delta) {
   var key = sendKey(); if (!key) throw new Error("NO_KEY");
@@ -533,8 +553,8 @@ async function openCasesFile(text, pw) {
   var b; try { b = JSON.parse(text); } catch (e) { throw new Error(L("err_not_export")); }
   if (!b || b.app !== "ovabmk-cases" || !b.ct) throw new Error(L("err_not_export"));
   if (b.v === 3) {
-    var my = S.prof && S.prof.ckp;
-    if (!my || (b.kid && my.pub.kid && b.kid !== my.pub.kid)) throw new Error(L("e_other_key"));
+    var my = myKeys().filter(function (k) { return !b.kid || !k.pub.kid || k.pub.kid === b.kid; })[0];
+    if (!my) throw new Error(L("e_other_key"));
     var d = await Vault.openPriv(b, my.priv); if (!d) throw new Error(L("e_other_key"));
     return d;
   }

@@ -68,12 +68,19 @@ window.__MOCK.rpc = {
   admin_save_anc_row: function(){ return window.__ancErr ? {error:{message:window.__ancErr}} : null; },
   admin_offline_roles: function(){ return [{user_id:'%s', offline_role:'cab'}]; }, admin_set_offline_role: function(a){ return a._role==='coord' ? {error:{message:'coord_admin_only'}} : null; },
   admin_get_offline_key: function(){ return window.__AKEY || null; }, admin_set_offline_key: function(){ window.__AKEY = {x:'x', y:'y'}; return null; },
+  my_work_profile: function(){ return {rate:1, rate_req:null, offline_role:'cab', has_pub:false, is_head:false, max:1.5, sub_load:0.3}; },
+  leaves_list: function(){ return window.__LV || []; }, admin_rates: function(){ return [{user_id:'u9', full_name:'Каримова Д.', user_position:'Доя', rate:1, rate_req:1.25, rate_req_at:'2026-10-24T05:00:00Z'}]; },
+  leave_candidates: function(){ return [{user_id:'u5', full_name:'Холова Ж.', user_position:'Доя', rate:1, load_now:1, can:true}, {user_id:'u6', full_name:'Рахимова С.', user_position:'Доя', rate:1.5, load_now:1.5, can:false}]; },
+  request_leave: function(a){ return window.__lvErr ? {error:{message:window.__lvErr}} : 'lv-new'; }, request_rate: function(){ return null; },
+  substitution_consent: function(){ return null; }, decide_leave: function(a){ return window.__decErr ? {error:{message:window.__decErr}} : null; },
+  admin_demand_review: function(){ return null; }, cancel_leave: function(){ return null; }, admin_confirm_rate: function(){ return null; }, set_my_offline_pub: function(){ return null; },
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
 };""" % (A, S_, S_, A)
 
 FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
   'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; },
   'anc-digest': function(){ return {total:4, sent:3, blocked:1, failed:0}; },
+  'leave-notify': function(){ return {total:2, sent:2, failed:0}; },
   'offline-key': function(b){ return window.__offErr ? {error:{message:window.__offErr}} : {token:'eyJ2IjoxfQ.c2ln' + (b && b.uid ? 'U' : ''), role:'cab', exp:1}; } };"""
 
 def page_for(p, sc, w=1280, h=900, scheme="light", search="", now=None, hash="#/folders"):
@@ -806,6 +813,60 @@ with sync_playwright() as p:
     set_lmp(pg, lmp_ago(20))
     ok("помощник на телефоне: нет горизонтальной прокрутки", not hscroll(pg))
     pg.screenshot(path=str(SHOTS / "c_pregnant_mobile.png"), full_page=True); b.close()
+
+    # --- отпуск и замещение
+    LVD = [{"id": "l1", "user_id": "x1", "full_name": "Азимова Н.", "user_position": "Доя", "institution": "СВП №3", "kind": "vacation", "date_from": "2026-11-02", "date_to": "2026-11-20", "note": "",
+            "status": "pending", "decided_by_name": None, "decided_at": None, "decision_note": "", "created_at": "2026-10-20T05:00:00Z", "due_at": "2026-10-22T05:00:00Z", "overdue": True,
+            "escalated_at": "2026-10-23T04:00:00Z", "demanded_at": None, "substitute": S_, "substitute_name": "Сотрудник Тест", "load": 0.3, "consent": "pending", "mine": False, "i_substitute": True, "i_decide": False},
+           {"id": "l2", "user_id": S_, "full_name": "Сотрудник Тест", "user_position": "Доя", "institution": "СВП №3", "kind": "vacation", "date_from": "2026-12-01", "date_to": "2026-12-10", "note": "",
+            "status": "approved", "decided_by_name": "Руководитель", "decided_at": "2026-10-21T05:00:00Z", "decision_note": "", "created_at": "2026-10-19T05:00:00Z", "due_at": "2026-10-21T05:00:00Z", "overdue": False,
+            "escalated_at": None, "demanded_at": None, "substitute": None, "substitute_name": None, "load": None, "consent": None, "mine": True, "i_substitute": False, "i_decide": False}]
+    b, ctx = pg_ctx(S_, ("staff",))
+    ctx.add_init_script("window.__LV=" + json.dumps(LVD) + ";")
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/leaves"); pg.wait_for_selector("#lv_need", timeout=8000); pg.wait_for_timeout(1500)
+    ok("отпуск: пункт меню и значок «ждут действия»", "Отпуск и замещение" in pg.inner_text("nav.nav") and pg.locator("nav.nav a[href='#/leaves'] .nbadge").count() == 1, pg.inner_text("nav.nav"))
+    ok("отпуск: просьба замещать — в «Ждут вашего действия»", "Азимова Н." in pg.inner_text("#lv_need") and "Согласен замещать" in pg.inner_text("#lv_need"), pg.inner_text("body")[:600])
+    pg.click("#lv_need >> text=Согласен замещать"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("отпуск: согласие замещающего и уведомление руководителю", any(x[0] == "rpc" and x[1] == "substitution_consent" and x[2]["_accept"] is True for x in lg) and any(x[0] == "fn" and x[1] == "leave-notify" and x[2]["event"] == "consent" for x in lg))
+    pg.select_option("#lv_rate", "1.25"); pg.click("#lv_rate ~ button"); pg.wait_for_timeout(800)
+    ok("ставка: отправлена на подтверждение", any(x[0] == "rpc" and x[1] == "request_rate" and x[2]["_rate"] == 1.25 for x in pg.evaluate("window.__MOCK.log")))
+    pg.fill("#lv_from", "2026-11-03"); pg.dispatch_event("#lv_from", "change"); pg.fill("#lv_to", "2026-11-14"); pg.dispatch_event("#lv_to", "change"); pg.wait_for_timeout(700)
+    ok("заявка: кандидаты, без запаса — недоступен", pg.locator("#lv_sub option").count() == 3 and pg.evaluate("document.querySelector('#lv_sub option[value=u6]').disabled"), pg.inner_text("#lv_sub"))
+    pg.select_option("#lv_sub", "u5"); pg.fill("#lv_note", "ежегодный"); pg.click("#lv_send"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    rq = [x for x in lg if x[0] == "rpc" and x[1] == "request_leave"]
+    ok("заявка: подана с замещающим и уведомлением", rq and rq[-1][2]["_substitute"] == "u5" and rq[-1][2]["_from"] == "2026-11-03" and any(x[0] == "fn" and x[1] == "leave-notify" and x[2]["event"] == "request" for x in lg), rq)
+    pg.wait_for_timeout(500); pg.fill("#lv_from", "2026-11-03"); pg.fill("#lv_to", "2026-11-14")
+    pg.evaluate("window.__lvErr = 'over_limit'"); pg.click("#lv_send"); pg.wait_for_timeout(400)
+    ok("заявка: превышение 1,5 ставки — понятное сообщение", "1,5 ставки" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    ok("отпуск: своя заявка — отмена есть", "Отменить заявку" in pg.inner_text("#lv_list"))
+    ok("ошибок JS нет (отпуск: сотрудник)", not errs, errs); b.close()
+    LVA = [dict(LVD[0], i_substitute=False, consent="accepted", substitute="u5", substitute_name="Холова Ж.")]
+    b, ctx = pg_ctx(A, ("admin",))
+    ctx.add_init_script("window.__LV=" + json.dumps(LVA) + ";")
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(SITE + "#/leaves"); pg.wait_for_selector("#lv_need", timeout=8000); pg.wait_for_timeout(1500)
+    t = pg.inner_text("#lv_need")
+    ok("отпуск (админ): просроченная заявка и кнопка требования", "не рассмотрено 2 рабочих дня" in t and "Потребовать рассмотрения" in t, t)
+    pg.click("#lv_need >> text=Потребовать рассмотрения"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("отпуск (админ): требование рассмотрения уходит руководителю", any(x[0] == "rpc" and x[1] == "admin_demand_review" for x in lg) and any(x[0] == "fn" and x[1] == "leave-notify" and x[2]["event"] == "demand" for x in lg))
+    ok("ставки (админ): заявка на 1,25", "Каримова Д." in pg.inner_text("#lv_rates") and "1,25" in pg.inner_text("#lv_rates"), pg.inner_text("#lv_rates"))
+    pg.click("#lv_rates >> text=Подтвердить"); pg.wait_for_timeout(300)
+    ok("ставки (админ): подтверждено", any(x[0] == "rpc" and x[1] == "admin_confirm_rate" and x[2]["_ok"] is True for x in pg.evaluate("window.__MOCK.log")))
+    LVH = [dict(LVA[0], overdue=False, i_decide=True)]
+    pg.evaluate("window.__LV = " + json.dumps(LVH)); pg.goto(SITE + "#/overview"); pg.goto(SITE + "#/leaves"); pg.wait_for_selector("#lv_need", timeout=8000); pg.wait_for_timeout(1500)
+    pg.evaluate("window.__decErr = 'no_consent'"); pg.click("#lv_need >> text=Разрешить"); pg.wait_for_timeout(300)
+    ok("решение: без согласия — понятное сообщение", "замещающий должен дать согласие" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.evaluate("window.__decErr = null"); pg.click("#lv_need >> text=Разрешить"); pg.wait_for_timeout(400)
+    lg = pg.evaluate("window.__MOCK.log")
+    ok("решение: разрешено, уведомление сотруднику и замещающему", any(x[0] == "rpc" and x[1] == "decide_leave" and x[2]["_approve"] is True for x in lg) and any(x[0] == "fn" and x[1] == "leave-notify" and x[2]["event"] == "decided" for x in lg))
+    pg.goto(SITE + "#/offline?pub=" + "A" * 43 + "." + "B" * 43); pg.wait_for_timeout(600)
+    sp = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "set_my_offline_pub"]
+    ok("офлайн: ключ устройства из ссылки программы сохранён, адрес очищен", sp and sp[-1][2]["_x"] == "A" * 43 and "pub=" not in pg.url, (sp, pg.url))
+    ok("ошибок JS нет (отпуск: админ)", not errs, errs); b.close()
 
     # --- офлайн-программа: ключ активации с сайта, должность назначает администратор
     b, ctx = pg_ctx(S_, ("staff",))

@@ -6,7 +6,13 @@ var TABS = {
   coord: ["home", "cases", "senders", "files", "data", "search", "ind", "report", "set"]
 };
 var UI = { lockTimer: null, minutes: 0, sel: null };   // 0 — не блокировать автоматически
-function tabs() { return (TABS[PROF.role] || TABS.cab).map(function (k) { return [k, L("nav_" + k)]; }); }
+function tabs() {
+  var all = []; activeRoles().forEach(function (r) { (TABS[r] || []).forEach(function (k) { if (all.indexOf(k) < 0) all.push(k); }); });
+  if (!all.length) all = TABS.cab.slice();
+  // «Настройки» всегда последние
+  all = all.filter(function (k) { return k !== "set"; }).concat(["set"]);
+  return all.map(function (k) { return [k, L("nav_" + k)]; });
+}
 
 function $(id) { return document.getElementById(id); }
 function toast(msg, bad) {
@@ -350,6 +356,7 @@ function setView() {
     h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast(L("bk_done")); } }, L("bk_save")),
       h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, L("bk_restore"))])]));
   root.appendChild(keyPanel());
+  var dk = devKeyPanel(); if (dk) root.appendChild(dk);
   root.appendChild(casesSettings());
   if (PROF.role !== "coord") root.appendChild(profPanel());
   var ml = h("select", { id: "lockSel" }, [[0, L("lock_never")], [5, "5"], [15, "15"], [30, "30"], [60, "60"]].map(function (x) { return h("option", { value: String(x[0]), text: x[0] ? x[1] + " " + L("lock_min") : x[1] }); }));

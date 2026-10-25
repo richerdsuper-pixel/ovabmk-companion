@@ -325,3 +325,5 @@ label.f{font-size:15px;color:var(--ink)}
 .nbadge{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:99px;background:var(--bad,#b3261e);color:#fff;font-size:12px;line-height:20px;text-align:center}
 .fcard.bc-new{border-color:var(--accent)}
 .hidden{display:none!important}
+.lcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.lcard .row input[type=text]{flex:1 1 180px}

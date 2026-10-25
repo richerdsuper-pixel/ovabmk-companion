@@ -97,7 +97,7 @@ function computeNumbers() {
 }
 var NUM_ROWS = { cab: ["preg_total", "preg_t1", "preg_t2", "preg_t3", "preg_lt18", "preg_35plus", "preg_risk", "anc_missed", "anc_due_now", "anc_done_month", "women_total", "scr_annual_need", "scr_cerv_need", "scr_breast_need", "scr_done_month", "visits_month"],
   pat: ["preg_total", "preg_lt18", "preg_35plus", "preg_risk", "pat_preg_missed", "pat_preg_due", "pp_total", "pp_missed", "pp_due", "nb_total", "nb_missed", "nb_due", "pat_done_month", "visits_month"] };
-function numRows() { return PROF.role === "pat" ? NUM_ROWS.pat : PROF.role === "cab" ? NUM_ROWS.cab : NUM_ROWS.cab.concat(NUM_ROWS.pat.filter(function (k) { return NUM_ROWS.cab.indexOf(k) < 0; })); }
+function numRows() { return !doesPat() ? NUM_ROWS.cab : !doesAnc() ? NUM_ROWS.pat : NUM_ROWS.cab.concat(NUM_ROWS.pat.filter(function (k) { return NUM_ROWS.cab.indexOf(k) < 0; })); }
 async function exportNumbers() {
   var p = S.prof || {};
   if (!p.inst) { toast(L("e_prof"), true); return; }
@@ -112,8 +112,39 @@ function profPanel() {
   return h("div", { class: "panel" }, [h("h2", { text: L("prof_title") }), h("p", { class: "small muted", text: L("prof_hint") }),
     h("label", null, [L("f_inst"), inst]), h("label", null, [L("f_unit"), unit]), h("label", null, [L("f_who"), who]), h("div", { class: "bar" }, [btn])]);
 }
+// замещение: передать пациенток замещающей (на время отпуска) и вернуть их после
+function substPanel() {
+  var a = PROF.act || {}, t = todayStr(), items = [];
+  (a.handover || []).filter(function (x) { return x && x.until >= t; }).forEach(function (x) {
+    items.push(h("div", { class: "subst" }, [h("b", { text: L("ho_to", { n: x.to, a: fmtD(x.from), b: fmtD(x.until) }) }), h("p", { class: "small muted", text: L("ho_hint") }),
+      h("button", { class: "pri big wide", type: "button", "data-ho": x.to, onclick: async function () {
+        var cs = activeCases(); if (!cs.length) return toast(L("e_nothing"), true);
+        var r = await exportTo(x, cs, "handover");
+        var how = await shareOrSave("OvaBMQ_topshirish_" + todayStr() + ".ovabmkc", r.blob); if (how !== "cancel") toast(L("ho_done", { n: r.n }));
+      } }, "📦 " + L("ho_btn"))]));
+  });
+  (a.extra || []).filter(function (x) { return x && x.until >= addDays(t, -30); }).forEach(function (x) {
+    var mine = activeCases().filter(function (c) { return x.uid && c.owner === x.uid; });
+    items.push(h("div", { class: "subst" }, [h("b", { text: L("ex_for", { r: L("role_" + x.role), n: x.of, a: fmtD(x.from), b: fmtD(x.until) }) }),
+      h("p", { class: "small muted", text: L("ex_hint", { n: mine.length }) }),
+      x.k && x.k.x ? h("button", { class: "big wide", type: "button", "data-ret": x.of, onclick: async function () {
+        if (!mine.length) return toast(L("e_nothing"), true);
+        var r = await exportTo(x, mine, "return");
+        var how = await shareOrSave("OvaBMQ_qaytarish_" + todayStr() + ".ovabmkc", r.blob); if (how !== "cancel") toast(L("ho_done", { n: r.n }));
+      } }, "↩ " + L("ex_btn", { n: x.of })) : h("p", { class: "small warnc", text: L("ex_nokey", { n: x.of }) })]));
+  });
+  return items.length ? h("div", { class: "panel bigacts", id: "substPanel" }, [h("h2", { text: L("sub_title") })].concat(items)) : null;
+}
+function devKeyPanel() {
+  var k = S.prof && S.prof.dkp; if (!k || PROF.role === "coord") return null;
+  var link = SITE_URL + "#/offline?pub=" + k.pub.x + "." + k.pub.y;
+  return h("div", { class: "panel", id: "devKey" }, [h("h2", { text: L("dk_title") }), h("p", { class: "small muted", text: L("dk_hint") }),
+    h("p", null, [h("span", { text: L("key_code") + ": " }), h("b", { text: k.pub.kid })]),
+    h("a", { class: "btnlink pri", id: "dkLink", href: link, target: "_blank", rel: "noopener", text: L("dk_btn") })]);
+}
 function reportView() {
   var root = h("div"), n = computeNumbers(), p = S.prof || {};
+  var sp = substPanel(); if (sp) root.appendChild(sp);
   if (!p.inst) root.appendChild(h("div", { class: "alert warn" }, [h("b", { text: L("rep_need_prof") })]));
   // главное — две большие кнопки: отправить координатору и числа для сайта
   root.appendChild(h("div", { class: "panel bigacts" }, [
@@ -138,8 +169,8 @@ function exportCasesIcs() {
     var seen = {};
     function once(d) { if (d && !seen[d]) { seen[d] = 1; add(d); } }
     once(c.next);
-    if (PROF.role !== "pat") { var a = ancState(c); if (a) { if (a.kind === "missed" || a.kind === "cur") once(t); ANC.forEach(function (r) { if (!a.done[r.visit_no]) { var f = addDays(c.lmp, r.from_week * 7); if (f > t) once(f); } }); } }
-    if (PROF.role !== "cab") { var p = patState(c); if (p) { if (p.kind === "missed" || p.kind === "cur") once(t); p.items.forEach(function (x) { if (!p.done[x.k] && x.from > t) once(x.from); }); } }
+    if (doesAnc()) { var a = ancState(c); if (a) { if (a.kind === "missed" || a.kind === "cur") once(t); ANC.forEach(function (r) { if (!a.done[r.visit_no]) { var f = addDays(c.lmp, r.from_week * 7); if (f > t) once(f); } }); } }
+    if (doesPat()) { var p = patState(c); if (p) { if (p.kind === "missed" || p.kind === "cur") once(t); p.items.forEach(function (x) { if (!p.done[x.k] && x.from > t) once(x.from); }); } }
   });
   var days = Object.keys(by).sort();
   var L2 = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OvaBMK Offline//RU", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"], stamp = t.replace(/-/g, "") + "T000000Z";
@@ -190,6 +221,7 @@ function roleLangPanel() {
   var a = PROF.act || {};
   return h("div", { class: "panel" }, [h("h2", { text: L("set_role_lang") }),
     h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L("role_" + PROF.role) })]),
+    extraRoles().length ? h("div", { class: "small", id: "extraNow", text: extraRoles().map(function (x) { return L("ex_short", { r: L("role_" + x.role), n: x.of, b: fmtD(x.until) }); }).join("; ") }) : null,
     a.name ? h("div", { class: "small muted", text: a.name + (a.inst ? " · " + a.inst : "") }) : null,
     h("p", { class: "small muted", text: L("role_locked") }),
     h("div", { class: "bar" }, [h("button", { type: "button", id: "newKey", onclick: newKey }, L("act_new"))]),

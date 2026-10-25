@@ -283,7 +283,7 @@
   }
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/indicators", "nav_ind", "ind"],
-      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/offline", "nav_offline", "offline"]];
+      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/leaves", "nav_leaves", "leaves", "lv"], ["#/offline", "nav_offline", "offline"]];
     if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
@@ -312,7 +312,8 @@
     if (route === "/pregnant") return pregnantView();
     if (route === "/broadcasts") return broadcastsView();
     if (route === "/tasks") return tasksView();
-    if (route === "/offline") return offlineView();
+    if (route === "/leaves") return leavesView();
+    if (route.indexOf("/offline") === 0) { var pq = /[?&]pub=([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})/.exec(route); if (pq) return registerPub(pq[1], pq[2]); return offlineView(); }
     if (route === "/mahallas") return canSummary() ? mahallasView() : forbidden("mahallas");
     if (route === "/admin/institutions") return isAdmin() ? institutionsView() : forbidden("institutions");
     if (route === "/admin/requests") return isAdmin() ? requestsView() : forbidden("requests");
@@ -1467,8 +1468,127 @@
     toast(t("bc_notify_done", { sent: r.data.sent, total: r.data.total, blocked: (r.data.blocked || 0) + (r.data.failed || 0) })); return r.data;
   }
   async function loadBadges() {
-    var a = await sb.rpc("my_broadcasts"), b = await sb.rpc("my_tasks");
-    S.badge = { bc: (a.data || []).filter(function (x) { return !x.viewed; }).length, tk: (b.data || []).filter(function (x) { return !x.done_at; }).length };
+    var a = await sb.rpc("my_broadcasts"), b = await sb.rpc("my_tasks"), c = await sb.rpc("leaves_list");
+    S.badge = { bc: (a.data || []).filter(function (x) { return !x.viewed; }).length, tk: (b.data || []).filter(function (x) { return !x.done_at; }).length, lv: leaveActionCount(c.data || []) };
+  }
+  // что ждёт моего действия: согласие на замещение, рассмотрение, просроченная заявка (администратору)
+  function leaveActionCount(list) { return list.filter(function (x) { return (x.i_substitute && x.consent === "pending" && x.status === "pending") || x.i_decide; }).length; }
+
+  // --- отпуск и замещение
+  var RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5];
+  function rateTxt(r) { return r == null ? "—" : String(+r).replace(".", ","); }
+  async function leaveNotify(id, event) { var r = await callFn("leave-notify", { id: id, event: event }); if (!r.error && r.data && r.data.sent) toast(t("lv_notified", { n: r.data.sent })); }
+  function leaveCard(x) {
+    var st = x.status === "pending" ? (x.overdue ? ["bad", t("lv_overdue")] : ["warn", t("lv_pending")]) : x.status === "approved" ? ["ok", t("lv_approved")] : ["", t("lv_" + x.status)];
+    var acts = h("div", { class: "row" });
+    if (x.i_substitute && x.consent === "pending" && x.status === "pending") {
+      acts.appendChild(h("button", { class: "btn sm pri", type: "button", text: t("lv_agree"), onclick: async function () {
+        var r = await sb.rpc("substitution_consent", { _leave: x.id, _accept: true });
+        if (r.error) { toast(/over_limit/.test(errMsg(r.error)) ? t("lv_over_limit") : t("err_action", { msg: errMsg(r.error) })); return; }
+        toast(t("u_saved")); await leaveNotify(x.id, "consent"); leavesView();
+      } }));
+      acts.appendChild(h("button", { class: "btn sm", type: "button", text: t("lv_refuse"), onclick: async function () {
+        var r = await sb.rpc("substitution_consent", { _leave: x.id, _accept: false });
+        if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; } toast(t("u_saved")); leavesView();
+      } }));
+    }
+    if (x.i_decide) {
+      var note = h("input", { type: "text", maxlength: "500", placeholder: t("lv_dec_note"), "aria-label": t("lv_dec_note") });
+      var dec = function (ok) { return async function () {
+        var r = await sb.rpc("decide_leave", { _id: x.id, _approve: ok, _note: note.value });
+        if (r.error) { toast(/no_consent/.test(errMsg(r.error)) ? t("lv_no_consent") : t("err_action", { msg: errMsg(r.error) })); return; }
+        toast(t("u_saved")); await leaveNotify(x.id, "decided"); leavesView();
+      }; };
+      acts.appendChild(note);
+      acts.appendChild(h("button", { class: "btn sm pri", type: "button", text: t("lv_approve"), onclick: dec(true) }));
+      acts.appendChild(h("button", { class: "btn sm", type: "button", text: t("lv_reject"), onclick: dec(false) }));
+    }
+    if (isAdmin() && x.status === "pending" && x.overdue && !x.mine) {
+      acts.appendChild(h("button", { class: "btn sm danger", type: "button", text: x.demanded_at ? t("lv_demand_again") : t("lv_demand"), onclick: async function () {
+        var r = await sb.rpc("admin_demand_review", { _id: x.id });
+        if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; }
+        await leaveNotify(x.id, "demand"); toast(t("lv_demand_done")); leavesView();
+      } }));
+    }
+    if (x.mine && (x.status === "pending" || x.status === "approved") && x.date_to >= todayS()) {
+      var cb = h("button", { class: "btn sm", type: "button", text: t("lv_cancel") });
+      armed(cb, t("lv_cancel_q"), async function () { var r = await sb.rpc("cancel_leave", { _id: x.id }); if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; } toast(t("u_saved")); leavesView(); });
+      acts.appendChild(cb);
+    }
+    return h("div", { class: "lcard stack", "data-id": x.id, style: "gap:6px" },
+      h("div", { class: "row", style: "justify-content:space-between;align-items:center" }, h("b", { text: x.full_name + (x.user_position ? " · " + x.user_position : "") }), h("span", { class: "chip " + st[0], text: st[1] })),
+      h("div", { class: "small", text: t("lv_kind_" + x.kind) + ": " + fmtDate(x.date_from) + " – " + fmtDate(x.date_to) + (x.institution ? " · " + x.institution : "") }),
+      x.substitute_name ? h("div", { class: "small", text: t("lv_sub_line", { n: x.substitute_name, l: rateTxt(x.load), c: t("lv_consent_" + x.consent) }) }) : h("div", { class: "small mute", text: t("lv_no_sub") }),
+      x.note ? h("div", { class: "small mute", text: x.note }) : null,
+      x.status === "pending" ? h("div", { class: "small mute", text: t("lv_due", { d: fmtDate(x.due_at) }) + (x.demanded_at ? " · " + t("lv_demanded", { d: fmtDate(x.demanded_at) }) : "") }) : null,
+      x.decided_at ? h("div", { class: "small mute", text: t("lv_decided", { n: x.decided_by_name || "", d: fmtDate(x.decided_at) }) + (x.decision_note ? " — " + x.decision_note : "") }) : null,
+      acts.childNodes.length ? acts : null);
+  }
+  async function leavesView() {
+    var my = renderToken;
+    shell("leaves", loadingBox());
+    var wp = await sb.rpc("my_work_profile"), lst = await sb.rpc("leaves_list"), rates = isAdmin() ? await sb.rpc("admin_rates") : null;
+    if (my !== renderToken) return;
+    if (lst.error) return shell("leaves", failBox(lst.error));
+    var w = wp.data || {}, list = lst.data || [];
+    S.badge = S.badge || {}; S.badge.lv = leaveActionCount(list);
+    // моя ставка
+    var rsel = h("select", { id: "lv_rate", "aria-label": t("lv_rate") }, RATES.map(function (r) { return h("option", { value: String(r), text: rateTxt(r) }); }));
+    rsel.value = String(w.rate_req != null ? +w.rate_req : w.rate != null ? +w.rate : 1);
+    var rateP = h("section", { class: "panel stack" }, h("h2", { text: t("lv_rate_title") }),
+      h("p", { class: "small", text: t("lv_rate_now", { r: rateTxt(w.rate) }) + (w.rate_req != null ? " · " + t("lv_rate_wait", { r: rateTxt(w.rate_req) }) : "") }),
+      h("div", { class: "row" }, rsel, h("button", { class: "btn sm", type: "button", text: t("lv_rate_send"), onclick: async function () {
+        var r = await sb.rpc("request_rate", { _rate: +rsel.value }); if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; } toast(t("lv_rate_sent")); leavesView();
+      } })), h("p", { class: "mute small", text: t("lv_rate_hint", { m: rateTxt(w.max || 1.5), l: rateTxt(w.sub_load || 0.3) }) }));
+    // новая заявка
+    var kind = h("select", { id: "lv_kind" }, ["vacation", "sick", "study", "other"].map(function (k) { return h("option", { value: k, text: t("lv_kind_" + k) }); }));
+    var from = h("input", { type: "date", id: "lv_from", min: todayS() }), to = h("input", { type: "date", id: "lv_to", min: todayS() });
+    var note = h("input", { type: "text", id: "lv_note", maxlength: "500", placeholder: t("lv_note") });
+    var sub = h("select", { id: "lv_sub" }, h("option", { value: "", text: t("lv_sub_none") }));
+    var candSeq = 0;
+    async function loadCands() {
+      var mySeq = ++candSeq;
+      if (!from.value || !to.value || to.value < from.value) { sub.textContent = ""; sub.appendChild(h("option", { value: "", text: t("lv_sub_none") })); return; }
+      var c = await sb.rpc("leave_candidates", { _from: from.value, _to: to.value });
+      if (mySeq !== candSeq) return;
+      sub.textContent = ""; sub.appendChild(h("option", { value: "", text: t("lv_sub_none") }));
+      (c.data || []).forEach(function (u) { sub.appendChild(h("option", { value: u.user_id, disabled: !u.can, text: u.full_name + (u.user_position ? " · " + u.user_position : "") + " — " + t("lv_load", { a: rateTxt(u.load_now) }) + (u.can ? "" : " " + t("lv_full")) })); });
+    }
+    from.addEventListener("change", loadCands); to.addEventListener("change", loadCands);
+    var send = h("button", { class: "btn pri", type: "button", id: "lv_send", text: t("lv_send"), onclick: async function () {
+      if (!from.value || !to.value || to.value < from.value) { toast(t("lv_bad_dates")); return; }
+      send.disabled = true;
+      var r = await sb.rpc("request_leave", { _kind: kind.value, _from: from.value, _to: to.value, _note: note.value, _substitute: sub.value || null });
+      send.disabled = false;
+      if (r.error) { var m = errMsg(r.error); toast(/overlap/.test(m) ? t("lv_overlap") : /over_limit/.test(m) ? t("lv_over_limit") : /too_long/.test(m) ? t("lv_too_long") : t("err_action", { msg: m })); return; }
+      toast(t("lv_sent")); await leaveNotify(r.data, "request"); leavesView();
+    } });
+    var form = h("section", { class: "panel stack" }, h("h2", { text: t("lv_new") }), h("p", { class: "mute small", text: t("lv_new_hint") }),
+      h("div", { class: "row", style: "flex-wrap:wrap;gap:8px" }, h("label", { class: "f" }, t("lv_kind"), kind), h("label", { class: "f" }, t("lv_from"), from), h("label", { class: "f" }, t("lv_to"), to)),
+      h("label", { class: "f" }, t("lv_sub"), sub), h("label", { class: "f" }, t("lv_note"), note), h("div", null, send));
+    var parts = [];
+    var need = list.filter(function (x) { return (x.i_substitute && x.consent === "pending" && x.status === "pending") || x.i_decide || (isAdmin() && x.overdue && !x.mine); });
+    if (need.length) parts.push(h("section", { class: "panel stack", id: "lv_need" }, h("h2", { text: t("lv_need", { n: need.length }) }), need.map(leaveCard)));
+    parts.push(rateP, form);
+    var rest = list.filter(function (x) { return need.indexOf(x) < 0; });
+    parts.push(h("section", { class: "panel stack", id: "lv_list" }, h("h2", { text: t("lv_list") }), rest.length ? rest.map(leaveCard) : h("p", { class: "mute", text: t("lv_empty") })));
+    if (rates && !rates.error) {
+      var pend = (rates.data || []).filter(function (u) { return u.rate_req != null; });
+      parts.push(h("section", { class: "panel stack", id: "lv_rates" }, h("h2", { text: t("lv_rates_title", { n: pend.length }) }),
+        pend.length ? pend.map(function (u) {
+          return h("div", { class: "row", style: "align-items:center;gap:8px;flex-wrap:wrap" }, h("span", { text: u.full_name + " · " + (u.user_position || "") + ": " + rateTxt(u.rate) + " → " }), h("b", { text: rateTxt(u.rate_req) }),
+            h("button", { class: "btn sm pri", type: "button", text: t("lv_confirm"), onclick: async function () { var r = await sb.rpc("admin_confirm_rate", { _uid: u.user_id, _ok: true }); if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; } toast(t("u_saved")); leavesView(); } }),
+            h("button", { class: "btn sm", type: "button", text: t("lv_reject"), onclick: async function () { var r = await sb.rpc("admin_confirm_rate", { _uid: u.user_id, _ok: false }); if (r.error) { toast(t("err_action", { msg: errMsg(r.error) })); return; } toast(t("u_saved")); leavesView(); } }));
+        }) : h("p", { class: "mute small", text: t("lv_rates_none") })));
+    }
+    shell("leaves", h("div", { class: "stack" }, parts));
+  }
+  // офлайн-программа присылает открытый ключ устройства: #/offline?pub=x.y — сохраняем (нужно для передачи пациенток при замещении)
+  async function registerPub(x, y) {
+    var r = await sb.rpc("set_my_offline_pub", { _x: x, _y: y });
+    try { history.replaceState(null, "", location.pathname + location.search + "#/offline"); } catch (e) {}
+    toast(r.error ? t("err_action", { msg: errMsg(r.error) }) : t("off_pub_done"));
+    return offlineView();
   }
   function armed(btn, label, fn) {   // кнопка с подтверждением вторым нажатием
     btn.addEventListener("click", function () {

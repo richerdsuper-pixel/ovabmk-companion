@@ -5,7 +5,7 @@ var CATS = [CAT_PREG, CAT_PP, CAT_NB, "Ребёнок до 1 года", "Реб�
 var CAT_KEY = { "Беременная": "cat_preg", "Родильница": "cat_pp", "Новорождённый": "cat_nb", "Ребёнок до 1 года": "cat_ch1", "Ребёнок 1–5 лет": "cat_ch5", "Женщина (скрининг)": "cat_woman", "Женщина (ВОП/диспансер)": "cat_disp", "Другое": "cat_other" };
 function catName(x) { return CAT_KEY[x] ? L(CAT_KEY[x]) : x; }
 // категории, с которыми работает должность (остальные можно выбрать, но в списке они ниже)
-function roleCats() { return PROF.role === "cab" ? [CAT_PREG, CAT_WOMAN, "Другое"] : PROF.role === "pat" ? [CAT_PREG, CAT_PP, CAT_NB, "Другое"] : CATS; }
+function roleCats() { if (hasRole("coord")) return CATS; var out = []; if (hasRole("cab")) out.push(CAT_PREG, CAT_WOMAN); if (hasRole("pat")) out.push(CAT_PREG, CAT_PP, CAT_NB); out.push("Другое"); return out.filter(function (x, i) { return out.indexOf(x) === i; }); }
 var RISKS = ["pe", "gdm", "fgr", "ptb", "vte", "pph", "anemia", "other"];
 var CS = { q: "", cat: "" };
 // в списках пациент обозначается номером карты; Ф.И.О. необязательно (чтобы личные данные не копировались лишний раз)
@@ -148,8 +148,8 @@ async function editCase(c) {
 // что можно отметить в визите: пункты плана (визиты по №180, патронаж по №210), ещё не выполненные
 function visitItems(c) {
   var out = [], a = ancState(c), p = patState(c), t = todayStr();
-  if (a && PROF.role !== "pat") ANC.forEach(function (r) { if (!a.done[r.visit_no]) out.push({ k: "anc:" + r.visit_no, pre: (a.missed[0] === r) || a.cur === r }); });
-  if (p && PROF.role !== "cab") p.items.forEach(function (x) { if (!p.done[x.k]) out.push({ k: x.k, pre: (p.missed[0] === x) || p.cur === x }); });
+  if (a && doesAnc()) ANC.forEach(function (r) { if (!a.done[r.visit_no]) out.push({ k: "anc:" + r.visit_no, pre: (a.missed[0] === r) || a.cur === r }); });
+  if (p && doesPat()) p.items.forEach(function (x) { if (!p.done[x.k]) out.push({ k: x.k, pre: (p.missed[0] === x) || p.cur === x }); });
   if (PROF.role === "coord") { var first = out.filter(function (x) { return x.pre; })[0]; out.forEach(function (x) { x.pre = x === first; }); }
   return out;
 }
@@ -191,7 +191,7 @@ function ancBlock(c) {
   var out = [h("div", { class: "bar" }, [h("b", { text: L("anc_term", { w: s.wk.w, d: s.wk.d }) }), h("span", { class: "small muted", text: L("anc_edd", { d: fmtD(s.edd) }) })])];
   if (s.wk.w > 42) out.push(h("p", { class: "small warnc", text: L("anc_over42") }));
   if ((c.risk || []).length) out.push(h("div", { class: "small bad-t", text: L("risk_group") + ": " + c.risk.map(function (k) { return L("risk_" + k); }).join(", ") }));
-  if (PROF.role !== "pat") {
+  if (doesAnc()) {
     s.missed.forEach(function (r) { out.push(one(L("anc_missed"), r, "bad")); });
     if (s.cur) out.push(one(L("anc_now"), s.cur, "warn"));
     else if (s.nxt) out.push(one(L("anc_next"), s.nxt, ""));
@@ -199,7 +199,7 @@ function ancBlock(c) {
   return h("div", { class: "ancbox" }, out);
 }
 function patBlock(c) {
-  var p = patState(c); if (!p || PROF.role === "cab") return null;
+  var p = patState(c); if (!p || !doesPat()) return null;
   return h("div", { class: "ancbox" }, [h("b", { text: L("pat_title") })].concat(p.items.map(function (x) {
     var st = p.done[x.k] ? ["ok", L("pat_done")] : x.to < todayStr() ? ["bad", L("pat_missed")] : x.from <= todayStr() ? ["warn", L("pat_now")] : ["mute", L("pat_later")];
     return h("div", { class: "anc " + (st[0] === "ok" ? "" : st[0]) }, [h("span", { class: "badge " + st[0], text: st[1] }), " ", h("b", { text: itemLabel(x.k) }), h("div", { class: "small muted", text: fmtD(x.from) + "–" + fmtD(x.to) })]);
@@ -238,7 +238,7 @@ async function openCase(c) {
   });
   var ag = ageGroup(c);
   var rows = [[L("f_cat"), catName(c.cat)], [L("f_byear"), c.byear ? c.byear + " (" + L("ag_" + ag) + ")" : ""], [L("f_birth"), fmtD(c.birth)], [L("f_disch"), fmtD(c.disch)], [L("f_mah"), c.mahalla], [L("f_street"), c.street], [L("f_phone"), c.phone], [L("f_diag"), c.diag], [L("f_note"), c.note], [L("f_src"), c.src]].filter(function (r) { return r[1]; });
-  var canMark = (ancState(c) && PROF.role !== "pat") || (patState(c) && PROF.role !== "cab");
+  var canMark = (ancState(c) && doesAnc()) || (patState(c) && doesPat());
   var act = await modal(caseTitle(c), [h("div", { class: "kvlist" }, rows.map(function (r) { return h("div", null, [h("span", { class: "k", text: r[0] }), h("span", { class: "v", text: r[1] })]); })),
     h("div", { class: "bar" }, [dueBadge(c), caseNext(c) && !c.closed ? h("span", { class: "small muted", text: L("next_visit_d", { d: fmtD(caseNext(c)) }) }) : null]),
     ancBlock(c), patBlock(c), scrBlock(c),
@@ -279,7 +279,7 @@ function casesView() {
     h("div", { class: "card" }, [h("b", { text: String(cnt.tomorrow) }), h("span", { text: L("k_tomorrow") })]),
     h("div", { class: "card" }, [h("b", { text: String(cnt.week + cnt.later + cnt.none + cnt.late + cnt.today + cnt.tomorrow) }), h("span", { text: L("k_watch") })])]));
   var ac = ancCounts();
-  if (ac.total && PROF.role !== "pat") root.appendChild(h("p", { class: "small muted", id: "anc_counts", text: L("anc_counts", { t: ac.total, m: ac.missed, c: ac.cur }) }));
+  if (ac.total && doesAnc()) root.appendChild(h("p", { class: "small muted", id: "anc_counts", text: L("anc_counts", { t: ac.total, m: ac.missed, c: ac.cur }) }));
   if (banner) root.appendChild(banner);
   var catSel = h("select", { id: "c_catf" }, [h("option", { value: "", text: L("all_cats") })].concat(CATS.map(function (x) { return h("option", { value: x, text: catName(x) }); })));
   catSel.value = CS.cat || "";

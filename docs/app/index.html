@@ -11,11 +11,11 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <title>OvaBMQ — Офлайн</title>
-<style>:root{--bg:#f4f6f5;--card:#fff;--ink:#17211e;--mute:#64736e;--line:#dde4e1;--acc:#0b6e5c;--acc-ink:#fff;--ok:#1b7f4b;--okbg:#e3f4ea;--bad:#b3261e;--badbg:#fbe7e5;--warn:#8a5a00;--warnbg:#fff1d6}
-@media(prefers-color-scheme:dark){:root{--bg:#101614;--card:#18211e;--ink:#e6efec;--mute:#93a49e;--line:#2a3733;--acc:#3fb59b;--acc-ink:#07201a;--ok:#5ccf93;--okbg:#17332480;--bad:#ff8a80;--badbg:#3a1a18;--warn:#f2c066;--warnbg:#3a2c0e}}
+<style>:root{--bg:#EEF3FA;--card:#FFFFFF;--ink:#111827;--mute:#4B5563;--line:#D9E1EE;--acc:#1E40AF;--acc-ink:#FFFFFF;--head:#1E3A8A;--band:#1E40AF;--gold:#F5B843;--ok:#1B6E3A;--okbg:#DFF3E6;--bad:#B42318;--badbg:#FDE8E6;--warn:#8A5200;--warnbg:#FFF1CC;--shadow:0 1px 2px rgba(18,33,47,.05),0 4px 14px rgba(18,33,47,.05);--wavefill:%23EEF3FA}
+@media(prefers-color-scheme:dark){:root{--bg:#0C1324;--card:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--acc:#8FB0F5;--acc-ink:#0A1A3F;--head:#B9CCF7;--band:#172A66;--ok:#7BD99A;--okbg:#14301F;--bad:#F2877C;--badbg:#3A1A17;--warn:#F2B34A;--warnbg:#3A2D10;--shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.3)}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:16.5px/1.5 "Nunito",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
 .hidden{display:none!important}
 .hidden-ta{position:fixed;left:-999px;top:0}
 h1{font-size:1.5rem;margin:.2em 0 .4em}h2{font-size:1.1rem;margin:.1em 0 .6em}h3{margin:0 0 .6em}
@@ -113,12 +113,36 @@ details.opt{margin:.6rem 0;color:var(--mute)}details.opt summary{cursor:pointer;
 .bad-t{color:var(--bad)}
 .bigacts{display:flex;flex-direction:column;gap:.35rem}.bigacts .wide{width:100%;min-height:52px;font-size:1.05rem;text-align:left}.bigacts p{margin:0 0 .5rem}
 .alert.ok{background:var(--okbg);color:var(--ok)}
+.subst{border-top:1px solid var(--line);padding-top:.6rem;margin-top:.4rem;display:flex;flex-direction:column;gap:.35rem}
+.btnlink.pri{display:inline-block;background:var(--acc);color:var(--acc-ink);padding:.55rem .9rem;border-radius:10px;text-decoration:none;font-weight:600}
+
+/* оформление как у сайта: синяя шапка с орнаментом, золотая волна, эмблема «мать и дитя», белые «таблетки» меню */
+h1,h2,h3{color:var(--head);font-weight:900;letter-spacing:-.01em}
+header.top{position:sticky;top:0;z-index:5;border:0;color:#fff;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.15'%3E%3Cpath d='M28 4l7 17 17 7-17 7-7 17-7-17-17-7 17-7z' stroke-width='1.3'/%3E%3Cpath d='M28 14l14 14-14 14-14-14z'/%3E%3C/g%3E%3C/svg%3E") 0 0/56px 56px,var(--band);
+  box-shadow:0 4px 0 var(--gold),0 8px 18px rgba(0,0,0,.12)}
+.brand{padding:.7rem 1rem .2rem;gap:.6rem}
+.brand .bl{display:flex;align-items:center;gap:.6rem;min-width:0}
+.brand b{font-size:1.15rem;font-weight:900;color:#fff;letter-spacing:.01em}
+.emb{flex:none;width:40px;height:40px;border-radius:50%;background:#fff;color:#1E40AF;display:grid;place-items:center;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.emb svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.emb .em-child{fill:var(--gold);stroke:#C2410C}
+header.top .lock{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.55);border-radius:99px;font-weight:800}
+nav button{color:#fff;font-weight:800;font-size:1rem;padding:.55rem 1rem;min-height:42px}
+nav button.on{background:#fff;color:var(--head);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+@media(prefers-color-scheme:dark){nav button.on{background:#fff;color:#1E3A8A}}
+.panel,.card,.case{box-shadow:var(--shadow);border-radius:16px}
+button{font-weight:700;border-radius:10px}
+.authbox h1{color:var(--head)}
+#auth{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cpath d='M36 10l6 20 20 6-20 6-6 20-6-20-20-6 20-6z' fill='none' stroke='%231E40AF' stroke-opacity='.06'/%3E%3C/svg%3E") 0 0/72px 72px}
+.brand b{font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header.top .lock{padding:.25rem .7rem;min-height:34px;font-size:.8rem;white-space:nowrap}
 </style>
 </head>
 <body>
 <div id="auth" class="hidden"></div>
 <div id="app" class="hidden">
-  <header class="top"><div class="brand"><b id="brandName">OvaBMQ · Офлайн</b><button class="sm lock" id="lockBtn" type="button" onclick="lockNow()">🔒 Заблокировать</button></div><nav id="nav"></nav></header>
+  <header class="top"><div class="brand"><span class="bl"><span class="emb" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="13" cy="8" r="4"/><path d="M6 28c0-8 2-13 7-13 3 0 5 2 6 4"/><circle class="em-child" cx="21" cy="21" r="3"/><path d="M16 25c2 2 7 2 9-1"/></svg></span><b id="brandName">OvaBMQ · Офлайн</b></span><button class="sm lock" id="lockBtn" type="button" onclick="lockNow()">🔒 Заблокировать</button></div><nav id="nav"></nav></header>
   <main id="main"></main>
 </div>
 <input type="file" id="casesIn" class="hidden" accept=".ovabmkc,application/octet-stream">
@@ -482,6 +506,9 @@ function Ld(ru, uz) { return PROF.lang === "ru" || !uz ? ru : PROF.lang === "uzl
 
 var TR = {
   ru: {
+    sub_title: "Замещение", ho_to: "Вас замещает {n} с {a} по {b}", ho_hint: "Перед отпуском передайте ей пациенток: файл зашифрован её ключом и откроется только в её программе. Отправьте файл ей в Telegram.", ho_btn: "Передать пациенток замещающей", ho_done: "Файл готов (пациенток: {n})",
+    ex_for: "Вы замещаете: {r} за {n}, {a}–{b}", ex_hint: "Пациенток от неё у вас: {n}. После её возвращения отправьте их обратно — со всеми вашими визитами.", ex_btn: "Вернуть пациенток: {n}", ex_nokey: "{n} ещё не сохранила ключ устройства на сайте — вернуть файлом пока нельзя.", ex_short: "временно: {r} за {n} до {b}",
+    dk_title: "Ключ устройства", dk_hint: "Нужен, чтобы при замещении вам могли передать пациенток. Нажмите кнопку один раз — откроется сайт и сохранит ключ (войдите на сайт, если попросит).", dk_btn: "Сохранить ключ устройства на сайте",
     act_title: "Активация программы", act_hint: "Вставьте ключ активации. Его выдаёт сайт после того, как администратор подтвердил вас и назначил должность: войдите на сайт → «Офлайн-программа» → «Получить ключ». По ключу программа сама откроет нужные разделы.", act_ph: "Ключ активации", act_site: "Открыть сайт", act_go: "Активировать", act_bad: "Ключ не подходит: скопируйте его с сайта полностью.", act_expired: "Срок ключа истёк — получите новый на сайте.", act_new: "Ввести новый ключ активации", act_done: "Программа активирована: {r}", role_locked: "Должность назначает администратор на сайте. Чтобы сменить её, получите на сайте новый ключ активации.",
     ak_title: "Ключ шифрования администратора", ak_hint: "Скопируйте этот ключ и вставьте на сайте: раздел «Офлайн-программа» → «Мой ключ шифрования». После этого ключи активации доя будут содержать его, и их файлы будут открываться только у вас.", ak_copy: "Скопировать ключ",
     key_title: "Ключ администратора", key_ok: "получен", key_none: "не получен", key_code: "код ключа", key_hint: "Файлы «Отправить администратору» шифруются ключом администратора: открыть их может только его программа. Паролей вводить не нужно. Ключ приходит вместе с ключом активации с сайта.", key_need: "В вашем ключе активации нет ключа администратора. Получите на сайте новый ключ активации (после того как администратор сохранил свой ключ) и введите его в «Настройках».", key_got: "Ключ администратора получен (код {k})", key_pending: "Ключ администратора принят — войдите, и он сохранится.",
@@ -556,6 +583,9 @@ var TR = {
     prof_title: "Кто я", prof_hint: "Учреждение и бригада попадают в файлы выгрузки, чтобы администратор видел, от кого они.", f_inst: "Учреждение", f_unit: "Бригада / участок", f_who: "Ф.И.О. (необязательно)", ph_inst: "Например: СВП №3", ph_unit: "Например: бригада 2, махалля Қўшон", ph_who: "Ф.И.О."
   },
   uz: {
+    sub_title: "Ўрнини босиш", ho_to: "Ўрнингизни {n} {a} дан {b} гача босади", ho_hint: "Таътилдан олдин беморларни унга беринг: файл унинг калити билан шифрланган ва фақат унинг дастурида очилади. Файлни унга Telegramда юборинг.", ho_btn: "Беморларни ўрнини босувчига бериш", ho_done: "Файл тайёр (беморлар: {n})",
+    ex_for: "Сиз ўрнини босасиз: {r}, {n} ўрнига, {a}–{b}", ex_hint: "Ундан келган беморлар: {n}. У қайтгандан кейин уларни барча ташрифларингиз билан қайтариб юборинг.", ex_btn: "Беморларни қайтариш: {n}", ex_nokey: "{n} ҳали сайтда қурилма калитини сақламаган — файл билан қайтариб бўлмайди.", ex_short: "вақтинча: {r}, {n} ўрнига {b} гача",
+    dk_title: "Қурилма калити", dk_hint: "Ўрнини босишда сизга беморларни бериш учун керак. Тугмани бир марта босинг — сайт очилади ва калитни сақлайди (сўраса, сайтга киринг).", dk_btn: "Қурилма калитини сайтда сақлаш",
     act_title: "Дастурни фаоллаштириш", act_hint: "Фаоллаштириш калитини қўйинг. Уни сайт беради — администратор сизни тасдиқлаб, лавозим белгилагандан кейин: сайтга киринг → «Офлайн-дастур» → «Калитни олиш». Калит бўйича дастур керакли бўлимларни ўзи очади.", act_ph: "Фаоллаштириш калити", act_site: "Сайтни очиш", act_go: "Фаоллаштириш", act_bad: "Калит мос эмас: уни сайтдан тўлиқ нусха олинг.", act_expired: "Калит муддати тугаган — сайтдан янгисини олинг.", act_new: "Янги фаоллаштириш калитини киритиш", act_done: "Дастур фаоллаштирилди: {r}", role_locked: "Лавозимни сайтда администратор белгилайди. Ўзгартириш учун сайтдан янги фаоллаштириш калитини олинг.",
     ak_title: "Администраторнинг шифрлаш калити", ak_hint: "Бу калитдан нусха олиб, сайтга қўйинг: «Офлайн-дастур» бўлими → «Менинг шифрлаш калитим». Шундан кейин доялар фаоллаштириш калитида у бўлади ва уларнинг файллари фақат сизда очилади.", ak_copy: "Калитдан нусха олиш",
     key_title: "Администратор калити", key_ok: "олинган", key_none: "олинмаган", key_code: "калит коди", key_hint: "«Администраторга юбориш» файллари администратор калити билан шифрланади: уларни фақат унинг дастури очади. Парол киритиш шарт эмас. Калит сайтдан фаоллаштириш калити билан бирга келади.", key_need: "Фаоллаштириш калитингизда администратор калити йўқ. Сайтдан янги фаоллаштириш калитини олинг (администратор ўз калитини сақлагандан кейин) ва уни «Созламалар»да киритинг.", key_got: "Администратор калити олинди (код {k})", key_pending: "Администратор калити қабул қилинди — киринг, у сақланади.",
@@ -1039,8 +1069,8 @@ function patState(c) {
 function planStates(c) {
   if (!c || c.closed) return [];
   var out = [];
-  if (PROF.role !== "pat") { var a = ancState(c); if (a && a.date) out.push({ src: "anc", s: a }); }
-  if (PROF.role !== "cab") { var p = patState(c); if (p && p.date) out.push({ src: "pat", s: p }); }
+  if (doesAnc()) { var a = ancState(c); if (a && a.date) out.push({ src: "anc", s: a }); }
+  if (doesPat()) { var p = patState(c); if (p && p.date) out.push({ src: "pat", s: p }); }
   return out;
 }
 // ближайшая дата визита: самая ранняя из назначенной вручную и вычисленной по плану
@@ -1131,14 +1161,34 @@ async function applyToken(tok, fresh) {
   if (fresh) try { localStorage.setItem("ovabmk_tok", PROF.tok); } catch (e) { }
   return { ok: p };
 }
+// должности: основная + временные (замещение отсутствующего — только в даты его отпуска)
+function extraRoles() { var t = todayStr(); return ((PROF.act && PROF.act.extra) || []).filter(function (x) { return x && x.role && x.from <= t && t <= x.until; }); }
+function activeRoles() { var r = PROF.role ? [PROF.role] : []; extraRoles().forEach(function (x) { if (r.indexOf(x.role) < 0) r.push(x.role); }); return r; }
+function hasRole(x) { return activeRoles().indexOf(x) >= 0; }
+function doesAnc() { return hasRole("cab") || hasRole("coord"); }   // визиты беременных по №180
+function doesPat() { return hasRole("pat") || hasRole("coord"); }   // патронаж по №210
 // код ключа: короткий отпечаток открытого ключа координатора (виден в настройках у координатора и у доя — можно сверить)
 async function keyId(pub) { var hsh = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pub.x + "." + pub.y))); return b64(hsh).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase(); }
 // чей ключ использовать: доя — ключ координатора (из ссылки-приглашения), координатор — свой
 function sendKey() { var p = S.prof || {}; if (PROF.role === "coord") return p.ckp && p.ckp.pub; var k = PROF.act && PROF.act.k; return k && k.x ? { x: k.x, y: k.y, kid: PROF.act.kid || "" } : null; }
+// пара ключей устройства: у администратора — для файлов доя (ckp), у доя — для передачи пациенток при замещении (dkp)
 async function ensureCoordKey() {
-  if (PROF.role !== "coord" || (S.prof && S.prof.ckp)) return;
+  var fld = PROF.role === "coord" ? "ckp" : "dkp";
+  if (!PROF.role || (S.prof && S.prof[fld])) return;
   var kp = await Vault.newKeyPair(); kp.pub.kid = await keyId(kp.pub);
-  var np = JSON.parse(JSON.stringify(S.prof || {})); np.ckp = kp; await saveProf(np);
+  var np = JSON.parse(JSON.stringify(S.prof || {})); np[fld] = kp; await saveProf(np);
+}
+function myKeys() { var p = S.prof || {}; return [p.ckp, p.dkp].filter(Boolean); }
+// передача пациенток при замещении: файл шифруется ключом устройства получателя (из ключа активации), открыть может только он
+async function exportTo(target, cases, kind) {
+  var key = { x: target.k.x, y: target.k.y }; key.kid = await keyId(key);
+  var prof = S.prof || {}, me = (PROF.act && PROF.act.uid) || "", photos = {};
+  var list = cases.map(function (c) { var x = JSON.parse(JSON.stringify(c)); if (!x.owner && me) x.owner = me; return x; });
+  for (var i = 0; i < list.length; i++) for (var a = 0; a < (list[i].visits || []).length; a++) for (var b = 0; b < (list[i].visits[a].ph || []).length; b++) {
+    var id = list[i].visits[a].ph[b], f = await Vault.load("f:" + id); if (f) photos[id] = f.data;
+  }
+  var blob = await Vault.sealPub(key, { fmt: "ovabmk-cases", v: 3, kind: kind, exported: Date.now(), from: { inst: prof.inst || "", unit: prof.unit || "", who: prof.who || "", role: PROF.role, uid: me }, cases: list, photos: photos });
+  return { blob: blob, n: list.length };
 }
 async function exportCases(withPhotos, delta) {
   var key = sendKey(); if (!key) throw new Error("NO_KEY");
@@ -1166,8 +1216,8 @@ async function openCasesFile(text, pw) {
   var b; try { b = JSON.parse(text); } catch (e) { throw new Error(L("err_not_export")); }
   if (!b || b.app !== "ovabmk-cases" || !b.ct) throw new Error(L("err_not_export"));
   if (b.v === 3) {
-    var my = S.prof && S.prof.ckp;
-    if (!my || (b.kid && my.pub.kid && b.kid !== my.pub.kid)) throw new Error(L("e_other_key"));
+    var my = myKeys().filter(function (k) { return !b.kid || !k.pub.kid || k.pub.kid === b.kid; })[0];
+    if (!my) throw new Error(L("e_other_key"));
     var d = await Vault.openPriv(b, my.priv); if (!d) throw new Error(L("e_other_key"));
     return d;
   }
@@ -1203,7 +1253,7 @@ var CATS = [CAT_PREG, CAT_PP, CAT_NB, "Ребёнок до 1 года", "Реб�
 var CAT_KEY = { "Беременная": "cat_preg", "Родильница": "cat_pp", "Новорождённый": "cat_nb", "Ребёнок до 1 года": "cat_ch1", "Ребёнок 1–5 лет": "cat_ch5", "Женщина (скрининг)": "cat_woman", "Женщина (ВОП/диспансер)": "cat_disp", "Другое": "cat_other" };
 function catName(x) { return CAT_KEY[x] ? L(CAT_KEY[x]) : x; }
 // категории, с которыми работает должность (остальные можно выбрать, но в списке они ниже)
-function roleCats() { return PROF.role === "cab" ? [CAT_PREG, CAT_WOMAN, "Другое"] : PROF.role === "pat" ? [CAT_PREG, CAT_PP, CAT_NB, "Другое"] : CATS; }
+function roleCats() { if (hasRole("coord")) return CATS; var out = []; if (hasRole("cab")) out.push(CAT_PREG, CAT_WOMAN); if (hasRole("pat")) out.push(CAT_PREG, CAT_PP, CAT_NB); out.push("Другое"); return out.filter(function (x, i) { return out.indexOf(x) === i; }); }
 var RISKS = ["pe", "gdm", "fgr", "ptb", "vte", "pph", "anemia", "other"];
 var CS = { q: "", cat: "" };
 // в списках пациент обозначается номером карты; Ф.И.О. необязательно (чтобы личные данные не копировались лишний раз)
@@ -1346,8 +1396,8 @@ async function editCase(c) {
 // что можно отметить в визите: пункты плана (визиты по №180, патронаж по №210), ещё не выполненные
 function visitItems(c) {
   var out = [], a = ancState(c), p = patState(c), t = todayStr();
-  if (a && PROF.role !== "pat") ANC.forEach(function (r) { if (!a.done[r.visit_no]) out.push({ k: "anc:" + r.visit_no, pre: (a.missed[0] === r) || a.cur === r }); });
-  if (p && PROF.role !== "cab") p.items.forEach(function (x) { if (!p.done[x.k]) out.push({ k: x.k, pre: (p.missed[0] === x) || p.cur === x }); });
+  if (a && doesAnc()) ANC.forEach(function (r) { if (!a.done[r.visit_no]) out.push({ k: "anc:" + r.visit_no, pre: (a.missed[0] === r) || a.cur === r }); });
+  if (p && doesPat()) p.items.forEach(function (x) { if (!p.done[x.k]) out.push({ k: x.k, pre: (p.missed[0] === x) || p.cur === x }); });
   if (PROF.role === "coord") { var first = out.filter(function (x) { return x.pre; })[0]; out.forEach(function (x) { x.pre = x === first; }); }
   return out;
 }
@@ -1389,7 +1439,7 @@ function ancBlock(c) {
   var out = [h("div", { class: "bar" }, [h("b", { text: L("anc_term", { w: s.wk.w, d: s.wk.d }) }), h("span", { class: "small muted", text: L("anc_edd", { d: fmtD(s.edd) }) })])];
   if (s.wk.w > 42) out.push(h("p", { class: "small warnc", text: L("anc_over42") }));
   if ((c.risk || []).length) out.push(h("div", { class: "small bad-t", text: L("risk_group") + ": " + c.risk.map(function (k) { return L("risk_" + k); }).join(", ") }));
-  if (PROF.role !== "pat") {
+  if (doesAnc()) {
     s.missed.forEach(function (r) { out.push(one(L("anc_missed"), r, "bad")); });
     if (s.cur) out.push(one(L("anc_now"), s.cur, "warn"));
     else if (s.nxt) out.push(one(L("anc_next"), s.nxt, ""));
@@ -1397,7 +1447,7 @@ function ancBlock(c) {
   return h("div", { class: "ancbox" }, out);
 }
 function patBlock(c) {
-  var p = patState(c); if (!p || PROF.role === "cab") return null;
+  var p = patState(c); if (!p || !doesPat()) return null;
   return h("div", { class: "ancbox" }, [h("b", { text: L("pat_title") })].concat(p.items.map(function (x) {
     var st = p.done[x.k] ? ["ok", L("pat_done")] : x.to < todayStr() ? ["bad", L("pat_missed")] : x.from <= todayStr() ? ["warn", L("pat_now")] : ["mute", L("pat_later")];
     return h("div", { class: "anc " + (st[0] === "ok" ? "" : st[0]) }, [h("span", { class: "badge " + st[0], text: st[1] }), " ", h("b", { text: itemLabel(x.k) }), h("div", { class: "small muted", text: fmtD(x.from) + "–" + fmtD(x.to) })]);
@@ -1436,7 +1486,7 @@ async function openCase(c) {
   });
   var ag = ageGroup(c);
   var rows = [[L("f_cat"), catName(c.cat)], [L("f_byear"), c.byear ? c.byear + " (" + L("ag_" + ag) + ")" : ""], [L("f_birth"), fmtD(c.birth)], [L("f_disch"), fmtD(c.disch)], [L("f_mah"), c.mahalla], [L("f_street"), c.street], [L("f_phone"), c.phone], [L("f_diag"), c.diag], [L("f_note"), c.note], [L("f_src"), c.src]].filter(function (r) { return r[1]; });
-  var canMark = (ancState(c) && PROF.role !== "pat") || (patState(c) && PROF.role !== "cab");
+  var canMark = (ancState(c) && doesAnc()) || (patState(c) && doesPat());
   var act = await modal(caseTitle(c), [h("div", { class: "kvlist" }, rows.map(function (r) { return h("div", null, [h("span", { class: "k", text: r[0] }), h("span", { class: "v", text: r[1] })]); })),
     h("div", { class: "bar" }, [dueBadge(c), caseNext(c) && !c.closed ? h("span", { class: "small muted", text: L("next_visit_d", { d: fmtD(caseNext(c)) }) }) : null]),
     ancBlock(c), patBlock(c), scrBlock(c),
@@ -1477,7 +1527,7 @@ function casesView() {
     h("div", { class: "card" }, [h("b", { text: String(cnt.tomorrow) }), h("span", { text: L("k_tomorrow") })]),
     h("div", { class: "card" }, [h("b", { text: String(cnt.week + cnt.later + cnt.none + cnt.late + cnt.today + cnt.tomorrow) }), h("span", { text: L("k_watch") })])]));
   var ac = ancCounts();
-  if (ac.total && PROF.role !== "pat") root.appendChild(h("p", { class: "small muted", id: "anc_counts", text: L("anc_counts", { t: ac.total, m: ac.missed, c: ac.cur }) }));
+  if (ac.total && doesAnc()) root.appendChild(h("p", { class: "small muted", id: "anc_counts", text: L("anc_counts", { t: ac.total, m: ac.missed, c: ac.cur }) }));
   if (banner) root.appendChild(banner);
   var catSel = h("select", { id: "c_catf" }, [h("option", { value: "", text: L("all_cats") })].concat(CATS.map(function (x) { return h("option", { value: x, text: catName(x) }); })));
   catSel.value = CS.cat || "";
@@ -1653,7 +1703,7 @@ function computeNumbers() {
 }
 var NUM_ROWS = { cab: ["preg_total", "preg_t1", "preg_t2", "preg_t3", "preg_lt18", "preg_35plus", "preg_risk", "anc_missed", "anc_due_now", "anc_done_month", "women_total", "scr_annual_need", "scr_cerv_need", "scr_breast_need", "scr_done_month", "visits_month"],
   pat: ["preg_total", "preg_lt18", "preg_35plus", "preg_risk", "pat_preg_missed", "pat_preg_due", "pp_total", "pp_missed", "pp_due", "nb_total", "nb_missed", "nb_due", "pat_done_month", "visits_month"] };
-function numRows() { return PROF.role === "pat" ? NUM_ROWS.pat : PROF.role === "cab" ? NUM_ROWS.cab : NUM_ROWS.cab.concat(NUM_ROWS.pat.filter(function (k) { return NUM_ROWS.cab.indexOf(k) < 0; })); }
+function numRows() { return !doesPat() ? NUM_ROWS.cab : !doesAnc() ? NUM_ROWS.pat : NUM_ROWS.cab.concat(NUM_ROWS.pat.filter(function (k) { return NUM_ROWS.cab.indexOf(k) < 0; })); }
 async function exportNumbers() {
   var p = S.prof || {};
   if (!p.inst) { toast(L("e_prof"), true); return; }
@@ -1668,8 +1718,39 @@ function profPanel() {
   return h("div", { class: "panel" }, [h("h2", { text: L("prof_title") }), h("p", { class: "small muted", text: L("prof_hint") }),
     h("label", null, [L("f_inst"), inst]), h("label", null, [L("f_unit"), unit]), h("label", null, [L("f_who"), who]), h("div", { class: "bar" }, [btn])]);
 }
+// замещение: передать пациенток замещающей (на время отпуска) и вернуть их после
+function substPanel() {
+  var a = PROF.act || {}, t = todayStr(), items = [];
+  (a.handover || []).filter(function (x) { return x && x.until >= t; }).forEach(function (x) {
+    items.push(h("div", { class: "subst" }, [h("b", { text: L("ho_to", { n: x.to, a: fmtD(x.from), b: fmtD(x.until) }) }), h("p", { class: "small muted", text: L("ho_hint") }),
+      h("button", { class: "pri big wide", type: "button", "data-ho": x.to, onclick: async function () {
+        var cs = activeCases(); if (!cs.length) return toast(L("e_nothing"), true);
+        var r = await exportTo(x, cs, "handover");
+        var how = await shareOrSave("OvaBMQ_topshirish_" + todayStr() + ".ovabmkc", r.blob); if (how !== "cancel") toast(L("ho_done", { n: r.n }));
+      } }, "📦 " + L("ho_btn"))]));
+  });
+  (a.extra || []).filter(function (x) { return x && x.until >= addDays(t, -30); }).forEach(function (x) {
+    var mine = activeCases().filter(function (c) { return x.uid && c.owner === x.uid; });
+    items.push(h("div", { class: "subst" }, [h("b", { text: L("ex_for", { r: L("role_" + x.role), n: x.of, a: fmtD(x.from), b: fmtD(x.until) }) }),
+      h("p", { class: "small muted", text: L("ex_hint", { n: mine.length }) }),
+      x.k && x.k.x ? h("button", { class: "big wide", type: "button", "data-ret": x.of, onclick: async function () {
+        if (!mine.length) return toast(L("e_nothing"), true);
+        var r = await exportTo(x, mine, "return");
+        var how = await shareOrSave("OvaBMQ_qaytarish_" + todayStr() + ".ovabmkc", r.blob); if (how !== "cancel") toast(L("ho_done", { n: r.n }));
+      } }, "↩ " + L("ex_btn", { n: x.of })) : h("p", { class: "small warnc", text: L("ex_nokey", { n: x.of }) })]));
+  });
+  return items.length ? h("div", { class: "panel bigacts", id: "substPanel" }, [h("h2", { text: L("sub_title") })].concat(items)) : null;
+}
+function devKeyPanel() {
+  var k = S.prof && S.prof.dkp; if (!k || PROF.role === "coord") return null;
+  var link = SITE_URL + "#/offline?pub=" + k.pub.x + "." + k.pub.y;
+  return h("div", { class: "panel", id: "devKey" }, [h("h2", { text: L("dk_title") }), h("p", { class: "small muted", text: L("dk_hint") }),
+    h("p", null, [h("span", { text: L("key_code") + ": " }), h("b", { text: k.pub.kid })]),
+    h("a", { class: "btnlink pri", id: "dkLink", href: link, target: "_blank", rel: "noopener", text: L("dk_btn") })]);
+}
 function reportView() {
   var root = h("div"), n = computeNumbers(), p = S.prof || {};
+  var sp = substPanel(); if (sp) root.appendChild(sp);
   if (!p.inst) root.appendChild(h("div", { class: "alert warn" }, [h("b", { text: L("rep_need_prof") })]));
   // главное — две большие кнопки: отправить координатору и числа для сайта
   root.appendChild(h("div", { class: "panel bigacts" }, [
@@ -1694,8 +1775,8 @@ function exportCasesIcs() {
     var seen = {};
     function once(d) { if (d && !seen[d]) { seen[d] = 1; add(d); } }
     once(c.next);
-    if (PROF.role !== "pat") { var a = ancState(c); if (a) { if (a.kind === "missed" || a.kind === "cur") once(t); ANC.forEach(function (r) { if (!a.done[r.visit_no]) { var f = addDays(c.lmp, r.from_week * 7); if (f > t) once(f); } }); } }
-    if (PROF.role !== "cab") { var p = patState(c); if (p) { if (p.kind === "missed" || p.kind === "cur") once(t); p.items.forEach(function (x) { if (!p.done[x.k] && x.from > t) once(x.from); }); } }
+    if (doesAnc()) { var a = ancState(c); if (a) { if (a.kind === "missed" || a.kind === "cur") once(t); ANC.forEach(function (r) { if (!a.done[r.visit_no]) { var f = addDays(c.lmp, r.from_week * 7); if (f > t) once(f); } }); } }
+    if (doesPat()) { var p = patState(c); if (p) { if (p.kind === "missed" || p.kind === "cur") once(t); p.items.forEach(function (x) { if (!p.done[x.k] && x.from > t) once(x.from); }); } }
   });
   var days = Object.keys(by).sort();
   var L2 = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OvaBMK Offline//RU", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"], stamp = t.replace(/-/g, "") + "T000000Z";
@@ -1746,6 +1827,7 @@ function roleLangPanel() {
   var a = PROF.act || {};
   return h("div", { class: "panel" }, [h("h2", { text: L("set_role_lang") }),
     h("div", { class: "bar" }, [h("span", { text: L("role_now") + ": " }), h("b", { id: "roleNow", text: L("role_" + PROF.role) })]),
+    extraRoles().length ? h("div", { class: "small", id: "extraNow", text: extraRoles().map(function (x) { return L("ex_short", { r: L("role_" + x.role), n: x.of, b: fmtD(x.until) }); }).join("; ") }) : null,
     a.name ? h("div", { class: "small muted", text: a.name + (a.inst ? " · " + a.inst : "") }) : null,
     h("p", { class: "small muted", text: L("role_locked") }),
     h("div", { class: "bar" }, [h("button", { type: "button", id: "newKey", onclick: newKey }, L("act_new"))]),
@@ -1760,7 +1842,13 @@ var TABS = {
   coord: ["home", "cases", "senders", "files", "data", "search", "ind", "report", "set"]
 };
 var UI = { lockTimer: null, minutes: 0, sel: null };   // 0 — не блокировать автоматически
-function tabs() { return (TABS[PROF.role] || TABS.cab).map(function (k) { return [k, L("nav_" + k)]; }); }
+function tabs() {
+  var all = []; activeRoles().forEach(function (r) { (TABS[r] || []).forEach(function (k) { if (all.indexOf(k) < 0) all.push(k); }); });
+  if (!all.length) all = TABS.cab.slice();
+  // «Настройки» всегда последние
+  all = all.filter(function (k) { return k !== "set"; }).concat(["set"]);
+  return all.map(function (k) { return [k, L("nav_" + k)]; });
+}
 
 function $(id) { return document.getElementById(id); }
 function toast(msg, bad) {
@@ -2104,6 +2192,7 @@ function setView() {
     h("div", { class: "bar" }, [h("button", { class: "pri", type: "button", onclick: async function () { download("OvaBMQ_kopiya_" + todayStr() + ".ovabmk", await Vault.exportBackup()); toast(L("bk_done")); } }, L("bk_save")),
       h("button", { type: "button", onclick: function () { $("restoreIn").click(); } }, L("bk_restore"))])]));
   root.appendChild(keyPanel());
+  var dk = devKeyPanel(); if (dk) root.appendChild(dk);
   root.appendChild(casesSettings());
   if (PROF.role !== "coord") root.appendChild(profPanel());
   var ml = h("select", { id: "lockSel" }, [[0, L("lock_never")], [5, "5"], [15, "15"], [30, "30"], [60, "60"]].map(function (x) { return h("option", { value: String(x[0]), text: x[0] ? x[1] + " " + L("lock_min") : x[1] }); }));

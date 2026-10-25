@@ -7,9 +7,9 @@ _k = ec.generate_private_key(ec.SECP256R1())
 def _b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 _n = _k.public_key().public_numbers()
 PUB = {"x": _b64(_n.x.to_bytes(32, "big")), "y": _b64(_n.y.to_bytes(32, "big"))}
-def token(role, name="Тест Доя", inst="СВП №1", k=None, days=30, iat=None):
+def token(role, name="Тест Доя", inst="СВП №1", k=None, days=30, iat=None, extra=None, handover=None, uid=None):
     now = int(iat if iat is not None else time.time())
-    body = _b64(json.dumps({"v": 1, "uid": "u-" + role, "role": role, "name": name, "pos": "Доя", "inst": inst, "k": k, "iat": now, "exp": now + days * 86400}, ensure_ascii=False).encode())
+    body = _b64(json.dumps({"v": 1, "uid": uid or ("u-" + role), "role": role, "name": name, "pos": "Доя", "inst": inst, "k": k, "extra": extra or [], "handover": handover or [], "iat": now, "exp": now + days * 86400}, ensure_ascii=False).encode())
     r, s = decode_dss_signature(_k.sign(body.encode(), ec.ECDSA(hashes.SHA256())))
     return body + "." + _b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
 def init_script(role=None, k=None, now="2026-10-24T10:00:00"):

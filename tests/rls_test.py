@@ -517,6 +517,14 @@ expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",
           out="0")
 
+# PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
+expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",
+          r"""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname in ('public', 'private') and p.provolatile in ('s', 'i')
+                and (p.prosrc ~* '(insert\s+into|update\s+public|delete\s+from)' or p.prosrc ilike '%log_event%')""", out="0")
+expect_ok("ключ активации: функции VOLATILE (пишут в журнал)",
+          "select string_agg(provolatile::text, '') from pg_proc where proname in ('my_offline_activation', 'admin_offline_activation')", out="vv")
+
 failed = [n for n, r in results if not r]
 print(f"\n{len(results) - len(failed)}/{len(results)} passed")
 sys.exit(1 if failed else 0)

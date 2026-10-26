@@ -43,7 +43,7 @@
 ## Проверки
 
 ```sh
-sh tests/reset_local.sh && python3 tests/rls_test.py      # права доступа, заявки, показатели и удаление сотрудников, учреждения, области видимости, махалли и бригады, рассылки и задания, график визитов по приказу №180 (записей о беременных на сервере нет), активация офлайн-программы, ставки, отпуска и замещение, 384 проверки
+sh tests/reset_local.sh && python3 tests/rls_test.py      # права доступа, заявки, показатели и удаление сотрудников, учреждения, области видимости, махалли и бригады, рассылки и задания, график визитов по приказу №180 (записей о беременных на сервере нет), активация офлайн-программы, ставки, отпуска и замещение, 386 проверок
 node --experimental-strip-types tests/telegram_test.ts     # подпись Telegram, 12 проверок
 python3 tests/ui_test.py                                   # интерфейс на тестовых данных, 294 проверки
 python3 offline/tests/test_offline.py; python3 offline/tests/test_cases.py; python3 offline/tests/test_anc.py; python3 offline/tests/test_doya.py; python3 offline/tests/test_subst.py   # офлайн-программа: 46 + 41 + 20 + 47 + 12 проверок

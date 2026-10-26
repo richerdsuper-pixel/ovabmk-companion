@@ -12,6 +12,7 @@
     "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
 
   // ------------------------------------------------------------------ state
+  var WIDGET = /[?&]widget=1\b/.test(location.search);
   var S = {
     lang: (function () { var l = store("ovabmk-lang"); return l === "uz" || l === "uzl" ? l : "ru"; })(),
     session: null,
@@ -27,7 +28,8 @@
     loginError: "",
     invite: readInvite(),
     req: "",                  // заявка без приглашения: "" | none | pending | rejected
-    tgUser: null              // подписанные данные Telegram для повторной отправки заявки (действуют 1 час)
+    tgUser: null,             // подписанные данные Telegram для повторной отправки заявки (действуют 1 час)
+    widget: WIDGET            // запасной вход через окно Telegram (?widget=1)
   };
 
   function store(k, v) {
@@ -79,6 +81,7 @@
   function fmtDate(s) { if (!s) return ""; var d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString(S.lang === "uz" ? "uz-Cyrl" : S.lang === "uzl" ? "uz-Latn" : "ru-RU"); }
   function fmtDT(s) { var d = new Date(s); return isNaN(d) ? "" : d.toLocaleString(S.lang === "uz" ? "uz-Cyrl" : S.lang === "uzl" ? "uz-Latn" : "ru-RU", { dateStyle: "short", timeStyle: "short" }); }
   function fmtSize(n) { if (!n && n !== 0) return ""; return n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + " КБ" : (n / 1024 / 1024).toFixed(1) + " МБ"; }
+  function fmtPhone(p) { var d = String(p || "").replace(/\D/g, ""); return d.length === 12 ? "+" + d.slice(0, 3) + " " + d.slice(3, 5) + " " + d.slice(5, 8) + " " + d.slice(8, 10) + " " + d.slice(10) : p; }
   function errMsg(e) { return (e && (e.message || e.error_description || e.error)) || String(e); }
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -224,7 +227,7 @@
       S.roles = (r.data || []).map(function (x) { return x.role; }).filter(function (x) { return ROLES.indexOf(x) >= 0; });
       S.roleState = S.roles.length ? "ok" : "none";
       if (S.roleState === "ok") {
-        var p = await sb.from("profiles").select("full_name, position, institution_id").eq("id", uid).maybeSingle();
+        var p = await sb.from("profiles").select("full_name, position, institution_id, positions").eq("id", uid).maybeSingle();
         S.profile = p.data || null;
         var sc = await sb.from("scopes").select("kind, institution_id, position_code").eq("user_id", uid);
         S.scopes = { institutions: [], positions: [] };
@@ -328,7 +331,192 @@
   function loadingBox() { return h("p", { class: "boot", text: t("loading") }); }
   function failBox(e) { return h("div", { class: "notice bad", text: t("load_failed", { msg: errMsg(e) }) }); }
 
+  // ------------------------------------------------------------------ простой вход: анкета → бот «Старт» (функция tg-bot)
+  // Билет хранится в браузере (poll — секрет, start — код для ссылки на бота). Окно входа Telegram не нужно.
+  var RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5], MAX_RATE = 1.5;
+  var TK_KEY = "ovabmk-ticket", TK = null, pollTimer = null;
+  function tkLoad() { try { var x = JSON.parse(store(TK_KEY) || "null"); return x && x.poll ? x : null; } catch (e) { return null; } }
+  function tkSave(x) { TK = x; try { if (x) localStorage.setItem(TK_KEY, JSON.stringify(x)); else localStorage.removeItem(TK_KEY); } catch (e) {} }
+  function botLink(start) { return "https://t.me/" + CFG.botName + "?start=" + start; }
+  async function botCall(body) {
+    try {
+      var res = await fetch(CFG.supabaseUrl + "/functions/v1/tg-bot", { method: "POST",
+        headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey }, body: JSON.stringify(body) });
+      var d = {}; try { d = await res.json(); } catch (e) {}
+      return res.ok ? { data: d } : { error: d.error || "generic" };
+    } catch (e) { return { error: "network" }; }
+  }
+  function suErr(code) { return window.I18N.ru["su_err_" + code] ? t("su_err_" + code) : window.I18N.ru["err_" + code] ? t("err_" + code) : t("err_generic"); }
+  function readLoginParam() {
+    var m = /[?&]login=([A-Za-z0-9_-]{20,64})\b/.exec(location.search);
+    if (!m) return null;
+    history.replaceState(null, "", location.pathname + location.hash);
+    return m[1];
+  }
+  function stopPoll() { if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
+  function schedulePoll(ms) { stopPoll(); pollTimer = setTimeout(function () { pollTicket(false); }, ms); }
+  async function pollTicket(manual) {
+    if (!TK || S.session) return;
+    var r = await botCall({ action: "poll", poll: TK.poll });
+    if (!TK || S.session) return;
+    if (r.error) { if (manual) toast(suErr(r.error)); schedulePoll(15000); return; }
+    var st = r.data.state;
+    if (st === "login" && r.data.token_hash) {
+      var v = await sb.auth.verifyOtp({ token_hash: r.data.token_hash, type: "email" });
+      if (v.error) v = await sb.auth.verifyOtp({ token_hash: r.data.token_hash, type: "magiclink" });
+      if (v.error) { S.loginError = t("err_generic"); render(); return; }
+      tkSave(null); clearInvite(); stopPoll(); onSession(v.data.session); return;
+    }
+    if (st === "expired" || st === "used") { tkSave(null); stopPoll(); if (manual || TK === null) render(); return; }
+    var prev = TK.state; TK.state = st; tkSave(TK);
+    if (prev !== st || manual) render();
+    if (st === "wait") schedulePoll(Date.now() - (TK.at || 0) < 15 * 60000 ? 2500 : 30000);
+    else if (st === "pending") schedulePoll(60000);
+    else stopPoll();   // rejected | need_form
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && TK && !S.session && (TK.state === "wait" || TK.state === "pending")) pollTicket(false); });
+
+  async function startTicket(form, btn, msg) {
+    if (btn) btn.disabled = true;
+    var r = await botCall({ action: "start", form: form || null, invite: S.invite || null });
+    if (btn) btn.disabled = false;
+    if (r.error) { if (msg) { msg.textContent = ""; msg.appendChild(h("div", { class: "notice bad", text: suErr(r.error) })); } else toast(suErr(r.error)); return; }
+    tkSave({ poll: r.data.poll, start: r.data.start, at: Date.now(), state: "wait", reg: !!form });
+    render(); schedulePoll(3000);
+  }
+
   function loginView() {
+    if (S.widget) return widgetLoginView();
+    if (TK && TK.state === "wait") return tkWaitView();
+    if (TK && TK.state === "pending") return tkPendingView();
+    if (TK && TK.state === "rejected") return tkRejectedView();
+    if (S.invite) return inviteView();
+    return signupView(TK && TK.state === "need_form");
+  }
+  function steps(cur) {
+    return h("ol", { class: "su-steps" }, ["su_step1", "su_step2", "su_step3"].map(function (k, i) {
+      return h("li", { class: i + 1 === cur ? "on" : i + 1 < cur ? "done" : "" }, h("span", { class: "n", text: String(i + 1) }), h("span", { text: t(k) }));
+    }));
+  }
+  function tgButton(start, label) {
+    return h("a", { class: "btn pri big tg-go", href: botLink(start), target: "_blank", rel: "noopener", text: "✈️ " + t(label || "su_open_tg") });
+  }
+  function tkWaitView() {
+    return h("section", { class: "panel login stack" },
+      steps(2),
+      h("h2", { text: t("su_wait_title") }),
+      h("ol", { class: "su-how" }, h("li", { text: t("su_wait_1") }), h("li", null, t("su_wait_2a"), " ", h("b", { text: t("su_start_btn") }), " ", t("su_wait_2b")), h("li", { text: t("su_wait_3") })),
+      h("div", null, tgButton(TK.start)),
+      h("p", { class: "boot small", text: t("su_waiting") }),
+      S.loginError ? h("div", { class: "notice bad", text: S.loginError }) : null,
+      h("div", { class: "row" },
+        h("button", { class: "btn", type: "button", text: t("su_check"), onclick: function () { pollTicket(true); } }),
+        h("button", { class: "btn", type: "button", text: t("su_back"), onclick: function () { stopPoll(); tkSave(null); render(); } })));
+  }
+  function tkPendingView() {
+    return h("section", { class: "panel login stack" },
+      steps(3),
+      h("h2", { text: t("su_pending_title") }),
+      h("div", { class: "notice ok" }, t("su_pending"), h("p", { text: t("su_pending_long") })),
+      h("div", { class: "row" },
+        h("button", { class: "btn pri", type: "button", text: t("su_check"), onclick: function () { pollTicket(true); } }),
+        h("button", { class: "btn", type: "button", text: t("su_edit"), onclick: function () { stopPoll(); tkSave(null); render(); } })));
+  }
+  function tkRejectedView() {
+    return h("section", { class: "panel login stack" },
+      h("h2", { text: t("r_title") }),
+      h("div", { class: "notice warn", text: t("r_rejected") }),
+      h("div", null, h("button", { class: "btn pri", type: "button", text: t("su_again"), onclick: function () { tkSave(null); render(); } })));
+  }
+  function inviteView() {
+    var btn = h("button", { class: "btn pri big", type: "button", text: "✈️ " + t("su_invite_btn") }), msg = h("div");
+    btn.addEventListener("click", function () { startTicket(null, btn, msg); });
+    return h("section", { class: "panel login stack" }, h("h2", { text: t("login_title") }),
+      h("div", { class: "notice ok", text: t("invite_note") }), msg, h("div", null, btn));
+  }
+
+  // Анкета: ФИО, телефон, место работы, должности со ставками. Папки — по должностям (docs/positions.js).
+  function signupView(needForm) {
+    var nameIn = h("input", { type: "text", maxlength: "200", autocomplete: "name", id: "su_name", placeholder: t("su_name_ph") });
+    var phoneIn = h("input", { type: "tel", maxlength: "20", autocomplete: "tel-national", inputmode: "tel", id: "su_phone", placeholder: "90 123 45 67" });
+    phoneIn.addEventListener("input", function () {
+      var d = phoneIn.value.replace(/\D/g, ""); if (d.length > 9 && d.slice(0, 3) === "998") d = d.slice(3); d = d.slice(0, 9);
+      phoneIn.value = [d.slice(0, 2), d.slice(2, 5), d.slice(5, 7), d.slice(7, 9)].filter(Boolean).join(" ");
+    });
+    var instSel = instOptions(h("select", { "aria-label": t("su_work"), id: "su_inst" }), t("r_pick_inst"));
+    instSel.appendChild(h("option", { value: "other", text: t("r_inst_other") }));
+    var instIn = h("input", { type: "text", maxlength: "120", placeholder: t("r_inst_other_ph"), "aria-label": t("r_inst_other_ph"), id: "su_inst_text" });
+    var instBox = h("label", { class: "f", style: (S.institutions || []).length ? "display:none" : "" }, t("r_inst_other"), instIn);
+    if (!(S.institutions || []).length) instSel.style.display = "none";
+    instSel.addEventListener("change", function () { instBox.style.display = instSel.value === "other" ? "" : "none"; });
+
+    var rows = [], list = h("div", { class: "stack su-pos" }), sumBox = h("div", { class: "small" }), foldBox = h("div", { class: "small mute" });
+    var addBtn = h("button", { class: "btn sm", type: "button", text: "+ " + t("su_add_pos"), onclick: function () { addRow(); } });
+    function addRow() {
+      if (rows.length >= 4) return;
+      var ps = h("select", { "aria-label": t("u_position"), class: "su-ps" }, h("option", { value: "", text: t("r_pick_pos") }),
+        posList().map(function (p) { return h("option", { value: p.code, text: posTitle(p) }); }));
+      var rs = h("select", { "aria-label": t("su_rate"), class: "su-rs" }, RATES.map(function (x) { return h("option", { value: String(x), text: String(x).replace(".", ",") }); }));
+      rs.value = rows.length ? "0.5" : "1";
+      var other = h("input", { type: "text", maxlength: "100", placeholder: t("r_other_ph"), "aria-label": t("r_other"), style: "display:none", class: "su-other" });
+      var row = { ps: ps, rs: rs, other: other };
+      var del = h("button", { class: "btn sm danger", type: "button", text: "×", "aria-label": t("del"), onclick: function () {
+        rows.splice(rows.indexOf(row), 1); el.remove(); sync(); } });
+      var el = h("div", { class: "su-row" }, h("label", { class: "f grow" }, t("u_position"), ps, other), h("label", { class: "f" }, t("su_rate"), rs), rows.length ? del : null);
+      [ps, rs].forEach(function (x) { x.addEventListener("change", sync); });
+      ps.addEventListener("change", function () { other.style.display = ps.value === "other" ? "" : "none"; });
+      rows.push(row); list.appendChild(el); sync();
+    }
+    function sum() { return rows.reduce(function (a, r) { return a + (+r.rs.value || 0); }, 0); }
+    function chosen() { return rows.map(function (r) { return posByCode(r.ps.value); }).filter(Boolean); }
+    function sync() {
+      var s = sum(), over = s > MAX_RATE + 1e-9;
+      sumBox.textContent = ""; sumBox.appendChild(h("span", { class: "chip " + (over ? "bad" : "ok"), text: t("su_sum", { s: String(s).replace(".", ","), m: "1,5" }) }));
+      var f = {}; chosen().forEach(function (p) { p.folders.forEach(function (n) { f[n] = 1; }); });
+      var nums = Object.keys(f).map(Number).sort(function (a, b) { return a - b; });
+      foldBox.textContent = nums.length ? t("su_folders", { list: nums.join(", ") }) : chosen().length ? t("su_folders_admin") : "";
+      addBtn.style.display = rows.length >= 4 ? "none" : "";
+    }
+    addRow();
+    var msg = h("div");
+    var btn = h("button", { class: "btn pri big", type: "submit", text: "✈️ " + t("su_submit") });
+    var form = h("form", { class: "stack", novalidate: true },
+      h("label", { class: "f" }, t("su_name"), nameIn, h("span", { class: "small mute", text: t("su_name_hint") })),
+      h("label", { class: "f" }, t("su_phone"), h("div", { class: "phone" }, h("span", { class: "cc", text: "+998" }), phoneIn)),
+      h("div", { class: "f" }, h("span", { text: t("su_work") }), instSel, instBox),
+      h("div", { class: "f" }, h("span", { text: t("su_posts") }), h("span", { class: "small mute", text: t("su_posts_hint") }), list,
+        h("div", { class: "row" }, addBtn, sumBox), foldBox),
+      msg, h("div", null, btn),
+      h("p", { class: "small mute", text: t("su_after") }));
+    form.addEventListener("submit", function (e) {
+      e.preventDefault(); msg.textContent = "";
+      var fn = nameIn.value.trim().replace(/\s+/g, " "), ph = phoneIn.value.replace(/\D/g, "");
+      var iid = /^\d+$/.test(instSel.value) ? +instSel.value : null, itext = instIn.value.trim().replace(/\s+/g, " ");
+      var pos = rows.map(function (r) { return { code: r.ps.value, rate: +r.rs.value, other: r.ps.value === "other" ? r.other.value.trim() : undefined }; });
+      var codes = pos.map(function (p) { return p.code; });
+      var err = fn.length < 5 || fn.indexOf(" ") < 0 ? t("su_err_bad_full_name") : ph.length !== 9 ? t("su_err_bad_phone")
+        : !iid && itext.length < 2 ? t("su_err_need_institution")
+        : codes.some(function (c) { return !c; }) ? t("r_need_pos")
+        : pos.some(function (p) { return p.code === "other" && (p.other || "").length < 2; }) ? t("err_bad_position")
+        : codes.filter(function (c) { return c !== "other"; }).some(function (c, i, a) { return a.indexOf(c) !== i; }) ? t("su_err_dup")
+        : sum() > MAX_RATE + 1e-9 ? t("su_err_over_rate") : "";
+      if (err) { msg.appendChild(h("div", { class: "notice bad", text: err })); return; }
+      startTicket({ full_name: fn, phone: "998" + ph, institution_id: iid, institution_text: iid ? "" : itext, positions: pos }, btn, msg);
+    });
+    var loginBtn = h("button", { class: "btn", type: "button", text: "✈️ " + t("su_login_btn") }), lmsg = h("div");
+    loginBtn.addEventListener("click", function () { startTicket(null, loginBtn, lmsg); });
+    return h("div", { class: "stack" },
+      h("section", { class: "panel login stack" },
+        h("h2", { text: t("su_have_title") }), h("p", { class: "mute small", text: t("su_have_text") }), lmsg, h("div", null, loginBtn)),
+      h("section", { class: "panel login stack" },
+        steps(1),
+        h("h2", { text: t("su_title") }),
+        needForm ? h("div", { class: "notice warn", text: t("su_need_form") }) : h("p", { class: "mute", text: t("su_text") }),
+        form));
+  }
+
+  // Старый вход через окно Telegram (запасной: адрес с ?widget=1).
+  function widgetLoginView() {
     if (!S.loginBusy && S.tgUser && (S.req === "none" || S.req === "rejected")) return requestForm();
     if (!S.loginBusy && S.tgUser && S.req === "pending") return requestPending();
     var box = h("div", { class: "tgbox", id: "tgbox" }, h("span", { class: "mute small", text: t("widget_wait") }));
@@ -1232,6 +1420,7 @@
   function myPosCodes() {
     var c = [], p = S.profile && posByText(S.profile.position);
     if (p) c.push(p.code);
+    ((S.profile && S.profile.positions) || []).forEach(function (x) { if (x && x.code && x.code !== "other" && c.indexOf(x.code) < 0) c.push(x.code); });
     if (S.roles.indexOf("deputy") >= 0 || S.roles.indexOf("admin") >= 0) c.push("orinbosar");
     return c;
   }
@@ -1254,13 +1443,14 @@
   function subKey(s, sel) { return sel ? sel.value : s.period === "once" ? "once" : todayS(); }
   // Люди (только руководителям): профиль, коды должности, открытые папки.
   async function loadPeople() {
-    var rs = await Promise.all([sb.from("profiles").select("id, full_name, position, removed_at"), sb.from("user_roles").select("user_id, role"),
+    var rs = await Promise.all([sb.from("profiles").select("id, full_name, position, removed_at, positions"), sb.from("user_roles").select("user_id, role"),
       sb.from("folder_members").select("folder_id, user_id")]);
     var roles = {}, fold = {};
     (rs[1].data || []).forEach(function (x) { (roles[x.user_id] = roles[x.user_id] || []).push(x.role); });
     (rs[2].data || []).forEach(function (x) { (fold[x.user_id] = fold[x.user_id] || {})[x.folder_id] = 1; });
     return (rs[0].data || []).filter(function (p) { return !p.removed_at && roles[p.id]; }).map(function (p) {
       var r = roles[p.id], pos = posByText(p.position), codes = pos ? [pos.code] : [];
+      (p.positions || []).forEach(function (x) { if (x && x.code && x.code !== "other" && codes.indexOf(x.code) < 0) codes.push(x.code); });
       if (r.indexOf("deputy") >= 0 || r.indexOf("admin") >= 0) codes.push("orinbosar");
       return { id: p.id, name: p.full_name || "—", codes: codes, mgr: r.some(function (x) { return x !== "staff"; }), folders: fold[p.id] || {} };
     });
@@ -1527,7 +1717,7 @@
   async function requestsView() {
     var my = renderToken;
     shell("requests", loadingBox());
-    var r = await sb.from("access_requests").select("id, full_name, position, position_code, institution_id, institution_text, tg_username, tg_name, status, role, folder_ids, created_at, decided_at, used_at")
+    var r = await sb.from("access_requests").select("id, full_name, position, position_code, institution_id, institution_text, tg_username, tg_name, status, role, folder_ids, created_at, decided_at, used_at, phone, positions")
       .order("created_at", { ascending: false }).limit(200);
     await loadInstitutions(true);
     if (my !== renderToken) return;
@@ -1543,10 +1733,12 @@
       } })));
     function card(rq) {
       var p = posByCode(rq.position_code);
+      var rps = (rq.positions || []).map(function (x) { return { pos: posByCode(x.code), x: x }; });
+      var defRole = rps.length ? (rps.map(function (y) { return y.pos ? y.pos.role : "staff"; }).filter(function (r) { return r !== "staff"; })[0] || "staff") : (p ? p.role : "staff");
       var roleSel = h("select", null, ROLES.map(function (x) {
-        return h("option", { value: x, selected: x === (p ? p.role : "staff"), text: t("role_" + x) }); }));
+        return h("option", { value: x, selected: x === defRole, text: t("role_" + x) }); }));
       var picks = h("div", { class: "fold-picks" });
-      var def = p ? p.folders : [];
+      var def = rps.length ? rps.reduce(function (a, y) { return a.concat(y.pos ? y.pos.folders : []); }, []) : (p ? p.folders : []);
       for (var i = 1; i <= 20; i++) picks.appendChild(h("label", { class: i === 15 ? "off" : "", title: i === 15 ? t("locked_long") : null },
         h("input", { type: "checkbox", value: String(i), disabled: i === 15, checked: i !== 15 && def.indexOf(i) >= 0 }), String(i)));
       var instSel = instOptions(h("select", { "aria-label": t("inst_label") }), t("inst_none"));
@@ -1566,7 +1758,8 @@
         } });
         instNote = h("div", { class: "notice warn small" }, t("q_inst_typed", { x: rq.institution_text }), " ", addBtn);
       }
-      var hint = h("p", { class: "mute small", text: p && p.code !== "other" ? t("q_auto", { pos: posTitle(p) }) : t("q_manual") });
+      var known = rps.length ? rps.filter(function (y) { return y.pos && y.pos.code !== "other"; }) : (p && p.code !== "other" ? [{ pos: p }] : []);
+      var hint = h("p", { class: "mute small", text: known.length ? t("q_auto", { pos: known.map(function (y) { return posTitle(y.pos); }).join(", ") }) : t("q_manual") });
       function syncHint() { hint.style.display = roleSel.value === "staff" ? "" : "none"; picks.style.opacity = roleSel.value === "staff" ? "" : ".5"; }
       roleSel.addEventListener("change", syncHint); syncHint();
       var ok = h("button", { class: "btn pri", type: "button", text: t("q_approve") });
@@ -1577,7 +1770,11 @@
         var x = await sb.rpc("decide_request", { _id: rq.id, _approve: approve, _role: approve ? roleSel.value : null, _folders: approve ? folders : [],
           _institution_id: approve && instSel.value ? +instSel.value : null });
         if (x.error) { ok.disabled = no.disabled = false; toast(t("err_action", { msg: errMsg(x.error) })); return; }
-        toast(approve ? t("q_approved") : t("q_rejected")); requestsView();
+        if (approve) {   // сотруднику — «Доступ открыт» с кнопкой входа
+          var nt = await callFn("tg-bot", { action: "approved", id: rq.id });
+          toast(nt.data && nt.data.sent ? t("q_approved_sent") : t("q_approved"));
+        } else toast(t("q_rejected"));
+        requestsView();
       }
       ok.addEventListener("click", function () { decide(true); });
       no.addEventListener("click", function () {
@@ -1586,7 +1783,10 @@
         decide(false);
       });
       return h("div", { class: "panel stack req" },
-        h("div", null, h("b", { text: rq.full_name }), h("div", { class: "sub", text: rq.position }),
+        h("div", null, h("b", { text: rq.full_name }),
+          rps.length ? h("div", { class: "sub", text: rps.map(function (y) { return (y.pos && y.pos.code !== "other" ? posTitle(y.pos) : y.x.ru || y.x.other || "") + " — " + String(y.x.rate).replace(".", ",") + " " + t("su_rate_short"); }).join("; ") })
+            : h("div", { class: "sub", text: rq.position }),
+          rq.phone ? h("div", { class: "sub" }, "📞 ", h("a", { href: "tel:" + rq.phone, text: fmtPhone(rq.phone) })) : null,
           h("div", { class: "sub mono", text: (rq.tg_username ? "@" + rq.tg_username + " · " : "") + (rq.tg_name ? "Telegram: " + rq.tg_name + " · " : "") + fmtDT(rq.created_at) })),
         h("div", { class: "grid-f" }, h("label", { class: "f" }, t("i_role"), roleSel), h("label", { class: "f" }, t("inst_label"), instSel)),
         instNote,
@@ -1682,7 +1882,9 @@
       } });
       return h("tr", null,
         h("td", null, h("div", { class: "stack", style: "gap:6px" }, nameIn, posIn, h("div", { class: "row" }, save, removeButton(u))),
-          h("div", { class: "sub", text: (u.telegram_username ? "@" + u.telegram_username + " · " : "") + fmtDate(u.created_at) })),
+          h("div", { class: "sub", text: (u.telegram_username ? "@" + u.telegram_username + " · " : "") + fmtDate(u.created_at) }),
+          u.phone ? h("div", { class: "sub" }, "📞 ", h("a", { href: "tel:" + u.phone, text: fmtPhone(u.phone) })) : null,
+          (u.positions || []).length > 1 ? h("div", { class: "sub", text: (u.positions || []).map(function (x) { var pp = posByCode(x.code); return (pp && pp.code !== "other" ? posTitle(pp) : x.ru || "") + " " + String(x.rate).replace(".", ","); }).join("; ") }) : null),
         h("td", null, h("div", { class: "stack", style: "gap:4px" }, roleBoxes)),
         h("td", { style: "min-width:220px" }, picks, h("div", { style: "margin-top:8px" }, byPos)),
         h("td", { style: "min-width:240px" }, scopeEditor(u)),
@@ -2500,7 +2702,13 @@
       if (session) onSession(session);
     }, 0);
   });
-  sb.auth.getSession().then(function (r) {
-    if (r.data && r.data.session) onSession(r.data.session); else render();
+  TK = tkLoad();
+  var loginCode = readLoginParam();
+  if (loginCode) tkSave({ poll: loginCode, start: "", at: Date.now(), state: "wait" });
+  sb.auth.getSession().then(async function (r) {
+    if (r.data && r.data.session) { if (loginCode) tkSave(null); onSession(r.data.session); return; }
+    await loadInstitutions();
+    render();
+    if (TK && (TK.state === "wait" || TK.state === "pending")) pollTicket(false);
   }, function () { render(); });
 })();

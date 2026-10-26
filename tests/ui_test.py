@@ -26,7 +26,7 @@ def scenario(uid=None, roles=(), role_error=None, my_folders=()):
         "invites": [{"id": "i1", "role": "staff", "full_name": "Тестовый Сотрудник", "position": "Доя", "folder_ids": [1, 2],
                      "created_at": "2026-10-20T08:00:00Z", "expires_at": "2099-01-01T00:00:00Z", "used_at": None, "revoked_at": None}],
         "access_requests": [
-            {"id": "r1", "full_name": "Иванова Мария", "position": "Акушерка СВП (кабинет доя)", "position_code": "doya_qvp", "tg_username": "maria_i", "tg_name": "Maria",
+            {"id": "r1", "full_name": "Иванова Мария", "position": "Акушерка СВП (кабинет доя)", "position_code": "doya_qvp", "tg_username": "maria_i", "tg_name": "Maria", "phone": "+998901234567", "positions": [{"code": "doya_qvp", "rate": 1, "ru": "Акушерка СВП (кабинет доя)"}],
              "status": "pending", "role": None, "folder_ids": [], "created_at": "2026-10-24T07:00:00Z", "decided_at": None, "used_at": None},
             {"id": "r2", "full_name": "Каримов Алишер", "position": "Врач-лаборант", "position_code": "other", "tg_username": None, "tg_name": "Alisher",
              "status": "pending", "role": None, "folder_ids": [], "created_at": "2026-10-24T07:05:00Z", "decided_at": None, "used_at": None},
@@ -79,6 +79,7 @@ window.__MOCK.rpc = {
 
 FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
   'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; },
+  'tg-bot': function(){ return {sent:true}; },
   'anc-digest': function(){ return {total:4, sent:3, blocked:1, failed:0}; },
   'leave-notify': function(){ return {total:2, sent:2, failed:0}; },
   'offline-key': function(b){ return window.__offErr ? {error:{message:window.__offErr}} : {token:'eyJ2IjoxfQ.c2ln' + (b && b.uid ? 'U' : ''), role:'cab', exp:1}; } };"""
@@ -100,7 +101,7 @@ def hscroll(pg): return pg.evaluate("document.documentElement.scrollWidth > docu
 
 with sync_playwright() as p:
     # 1. без входа + приглашение в адресе
-    b, pg, errs = page_for(p, scenario(), search="?invite=0123456789ABCDEF01234567")
+    b, pg, errs = page_for(p, scenario(), search="?widget=1&invite=0123456789ABCDEF01234567")
     ok("без сессии показан вход", "Вход" in pg.inner_text("#app"))
     ok("приглашение распознано", "приглашение" in pg.inner_text("#app"))
     ok("код приглашения убран из адреса", "invite=" not in pg.url, pg.url)
@@ -110,6 +111,92 @@ with sync_playwright() as p:
     pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(150)
     ok("переключение на узбекский", "Кириш" in pg.inner_text("#app"))
     ok("ошибок JS нет (вход)", not errs, errs); b.close()
+
+    # 1б. простая регистрация: анкета → бот «Старт» → ожидание одобрения → вход
+    def bot_route(ctx_page, answer):
+        calls = []
+        def handler(route):
+            body = json.loads(route.request.post_data or "{}"); calls.append(body)
+            st, res = answer(body, calls)
+            route.fulfill(status=st, content_type="application/json", body=json.dumps(res), headers={"Access-Control-Allow-Origin": "*"})
+        ctx_page.route("**/functions/v1/tg-bot", handler)
+        return calls
+    START, POLL = "S" * 32, "P" * 32
+    stage = {"v": "wait"}
+    def answer(body, calls):
+        if body.get("action") == "start":
+            f = body.get("form") or {}
+            if f.get("phone") == "998000000000": return 400, {"error": "bad_phone"}
+            return 200, {"start": START, "poll": POLL}
+        if body.get("action") == "poll": return 200, ({"state": "login", "token_hash": "th"} if stage["v"] == "login" else {"state": stage["v"]})
+        return 400, {"error": "bad_request"}
+    sc = scenario(); sc["db"]["institutions"] = [{"id": 1, "name": "ОШП №3", "kind": "svp"}, {"id": 2, "name": "ОШП №5", "kind": "svp"}]
+    b, pg, errs = page_for(p, sc, w=390, h=844)
+    calls = bot_route(pg, answer)
+    t = pg.inner_text("#app")
+    ok("вход: сразу анкета и кнопка «Войти через Telegram»", "Регистрация" in t and "Войти через Telegram" in t and "Уже зарегистрированы?" in t, t[:300])
+    ok("вход: окна Telegram (виджета) больше нет", pg.locator("script[data-telegram-login]").count() == 0 and pg.locator("#tgbox").count() == 0)
+    ok("анкета: поля ФИО, телефон +998, место работы, должность и ставка", all(pg.locator(x).count() == 1 for x in ("#su_name", "#su_phone", "#su_inst")) and pg.locator(".su-ps").count() == 1 and pg.locator(".su-rs").count() == 1 and "+998" in t)
+    pg.screenshot(path=str(SHOTS / "c_signup.png"), full_page=True)
+    ok("анкета: на телефоне без горизонтальной прокрутки", not hscroll(pg))
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("анкета: без ФИО — понятная ошибка", "полностью" in pg.inner_text("form"))
+    pg.fill("#su_name", "Каримова Дилноза Рахимовна")
+    pg.fill("#su_phone", "+998901234567"); pg.wait_for_timeout(50)
+    ok("телефон: код страны убирается, номер разбит пробелами", pg.input_value("#su_phone") == "90 123 45 67", pg.input_value("#su_phone"))
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("анкета: без места работы — ошибка", "место работы" in pg.inner_text("form"))
+    pg.select_option("#su_inst", "1")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("анкета: без должности — ошибка", "Выберите должность" in pg.inner_text("form"))
+    pg.select_option(".su-ps >> nth=0", "doya_qvp")
+    ok("анкета: видно, какие папки откроются", "9, 10, 12, 13" in pg.inner_text("form"), pg.inner_text("form")[-300:])
+    pg.click("text=+ Ещё должность"); pg.wait_for_timeout(50)
+    pg.select_option(".su-ps >> nth=1", "patronaj_hamshira")
+    ok("две должности: папки объединяются", "5, 9, 10, 12, 13" in pg.inner_text("form"))
+    ok("две должности: ставки 1 + 0,5 = 1,5", "Ставок: 1,5 из 1,5" in pg.inner_text("form"), pg.inner_text("form")[-400:])
+    pg.select_option(".su-rs >> nth=1", "1")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(150)
+    ok("ставок больше 1,5 нельзя", "больше 1,5" in pg.inner_text("form"))
+    pg.select_option(".su-rs >> nth=1", "0.5")
+    pg.click("form button[type=submit]"); pg.wait_for_timeout(400)
+    st = [c for c in calls if c.get("action") == "start"]
+    f = st[-1].get("form") if st else {}
+    ok("анкета ушла: ФИО, телефон, учреждение, две должности со ставками", f and f["full_name"] == "Каримова Дилноза Рахимовна" and f["phone"] == "998901234567" and f["institution_id"] == 1
+       and [(x["code"], x["rate"]) for x in f["positions"]] == [("doya_qvp", 1), ("patronaj_hamshira", 0.5)], f)
+    t = pg.inner_text("#app")
+    ok("шаг 2: «Открыть Telegram» ведёт в бота со «Старт»", pg.get_attribute("a.tg-go", "href") == "https://t.me/OvaBMQbot?start=" + START and "Старт" in t, t[:300])
+    ok("шаг 2: билет сохранён (можно закрыть и вернуться)", pg.evaluate("JSON.parse(localStorage.getItem('ovabmk-ticket')).poll") == POLL)
+    pg.screenshot(path=str(SHOTS / "c_signup_wait.png"), full_page=True)
+    stage["v"] = "pending"; pg.wait_for_timeout(3200)
+    t = pg.inner_text("#app")
+    ok("после «Старт»: «Заявка отправлена», ждать кнопку от бота", "Заявка отправлена" in t and "Войти" in t, t[:400])
+    pg.reload(); pg.wait_for_timeout(700)
+    ok("после перезагрузки страница помнит заявку", "Заявка отправлена" in pg.inner_text("#app"))
+    stage["v"] = "login"
+    pg.click("text=Проверить"); pg.wait_for_timeout(600)
+    ok("после одобрения: вход без повторного подтверждения", "Заявка отправлена" not in pg.inner_text("#app") and pg.evaluate("localStorage.getItem('ovabmk-ticket')") is None, pg.inner_text("#app")[:200])
+    ok("ошибок JS нет (регистрация)", not errs, errs); b.close()
+
+    # ссылка из сообщения бота ?login=… — сразу вход
+    stage["v"] = "login"
+    b, pg, errs = page_for(p, scenario(), search="?login=" + POLL)
+    calls = bot_route(pg, answer); pg.reload(); pg.wait_for_timeout(700)
+    ok("ссылка «Войти» из Telegram: код убран из адреса и сайт входит", "login=" not in pg.url and any(c.get("action") == "poll" and c.get("poll") == POLL for c in calls), (pg.url, calls))
+    b.close()
+
+    # ошибка анкеты с сервера и уже зарегистрированный сотрудник
+    stage["v"] = "wait"
+    b, pg, errs = page_for(p, sc)
+    calls = bot_route(pg, answer)
+    pg.click("text=Войти через Telegram"); pg.wait_for_timeout(300)
+    st = [c for c in calls if c.get("action") == "start"]
+    ok("«Войти через Telegram»: билет без анкеты", st and st[-1].get("form") is None and pg.locator("a.tg-go").count() == 1)
+    pg.click("text=Назад"); pg.wait_for_timeout(150)
+    pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(150)
+    ok("латиница: регистрация", "Roʻyxatdan oʻtish" in pg.inner_text("#app") and "Telegram orqali kirish" in pg.inner_text("#app"), pg.inner_text("#app")[:300])
+    pg.click(".seg button:nth-child(1)"); pg.wait_for_timeout(150)
+    ok("ошибок JS нет (вход сотрудника)", not errs, errs); b.close()
 
     # 2. ошибка чтения ролей
     b, pg, errs = page_for(p, scenario(uid=A, roles=("admin",), role_error="permission denied for table user_roles"))
@@ -246,7 +333,7 @@ with sync_playwright() as p:
                           headers={"Access-Control-Allow-Origin": "*"})
         ctx_page.route("**/functions/v1/tg-login", handler)
         return calls
-    b, pg, errs = page_for(p, scenario())
+    b, pg, errs = page_for(p, scenario(), search="?widget=1")
     calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
     pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
     t = pg.inner_text("#app")
@@ -280,6 +367,7 @@ with sync_playwright() as p:
     checked = card1.evaluate("el => Array.from(el.querySelectorAll('.fold-picks input:checked')).map(x => +x.value)")
     ok("заявки: папки по должности отмечены сами (доя → 9,10,12,13)", checked == [9, 10, 12, 13], checked)
     ok("заявки: подсказка про автоматический выбор", "автоматически" in card1.inner_text())
+    ok("заявки: телефон и ставка видны", "+998 90 123 45 67" in card1.inner_text() and "1 ст." in card1.inner_text(), card1.inner_text())
     card2 = pg.locator(".req").nth(1)
     ok("заявки: «другая должность» — без галочек и с подсказкой", card2.evaluate("el => el.querySelectorAll('.fold-picks input:checked').length") == 0 and "вручную" in card2.inner_text())
     ok("заявки: рассмотренная в истории", "Сидорова Анна" in t and "ждёт входа" in t)
@@ -288,6 +376,8 @@ with sync_playwright() as p:
     card1.locator("button.pri").click(); pg.wait_for_timeout(300)
     dec = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "decide_request"]
     ok("заявки: одобрение с ролью и изменёнными папками", dec and dec[0][2] == {"_id": "r1", "_approve": True, "_role": "staff", "_folders": [9, 10, 12], "_institution_id": None}, dec)
+    nt = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "fn" and x[1] == "tg-bot"]
+    ok("заявки: после одобрения сотруднику уходит «Доступ открыт»", nt and nt[-1][2] == {"action": "approved", "id": "r1"}, nt)
     rej = pg.locator(".req").nth(1).locator("button.danger"); rej.click(); pg.wait_for_timeout(100)
     ok("заявки: отказ требует второго нажатия", "Точно" in rej.inner_text())
     ok("ошибок JS нет (заявки)", not errs, errs); b.close()
@@ -466,7 +556,7 @@ with sync_playwright() as p:
     # 9. учреждения и области видимости
     INSTS = [{"id": 1, "name": "СВП №3", "kind": "svp"}, {"id": 2, "name": "СВП №5", "kind": "svp"}]
     sc = scenario(); sc["db"]["institutions"] = INSTS
-    b, pg, errs = page_for(p, sc)
+    b, pg, errs = page_for(p, sc, search="?widget=1")
     calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
     pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
     ok("заявка: есть выбор учреждения", pg.locator("form select").count() == 2 and pg.locator("form select >> nth=1 >> option").count() == 4, pg.locator("form select >> nth=1 >> option").count())
@@ -481,7 +571,7 @@ with sync_playwright() as p:
     ok("заявка: ушло название учреждения вручную", sent.get("institution_id") is None and sent.get("institution_text") == "Частная клиника", sent)
     ok("ошибок JS нет (заявка с учреждением)", not errs, errs); b.close()
 
-    b, pg, errs = page_for(p, sc)
+    b, pg, errs = page_for(p, sc, search="?widget=1")
     calls = tg_route(pg, lambda body: {"request": "pending"} if body.get("request") else {"request": "none"})
     pg.evaluate("onTelegramAuth({id: 777, first_name: 'Мария', last_name: 'Иванова', auth_date: 1, hash: 'x'})"); pg.wait_for_timeout(400)
     pg.select_option("form select >> nth=0", "doya_qvp"); pg.select_option("form select >> nth=1", "2")

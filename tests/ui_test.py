@@ -927,7 +927,7 @@ with sync_playwright() as p:
         b_ = p.chromium.launch(); c_ = b_.new_context(viewport={"width": w, "height": h_})
         c_.add_init_script("window.__NOW='2026-11-20T09:00:00'")
         c_.add_init_script("window.__MOCK=" + json.dumps(sc_, ensure_ascii=False) + ";" + RPC + FN +
-            ";['subfolder_report','subfolder_unreport','subfolder_paper','admin_set_subfolder','admin_move_document'].forEach(function(n){ window.__MOCK.rpc[n] = function(a){ return (window.__subErr && window.__subErr[n]) ? {error:{message:window.__subErr[n]}} : null; }; });")
+            ";window.__MOCK.rpc.subfolder_reminder_log = function(x){ return x._sub === '10.7' ? [{period_key:'2026-11-05', user_id:'" + S_ + "', kind:'overdue', sent_at:'2026-11-06T04:07:00Z'}] : []; };['subfolder_report','subfolder_unreport','subfolder_paper','admin_set_subfolder','admin_move_document'].forEach(function(n){ window.__MOCK.rpc[n] = function(a){ return (window.__subErr && window.__subErr[n]) ? {error:{message:window.__subErr[n]}} : null; }; });")
         c_.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
         c_.route("**/telegram-widget.js*", lambda r: r.fulfill(status=200, content_type="application/javascript", body="/* stub */"))
         c_.route("**/fonts.g*/**", lambda r: r.abort())
@@ -976,6 +976,7 @@ with sync_playwright() as p:
     ok("10.1: отметка «оригинал получен»", r and r[-1][2]["_user"] == S_ and r[-1][2]["_on"] is True and r[-1][2]["_period"] == "2026-11-05", r[-1:])
     pg.click("#sf-10\\.7 summary"); pg.wait_for_timeout(200)
     ok("10.7: несдавшим — кнопка напоминания", pg.locator("#sf-10\\.7 .sf-ctl button").count() == 1)
+    ok("10.7: видно, что бот уже напомнил", "бот: просрочка 06.11.2026" in pg.inner_text("#sf-10\\.7"), pg.inner_text("#sf-10\\.7")[-300:])
     pg.locator("#sf-10\\.7 .sf-ctl button").click(); pg.wait_for_timeout(300)
     fn = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "fn" and x[1] == "tg-notify"]
     ok("10.7: напоминание уходит только несдавшим", fn and fn[-1][2]["kind"] == "subfolder" and fn[-1][2]["sub"] == "10.7" and fn[-1][2]["users"] == [S_] and fn[-1][2]["due"] == "2026-11-05", fn[-1:])
@@ -993,6 +994,7 @@ with sync_playwright() as p:
     ok("сроки: пункт меню и заголовок", "Сроки сдачи" in pg.inner_text("nav.nav") and "Контроль по району" in t)
     ok("сроки: просрочки по району посчитаны", "Не сдано к прошедшему сроку:" in t and "Сотрудник Тест" in t, t[:600])
     ok("сроки: «Что сдаю я» у заместителя есть", "Что сдаю я" in t and "Просрочено:" in t)
+    ok("сроки: сказано про автонапоминания", "Бот сам напоминает в Telegram в 9:00" in t)
     pg.screenshot(path=str(SHOTS / "c_due.png"), full_page=False)
     pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(300)
     t = pg.inner_text("#app")

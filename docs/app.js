@@ -1346,7 +1346,14 @@
     if (!keys.length) return null;   // «по поступлению» и «по случаю» — без контроля сроков
     var exp = expectedFor(s, ctx.people), canPaper = S.roles.indexOf("admin") >= 0 || S.roles.indexOf("deputy") >= 0;
     var sel = h("select", { "aria-label": t("sf_cycle") }, keys.map(function (k) { return h("option", { value: k, text: k === "once" ? t("sf_per_once") : t("sf_cycle_opt", { d: fmtD(k) }) }); }));
-    var box = h("div", { class: "stack" });
+    var box = h("div", { class: "stack" }), rem = {};
+    if (subPeriodic(s)) sb.rpc("subfolder_reminder_log", { _sub: s.id }).then(function (r) {
+      (r.data || []).forEach(function (x) { var q = rem[x.period_key + "|" + x.user_id] = rem[x.period_key + "|" + x.user_id] || []; q.push(x); });
+      if (r.data && r.data.length && box.isConnected) draw();
+    });
+    function remTxt(k, uid) {
+      return (rem[k + "|" + uid] || []).map(function (x) { return t(x.kind === "before" ? "sf_bot_before" : "sf_bot_over", { d: fmtD(String(x.sent_at).slice(0, 10)) }); }).join(" · ");
+    }
     function draw() {
       box.textContent = "";
       var k = sel.value, map = ctx.dm[s.id + "|" + k] || {}, rows = exp.slice();
@@ -1377,7 +1384,8 @@
           }
           return h("tr", null, h("td", { text: u.name }),
             h("td", null, done ? h("span", { class: "chip ok", text: "✓ " + (x.at ? fmtDT(x.at) : "") + (x.value != null ? " · " + x.value : "") + (x.files ? " · " + t("sf_files", { n: x.files }) : "") })
-              : h("span", { class: "chip " + (past ? "bad" : ""), text: t("sf_missing") })), pc);
+              : h("span", { class: "chip " + (past ? "bad" : ""), text: t("sf_missing") }),
+              !done && remTxt(k, u.id) ? h("div", { class: "sub", text: "🔔 " + remTxt(k, u.id) }) : null), pc);
         })))));
       if (isAdmin() && miss.length) box.appendChild(h("div", null, h("button", { class: "btn", type: "button", text: t("sf_remind", { n: miss.length }), onclick: async function (ev) {
         var b = ev.currentTarget; b.disabled = true;

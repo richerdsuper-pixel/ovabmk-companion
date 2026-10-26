@@ -564,6 +564,35 @@ expect_ok("напоминание: только те, у кого есть до�
 expect_err("напоминание: только администратор", f"select * from public.admin_subfolder_targets('10.3', array['{F1}']::uuid[])", "authenticated", D, "forbidden")
 expect_ok("подпапки: действия в журнале", "select count(*) >= 4 from public.audit_log where action in ('subfolder_report','paper_received','subfolder_settings','document_moved')", out="t")
 
+# ---------------- автонапоминания по подпапкам (миграция 0019)
+sql(f"update public.profiles set position = 'Акушерка СВП (кабинет доя)' where id = '{F1}'")
+expect_ok("напоминания: код должности по названию", f"select array_to_string(private.user_pos_codes('{F1}'), ',')", out="doya_qvp")
+expect_ok("напоминания: заместитель — orinbosar", f"select 'orinbosar' = any(private.user_pos_codes('{D}'))", out="t")
+REM = "select string_agg(subfolder_id || ':' || kind || ':' || due, ',' order by subfolder_id) from public.cron_subfolder_reminders('{sec}', '{d}') where user_id = '{u}'"
+expect_err("напоминания: неверный секрет", "select * from public.cron_subfolder_reminders('wrong-secret')", "service_role", None, "forbidden")
+expect_err("напоминания: пользователю недоступно", f"select * from public.cron_subfolder_reminders('{SEC}')", "authenticated", A, "permission denied")
+expect_ok("напоминания: до 1 ноября ничего (сроки с 01.11.2026)", REM.format(sec=SEC, d="2026-10-20", u=F1), "service_role", out="")
+expect_ok("напоминания: за 2 дня — только несданные (10.2 и 10.3 уже сданы)", REM.format(sec=SEC, d="2026-11-03", u=F1), "service_role",
+          out="10.1:before:2026-11-05,10.7:before:2026-11-05")
+expect_ok("напоминания: второй раз в тот же день не отправляются", REM.format(sec=SEC, d="2026-11-03", u=F1), "service_role", out="")
+expect_ok("напоминания: накануне тоже не повторяются", REM.format(sec=SEC, d="2026-11-04", u=F1), "service_role", out="")
+sql(f"insert into public.subfolder_marks (subfolder_id, period_key, user_id, value, submitted_at) values ('10.1', '2026-11-05', '{F1}', 9, now())")
+expect_ok("напоминания: после срока — только то, что так и не сдано", REM.format(sec=SEC, d="2026-11-06", u=F1), "service_role", out="10.7:overdue:2026-11-05")
+expect_ok("напоминания: просрочка — один раз", REM.format(sec=SEC, d="2026-11-07", u=F1), "service_role", out="")
+expect_ok("напоминания: без Telegram не записываются", f"select count(*) from private.subfolder_reminders where user_id not in (select user_id from public.telegram_links)", out="0")
+sql(f"insert into public.leaves (user_id, kind, date_from, date_to, status) values ('{F1}', 'vacation', '2026-12-01', '2026-12-20', 'approved')")
+expect_ok("напоминания: в утверждённом отпуске не беспокоим", REM.format(sec=SEC, d="2026-12-03", u=F1), "service_role", out="")
+expect_ok("напоминания: после отпуска — снова", REM.format(sec=SEC, d="2027-01-03", u=F1), "service_role", out="10.1:before:2027-01-05,10.3:before:2027-01-05,10.7:before:2027-01-05")
+expect_ok("напоминания: квартальная подпапка — за 2 дня до 10 января, месячные — уже просрочка", REM.format(sec=SEC, d="2027-01-08", u=F1), "service_role", out="10.1:overdue:2027-01-05,10.2:before:2027-01-10,10.3:overdue:2027-01-05,10.7:overdue:2027-01-05")
+expect_ok("напоминания: сотрудник без своей папки их не получает", REM.format(sec=SEC, d="2027-02-03", u=F2), "service_role", out="")
+DG = "select string_agg(subfolder_id || ':' || missing || '/' || expected, ',' order by subfolder_id) from public.cron_subfolder_digest('{sec}', '{d}') where admin_id = '{a}' and subfolder_id like '10.%'"
+expect_ok("сводка: администратору — несданное к прошедшему сроку", DG.format(sec=SEC, d="2026-11-10", a=A), "service_role", out=sql(f"select string_agg(sid || ':' || m || '/' || e, ',' order by sid) from (select e.subfolder_id sid, count(*) filter (where not private.sub_done(e.subfolder_id, '2026-11-05', e.user_id)) m, count(*) e from private.sub_expected() e where e.subfolder_id in ('10.1','10.3','10.7') group by 1) x where m > 0")[1][0])
+expect_ok("сводка: сданное у F1 не считается", f"select count(*) from public.cron_subfolder_digest('{SEC}', '2026-11-10') d where d.subfolder_id = '10.1' and d.missing = d.expected", "service_role", out="0")
+expect_err("сводка: неверный секрет", "select * from public.cron_subfolder_digest('nope')", "service_role", None, "forbidden")
+expect_ok("журнал напоминаний: руководитель видит", "select count(*) > 0 from public.subfolder_reminder_log('10.7')", "authenticated", D, out="t")
+expect_err("журнал напоминаний: сотруднику нельзя", "select * from public.subfolder_reminder_log('10.7')", "authenticated", F1, "forbidden")
+expect_err("напоминания: таблица отметок закрыта", "select * from private.subfolder_reminders", "authenticated", A, "permission denied")
+
 # ---------------- функции: безопасный search_path
 expect_ok("у всех SECURITY DEFINER функций задан search_path",
           "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')",

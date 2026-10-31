@@ -3,8 +3,14 @@
 // Модуль получает помощники из app.js (window.MothersModule(api)) и сам ничего не хранит в браузере.
 window.MothersModule = function (A) {
   var h = A.h, t = A.t, sb = A.sb, S = A.S;
-  var RISKF = ["age_lt18", "age_35", "grand_multi", "cs_scar", "pe_history", "hypertension", "diabetes", "anemia", "kidney", "heart",
-    "multiple", "rh_neg", "pph_history", "loss_history", "infection", "short_interval", "obesity", "other"];
+  // факторы риска по НКП «Антенатальный уход. Ведение беременных групп риска» (прил. 2 к приказу №180), по группам
+  var RF_GROUPS = [
+    ["rg_ob", ["cs_scar", "stillbirth", "neonatal_death", "miscarriage", "ptb_hist", "isoimmun", "gdm_hist", "pe_hist", "pph_hist", "abruption_hist", "macrosomia_hist", "sga_hist"]],
+    ["rg_som", ["chronic_htn", "diabetes", "kidney", "autoimmune", "heart", "epilepsy", "asthma", "mental", "substance", "vte_hist", "thrombophilia", "varicose", "coagulopathy"]],
+    ["rg_fam", ["dm_family", "pe_family", "vte_family"]],
+    ["rg_now", ["multiple", "fetal_anomaly", "previa", "large_fetus", "short_cervix", "pe_now", "bleeding_now", "rh_neg", "doctor_high"]]
+  ];
+  var RF_SELECTS = { smoke: ["", "smoking", "smoking_heavy"], interval: ["", "interval_lt6", "interval_gt60", "interval_gt10y"], anemia: ["", "anemia", "anemia_severe"] };
   var CLIN = ["doya_qvp", "doya_patronaj", "patronaj_hamshira", "akusher_ginekolog", "oilaviy_shifokor"];
   var HS = null;   // справочник патронажа
 
@@ -185,25 +191,38 @@ window.MothersModule = function (A) {
       gaOut.textContent = d < 0 || d > 320 ? t("mo_ga_bad") : gaTxt(d) + " · " + t("mo_edd_s", { d: fmtD(A.addDays(base, 280)) });
     }
     lmp.addEventListener("input", showGa); edd.addEventListener("input", showGa); showGa();
-    var riskSel = h("select", { id: "mf_risk" }, ["low", "mid", "high"].map(function (k) { return h("option", { value: k, text: t("mo_risk_" + k) }); }));
-    riskSel.value = v.risk || "low";
     var have = v.risk_factors || [];
-    var rfBox = h("div", { class: "rf" }, RISKF.map(function (k) {
-      return h("label", { class: "check small" }, h("input", { type: "checkbox", value: k, checked: have.indexOf(k) >= 0 }), h("span", { text: t("rf_" + k) }));
+    var ht = inp("number", "height_cm", { min: "120", max: "220", placeholder: "160" }), wt = inp("number", "weight_kg", { min: "30", max: "250", step: "0.1", placeholder: "60" });
+    var rfBox = h("div", { class: "stack", id: "mf_rf" }, RF_GROUPS.map(function (g) {
+      return h("div", null, h("b", { class: "small", text: t(g[0]) }), h("div", { class: "rf" }, g[1].map(function (k) {
+        return h("label", { class: "check small" }, h("input", { type: "checkbox", value: k, checked: have.indexOf(k) >= 0 }), h("span", { text: t("rf_" + k) }));
+      })));
     }));
-    function autoRisk() {   // подсказка: при факторах риска — не ниже «среднего»; итог выбирает специалист
-      var n = rfBox.querySelectorAll("input:checked").length;
-      if (n && riskSel.value === "low") riskSel.value = "mid";
+    var sel = {};
+    Object.keys(RF_SELECTS).forEach(function (g) {
+      sel[g] = h("select", { id: "mf_" + g }, RF_SELECTS[g].map(function (k) { return h("option", { value: k, text: k ? t("rf_" + k) : t("rf_none_" + g) }); }));
+      sel[g].value = RF_SELECTS[g].filter(function (k) { return k && have.indexOf(k) >= 0; })[0] || "";
+    });
+    if (have.indexOf("obesity") >= 0 && !v.weight_kg) rfBox.appendChild(h("p", { class: "small mute", text: t("mo_obesity_legacy") }));
+    function factors() {
+      var f = Array.from(rfBox.querySelectorAll("input:checked")).map(function (x) { return x.value; });
+      Object.keys(sel).forEach(function (g) { if (sel[g].value) f.push(sel[g].value); });
+      if (have.indexOf("obesity") >= 0 && !wt.value) f.push("obesity");
+      return f;
     }
-    rfBox.addEventListener("change", autoRisk);
-    function ageFactors() {
-      var a = ageOf(bd.value);
-      if (a == null) return;
-      rfBox.querySelector("input[value=age_lt18]").checked = a < 18;
-      rfBox.querySelector("input[value=age_35]").checked = a >= 35;
-      autoRisk();
+    var riskOut = h("div", { id: "mf_riskout" }), rq = 0, rtimer = null;
+    function evalRisk() {
+      clearTimeout(rtimer);
+      rtimer = setTimeout(async function () {
+        var my2 = ++rq;
+        var x = await sb.rpc("risk180_preview", { _d: { birth_date: bd.value, para: pa.value, height_cm: ht.value, weight_kg: wt.value, risk_factors: factors() } });
+        if (my2 !== rq || x.error) return;
+        riskOut.textContent = ""; riskOut.appendChild(riskPanel(x.data, true));
+      }, 250);
     }
-    bd.addEventListener("change", ageFactors);
+    [bd, pa, ht, wt].forEach(function (el) { el.addEventListener("input", evalRisk); el.addEventListener("change", evalRisk); });
+    rfBox.addEventListener("change", evalRisk); Object.keys(sel).forEach(function (g) { sel[g].addEventListener("change", evalRisk); });
+    evalRisk();
     var notes = h("textarea", { id: "mf_notes", rows: "2", maxlength: "1000", placeholder: t("mo_notes_ph") }); notes.value = v.notes || "";
     var consentChk = h("input", { type: "checkbox", id: "mf_consent", checked: !!v.consent_at }), consentDate = inp("date", "consent_at", { max: today() });
     if (!v.consent_at) consentDate.value = today();
@@ -218,9 +237,10 @@ window.MothersModule = function (A) {
       h("section", { class: "panel stack" }, h("h3", { text: t("mo_preg_block") }),
         h("div", { class: "grid-f" }, h("label", { class: "f" }, t("mo_lmp"), lmp), h("label", { class: "f" }, t("mo_edd_us"), edd),
           h("label", { class: "f" }, t("mo_gravida"), gr), h("label", { class: "f" }, t("mo_para"), pa)), h("div", null, gaOut)),
-      h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk") }), rfBox,
-        h("label", { class: "f", style: "max-width:260px" }, t("mo_risk_level"), riskSel), h("p", { class: "mute small", text: t("mo_risk_hint") }),
-        h("label", { class: "f" }, t("mo_notes"), notes)),
+      h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk180_title") }), h("p", { class: "mute small", text: t("mo_risk_hint") }),
+        h("div", { class: "grid-f" }, h("label", { class: "f" }, t("mo_height"), ht), h("label", { class: "f" }, t("mo_weight0"), wt),
+          h("label", { class: "f" }, t("rf_sel_smoke"), sel.smoke), h("label", { class: "f" }, t("rf_sel_interval"), sel.interval), h("label", { class: "f" }, t("rf_sel_anemia"), sel.anemia)),
+        rfBox, riskOut, h("label", { class: "f" }, t("mo_notes"), notes)),
       h("section", { class: "panel stack consent" }, h("h3", { text: t("mo_consent") }),
         h("label", { class: "check" }, consentChk, h("span", { text: t("mo_consent_chk") })),
         h("div", { class: "row", style: "gap:10px;flex-wrap:wrap;align-items:end" }, h("label", { class: "f" }, t("mo_consent_date"), consentDate),
@@ -231,8 +251,8 @@ window.MothersModule = function (A) {
       e.preventDefault(); err.textContent = "";
       if (!id && !consentChk.checked) { err.appendChild(h("div", { class: "notice bad", text: t("mo_err_need_consent") })); return; }
       var d = { full_name: name.value, birth_date: bd.value, phone: phone.value, institution_id: +instSel.value, mahalla_id: mahSel.value ? +mahSel.value : null,
-        address: addr.value, card_no: card.value, lmp: lmp.value, edd_us: edd.value, gravida: gr.value, para: pa.value, risk: riskSel.value,
-        risk_factors: Array.from(rfBox.querySelectorAll("input:checked")).map(function (x) { return x.value; }), notes: notes.value,
+        address: addr.value, card_no: card.value, lmp: lmp.value, edd_us: edd.value, gravida: gr.value, para: pa.value, height_cm: ht.value, weight_kg: wt.value,
+        risk_factors: factors(), notes: notes.value,
         consent_at: consentChk.checked ? consentDate.value : "" };
       save.disabled = true;
       var x = await sb.rpc("mother_save", { _id: id || null, _d: d });
@@ -242,6 +262,51 @@ window.MothersModule = function (A) {
     });
     A.shell("mothers", form);
     if (!id) name.focus();
+  }
+
+  // результат оценки риска по протоколу и что делать (тексты рекомендаций — из протокола)
+  var DERIVED = ["nullipara", "age_40", "age_35", "bmi_35", "bmi_30", "bmi_fgr", "interval", "para4"];
+  function rfName(k) { return DERIVED.indexOf(k) >= 0 ? t("rd_" + k) : t("rf_" + k); }
+  function riskPanel(e, preview) {
+    if (!e) return h("p", { class: "mute small", text: t("mo_risk_none") });
+    var hi = e.level === "high", recs = [];
+    recs.push(hi ? "rc_high" : "rc_low");
+    if (e.pe === "high") recs.push("rc_pe");
+    if (e.gdm) recs.push("rc_gdm");
+    if (e.fgr === "high") recs.push("rc_fgr");
+    if (e.vte === "high") recs.push("rc_vte_high"); else if (e.vte === "moderate") recs.push("rc_vte_mod");
+    if (e.pph) recs.push("rc_pph");
+    if ((e.ptb_f || []).indexOf("ptb_hist") >= 0) recs.push("rc_ptb_hist");
+    if ((e.ptb_f || []).indexOf("short_cervix") >= 0) recs.push("rc_short_cervix");
+    if (e.rh_neg) recs.push("rc_rh");
+    if (e.anemia) recs.push("rc_anemia");
+    recs.push("rc_all");
+    function line(key, list) { return list && list.length ? h("li", null, h("b", { text: t(key) + ": " }), list.map(rfName).join(", ")) : null; }
+    var why = h("ul", { class: "small", style: "margin:4px 0 0 18px" },
+      (e.reasons || []).filter(function (r) { return !/_risk$/.test(r) && r.indexOf("bmi_") !== 0; }).length
+        ? h("li", null, h("b", { text: t("rs_not_normal") + ": " }), (e.reasons || []).filter(function (r) { return !/_risk$/.test(r) && r.indexOf("bmi_") !== 0; }).map(rfName).join(", ")) : null,
+      (e.reasons || []).indexOf("bmi_extreme") >= 0 ? h("li", { text: t("rs_bmi_extreme", { b: e.bmi }) }) : (e.reasons || []).indexOf("bmi_risk") >= 0 ? h("li", { text: t("rs_bmi_risk", { b: e.bmi }) }) : null,
+      e.pe === "high" ? h("li", null, h("b", { text: t("rs_pe") + ": " }), (e.pe_high || []).concat(e.pe_mod || []).map(rfName).join(", ")) : null,
+      e.gdm ? line("rs_gdm", e.gdm_f) : null,
+      e.fgr === "high" ? line("rs_fgr", (e.fgr_major || []).concat(e.fgr_minor || [])) : null,
+      e.vte !== "none" ? h("li", { text: t("rs_vte", { n: e.vte_score, l: t("vte_" + e.vte) }) }) : null,
+      e.pph ? line("rs_pph", e.pph_f) : null,
+      e.ptb ? line("rs_ptb", e.ptb_f) : null);
+    return h("div", { class: "riskbox " + (hi ? "hi" : "lo"), id: preview ? "mf_riskbox" : "mc_riskbox" },
+      h("div", { class: "row", style: "gap:10px;align-items:center;flex-wrap:wrap" }, h("span", { class: "chip " + (hi ? "bad" : "ok"), text: t("mo_risk_" + e.level) }),
+        e.bmi ? h("span", { class: "chip", text: t("mo_bmi", { b: e.bmi }) }) : null, e.teen ? h("span", { class: "chip warn", text: t("rs_teen") }) : null,
+        h("span", { class: "mute small", text: preview ? t("mo_risk_auto") : t("mo_risk_by180") })),
+      hi ? why : null,
+      h("b", { class: "small", text: t("rc_title") }), h("ul", { class: "small", style: "margin:4px 0 0 18px" }, recs.map(function (k) { return h("li", { text: t(k) }); })));
+  }
+  function bpPanel(m) {
+    var list = m.bp || [];
+    if (!list.length) return null;
+    return h("section", { class: "panel stack", id: "mc_bp" }, h("h3", { text: t("mo_bp_diary") }), h("p", { class: "mute small", text: t("mo_bp_diary_hint") }),
+      h("div", { class: "chips" }, list.slice(0, 14).map(function (b) {
+        var c = b.sys >= 160 || b.dia >= 110 ? "bad" : b.sys >= 140 || b.dia >= 90 ? "warn" : "ok";
+        return h("span", { class: "chip " + c, title: A.fmtDT(b.at), text: b.sys + "/" + b.dia + " · " + A.fmtDT(b.at).slice(0, 5) });
+      })));
   }
 
   // ------------------------------------------------------------------ карточка
@@ -269,7 +334,7 @@ window.MothersModule = function (A) {
         kv(t("mo_phone"), telLink(m.phone) || "—"), kv(t("mo_mahalla"), A.mahName(m.mahalla_id) || "—"), kv(t("mo_address"), m.address || "—"),
         kv(t("mo_lmp"), fmtD(m.lmp)), kv(t("mo_edd"), fmtD(s.edd) + (m.edd_us ? " (" + t("mo_by_us") + ")" : "")),
         kv(t("mo_gp"), (m.gravida ? "G" + m.gravida : "") + (m.para != null ? " P" + m.para : "") || "—"),
-        kv(t("mo_risk"), (m.risk_factors || []).map(function (k) { return t("rf_" + k); }).join(", ") || "—"),
+        kv(t("mo_hw"), m.height_cm || m.weight_kg ? (m.height_cm || "—") + " см / " + (m.weight_kg || "—") + " кг" : "—"),
         kv(t("mo_consent"), fmtD(m.consent_at)), m.notes ? kv(t("mo_notes"), m.notes) : null,
         m.outcome ? kv(t("mo_outcome"), t("mo_out_" + m.outcome) + " · " + fmtD(m.outcome_date) + (m.discharge_date ? " · " + t("mo_discharge_s", { d: fmtD(m.discharge_date) }) : "")) : null)));
     // тревожные сигналы
@@ -281,6 +346,8 @@ window.MothersModule = function (A) {
           h("button", { class: "btn sm pri", type: "button", text: t("mo_alert_seen"), onclick: async function () {
             var x = await sb.rpc("mother_alert_seen", { _id: a.id }); if (x.error) { A.toast(errText(x.error)); return; } reload(); } }));
       }), h("p", { class: "small", text: t("mo_alert_hint") })));
+    parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk180_title") }), riskPanel(m.risk_eval, false)));
+    var bpp = bpPanel(m); if (bpp) parts.push(bpp);
     // план визитов
     if (m.status === "pregnant") parts.push(ancPanel(m, s, reload));
     parts.push(homePanel(m, s, reload));

@@ -1,6 +1,8 @@
 // node --experimental-strip-types tests/mother_bot_test.ts
 import { motherCode, parseCb, uzLat, tx, signLabel, reminderText, staffAlertText, staffDigestText, verifyInitData, signButtons, menuButtons, SIGNS, langButtons } from "../supabase/functions/tg-bot/mother.ts";
 import { startCode } from "../supabase/functions/tg-bot/texts.ts";
+import { parseBp, visitText, doyaText, SIGNS_PREG } from "../supabase/functions/tg-bot/mother.ts";
+import { TOPICS, topicText, tipText, TIP_TOPICS } from "../supabase/functions/tg-bot/info.ts";
 let pass = 0, fail = 0;
 function t(name: string, cond: boolean, info: unknown = "") { console.log((cond ? "PASS " : "FAIL ") + name + (cond ? "" : "  <- " + JSON.stringify(info))); cond ? pass++ : fail++; }
 const C = "m0123456789abcdef01234567";
@@ -16,16 +18,38 @@ t("латиница", uzLat("Ҳомиладор ўз ғамини") === "Homilad
 t("согласие на трёх языках", /Вы согласны/.test(tx("consent", "ru")) && /Розимисиз/.test(tx("consent", "uz")) && /Rozimisiz/.test(tx("consent", "uzl")));
 t("согласие упоминает /stop", tx("consent", "ru").includes("/stop") && tx("consent", "uz").includes("/stop"));
 t("признак при тревоге — звонить 103", tx("danger_sent", "uz", { sign: signLabel("bleeding", "uz"), n: 2 }).includes("103") && tx("danger_sent", "ru", { sign: "x", n: 1 }).includes("103"));
-t("признаки беременной и после родов разные", signButtons("ru", false).length === 9 && signButtons("ru", true).some((r) => r[0].callback_data === "ms:baby_feed"));
+t("признаки беременной — список протокола 180 (13 + судороги)", SIGNS_PREG.length === 14 && ["vomit", "discharge", "contractions", "trauma", "moves", "urine", "itch", "fever38"].every((k) => SIGNS_PREG.includes(k)));
+t("признаки беременной и после родов разные", signButtons("ru", false).length === 14 && signButtons("ru", true).some((r) => r[0].callback_data === "ms:baby_feed"));
 t("все признаки подписаны", SIGNS.every((k) => signLabel(k, "ru") !== k && signLabel(k, "uz") !== k));
 t("меню: мини-приложение с языком", (menuButtons("uzl", "https://x/mother.html")[0][0] as { web_app: { url: string } }).web_app.url === "https://x/mother.html?l=uzl");
 const rem = reminderText({ kind: "open", label: "2-кўрик (18–20 ҳафта)", date_to: "2026-12-05", tests: ["Ҳомила УТТ"], lang: "uzl", first_name: "Dilnoza" });
 t("напоминание: латиница, дата, анализы", rem.includes("2-koʻrik") && rem.includes("05.12") && rem.includes("Homila UTT") && rem.includes("Dilnoza"), rem);
 t("напоминание «осталось 3 дня»", reminderText({ kind: "soon", label: "Визит 3", date_to: "2026-12-05", tests: [], lang: "ru", first_name: "Д" }).includes("3 дня"));
 const al = staffAlertText(["bleeding", "fever"], { mother_name: "Каримова Д.", mother_phone: "+998901234567", mahalla: "Навбаҳор", address: "ул. 1", mother_id: "abc" }, "https://s/");
-t("сигнал сотруднику: признаки, телефон, ссылка", al.includes("Кровотечение, Высокая температура") && al.includes("+998 90 123 45 67") && al.includes("https://s/#/mother/abc"), al);
+t("сигнал сотруднику: признаки, телефон, ссылка", al.includes("кровотечение, Высокая температура") && al.includes("+998 90 123 45 67") && al.includes("https://s/#/mother/abc"), al);
 const dg = staffDigestText({ full_name: "Холова Жамила Ибрагимовна", due: 3, missed: 1, home_due: 0, home_missed: 0, alerts: 0 }, "https://s/");
 t("сводка доя: только ненулевые строки", dg.includes("Жамила") && dg.includes("визит сейчас: 3") && !dg.includes("патронаж"), dg);
+
+// давление в чате
+t("давление: 120/80, 120 80, 120\\80", JSON.stringify(parseBp("120/80")) === '{"sys":120,"dia":80}' && parseBp(" 135 85 ")?.dia === 85 && parseBp("120\\80")?.sys === 120);
+t("давление: мусор и нижнее > верхнего — нет", parseBp("привет") === null && parseBp("80/120") === null && parseBp("12/8") === null && parseBp(42) === null);
+// меню: все кнопки укладываются в 64 байта и есть разделы
+const mb = menuButtons("ru", "https://x/m.html").flat() as { callback_data?: string }[];
+t("меню: разделы и тревога", ["mi:visit", "mi:bp", "mi:food", "mi:life", "mi:signs", "mi:birth", "mi:after", "mi:call", "ma"].every((c) => mb.some((b) => b.callback_data === c)));
+t("кнопки разделов разбираются", parseCb("mi:food")?.sign === "food" && parseCb("mi:hack") === null);
+// справка и советы
+t("справка: все разделы на трёх языках", TOPICS.every((k) => topicText(k, "ru").length > 200 && topicText(k, "uz").length > 200 && !/[а-яё]/i.test(topicText(k, "uzl").replace(/[^а-яёА-ЯЁ]/g, "").slice(0, 1) || "")));
+t("справка: витамины по протоколу", topicText("food", "ru").includes("400 мкг") && topicText("food", "ru").includes("200 мкг") && topicText("food", "uz").includes("йодиди"));
+t("справка: тревожные признаки протокола", ["больше 5 раз", "4–5 схваток", "38°", "24 недель"].every((x) => topicText("signs", "ru").includes(x)));
+t("советы: все сроки, при высоком риске ПЭ — про давление", TIP_TOPICS.includes("w24") && tipText("w24", "ru", "Дилноза", "high").includes("давление") && !tipText("pp1", "ru", "", "high").includes("преэклампсии"));
+t("советы: латиница", tipText("w28", "uzl", "Dilnoza", "low").includes("hafta") && tipText("nope", "ru", "", "") === "");
+const VV = { status: "pregnant", institution: "ОШП №3", doya: { name: "Холова Жамила", phone: "+998901112233" },
+  state: { ga_days: 129, edd: "2027-03-17", next_anc: { no: 2, from: "2026-11-04", to: "2026-11-24", state: "due" }, anc: [{ no: 1, state: "missed" }], home: [{ kind: "ant32", from: "2027-01-27", to: "2027-02-09", state: "next" }] },
+  schedule: [{ no: 1, label: "Первый визит", label_uz: "1-кўрик", tests: [] }, { no: 2, label: "Визит 2", label_uz: "2-кўрик", tests: ["УЗИ плода"], tests_uz: ["Ҳомила УТТ"] }] };
+const vt = visitText(VV, "ru");
+t("мой визит: срок, пропуск, визит сейчас, анализы, патронаж", ["18 нед 3 дн", "пропустили визит: Первый визит", "Сейчас время визита: Визит 2", "УЗИ плода", "домой"].every((x) => vt.includes(x)), vt);
+t("мой визит: узбекский", visitText(VV, "uz").includes("Ҳомила УТТ"));
+t("моя доя: имя и телефон", doyaText(VV, "ru").includes("+998 90 111 22 33") && doyaText(VV, "uzl").includes("Xolova"));
 
 // подпись мини-приложения
 const BOT = "123456:ABC-test";

@@ -36,19 +36,27 @@ export function parseCb(data: unknown): { k: string; lang?: Lang; code?: string;
   if (typeof data !== "string" || data.length > 64) return null;
   let m = /^(ml|mc):(uz|uzl|ru):(m[0-9a-f]{24})$/.exec(data);
   if (m) return { k: m[1], lang: m[2] as Lang, code: m[3] };
-  m = /^ms:([a-z_]{2,30})$/.exec(data);
+  m = /^mi:(visit|food|life|signs|birth|after|call|bp)$/.exec(data);
+  if (m) return { k: "mi", sign: m[1] };
+  m = /^ms:([a-z0-9_]{2,30})$/.exec(data);
   if (m && SIGNS.includes(m[1])) return { k: "ms", sign: m[1] };
   if (data === "mn" || data === "ma" || data === "mh" || data === "ma_pp") return { k: data };
   return null;
 }
 
 // тревожные признаки (ВОЗ, «опасные признаки» при беременности, после родов и у новорождённого)
-export const SIGNS_PREG = ["bleeding", "headache", "convulsions", "abd_pain", "fever", "waters", "less_move", "swelling", "breath"];
+// при беременности — список «тревожных признаков» протокола №180 (+ судороги)
+export const SIGNS_PREG = ["bleeding", "waters", "discharge", "abd_pain", "contractions", "moves", "headache", "swelling", "vomit", "fever38", "urine", "itch", "trauma", "convulsions"];
 export const SIGNS_PP = ["pp_bleeding", "fever", "pp_discharge", "headache", "convulsions", "breath", "baby_feed", "baby_fever", "baby_breath", "baby_jaundice", "baby_cord", "baby_convulsions"];
-export const SIGNS = Array.from(new Set([...SIGNS_PREG, ...SIGNS_PP]));
+export const SIGNS = Array.from(new Set([...SIGNS_PREG, ...SIGNS_PP, "less_move", "bp_high", "bp_severe"]));
 
 const SG: Record<string, [string, string]> = {   // [русский, узбекский кириллицей]
-  bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
+  bleeding: ["Кровянистые выделения, кровотечение", "Қонли ажралма, қон кетиши"],
+  vomit: ["Рвота больше 5 раз", "5 мартадан кўп қусиш"], discharge: ["Обильные жидкие выделения", "Кўп суюқ ажралма"],
+  fever38: ["Температура 38° и выше", "Ҳарорат 38° ва юқори"], itch: ["Сильный зуд, жжение, выделения", "Кучли қичишиш, ачишиш, ажралма"],
+  urine: ["Жжение и боль при мочеиспускании", "Сийганда ачишиш ва оғриқ"], contractions: ["Больше 4–5 схваток за час", "Бир соатда 4–5 тадан кўп тўлғоқ"],
+  trauma: ["Ушиб живота (падение, удар)", "Қоринга зарба (йиқилиш, урилиш)"], moves: ["Ребёнок шевелится слишком сильно или слабо", "Бола жуда кучли ёки кучсиз қимирлаяпти"],
+  bp_high: ["Давление 140/90 и выше", "Қон босими 140/90 ва юқори"], bp_severe: ["Давление 160/110 и выше", "Қон босими 160/110 ва юқори"], headache: ["Постоянная головная боль, пятна или вспышки перед глазами", "Доимий бош оғриғи, кўз олдида доғ ёки учқунлар"],
   convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
   waters: ["Подтекают воды", "Сув кетяпти"], less_move: ["Ребёнок мало шевелится", "Бола кам қимирлаяпти"], swelling: ["Отёки лица и рук", "Юз ва қўл шиши"],
   breath: ["Трудно дышать", "Нафас олиш қийин"], pp_bleeding: ["Сильное кровотечение после родов", "Туғруқдан кейин кучли қон кетиши"],
@@ -79,7 +87,27 @@ const T: Record<string, [string, string]> = {
   danger_nobody: ["🚑 «{sign}» — это опасный признак. Звоните 103 или срочно поезжайте в роддом.", "🚑 «{sign}» — бу хавфли белги. 103 га қўнғироқ қилинг ёки дарҳол туғруқхонага боринг."],
   not_linked: ["Вы не подключены. Попросите у доя ссылку-приглашение.", "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг."],
   stopped: ["Вы отключены: напоминаний больше не будет. Подключиться снова можно по новой ссылке от доя.", "Сиз узилдингиз: эслатмалар бошқа келмайди. Доядан янги ҳавола билан яна уланишингиз мумкин."],
-  help: ["Выберите:", "Танланг:"],
+  help: ["Выберите, что нужно. Давление можно просто написать сообщением, например 120/80.", "Кераклисини танланг. Қон босимини хабар қилиб ёзиш мумкин, масалан 120/80."],
+  m_visit: ["🗓 Мой визит и анализы", "🗓 Кўригим ва таҳлиллар"], m_bp: ["🩺 Давление", "🩺 Қон босими"], m_food: ["🍎 Питание, витамины", "🍎 Овқат, витаминлар"],
+  m_life: ["🚶 Образ жизни", "🚶 Турмуш тарзи"], m_signs: ["⚠️ Когда к врачу", "⚠️ Қачон шифокорга"], m_birth: ["🤰 Роды", "🤰 Туғруқ"],
+  m_after: ["👶 После родов", "👶 Туғруқдан кейин"], m_call: ["📞 Моя доя", "📞 Доям"],
+  v_ga: ["Срок: {w} нед {d} дн. Предполагаемая дата родов: {edd}.", "Муддат: {w} ҳафта {d} кун. Тахминий туғиш санаси: {edd}."],
+  v_pp: ["После родов: {d}-й день.", "Туғруқдан кейин {d}-кун."],
+  v_missed: ["❗ Вы пропустили визит: {v}. Пожалуйста, подойдите к доя как можно скорее.", "❗ Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, иложи борича тезроқ доянгизга келинг."],
+  v_now: ["🗓 Сейчас время визита: {v} — до {b}.", "🗓 Ҳозир кўрик вақти: {v} — {b} гача."],
+  v_next: ["🗓 Следующий визит: {v} — с {a} по {b}.", "🗓 Кейинги кўрик: {v} — {a} дан {b} гача."],
+  v_home: ["🏠 Доя придёт к вам домой: с {a} по {b}.", "🏠 Доя уйингизга келади: {a} дан {b} гача."],
+  v_none: ["Плановых визитов сейчас нет.", "Ҳозир режали кўрик йўқ."],
+  doya: ["📞 Ваша доя: {name}\n{inst}\nТелефон: {phone}", "📞 Доянгиз: {name}\n{inst}\nТелефон: {phone}"],
+  no_phone: ["не указан — спросите в поликлинике", "кўрсатилмаган — поликлиникадан сўранг"],
+  bp_ask: ["Напишите давление сообщением, например: 120/80", "Қон босимини хабар қилиб ёзинг, масалан: 120/80"],
+  bp_ok: ["✅ Записано: {v}. Давление в норме.", "✅ Ёзиб қўйдим: {v}. Қон босими меъёрда."],
+  bp_high: ["⚠️ Записано: {v}. Это высокое давление (140/90 и выше). Ваша доя получила сообщение. Отдохните 15 минут и измерьте ещё раз. Если болит голова, мелькает перед глазами, боль под рёбрами — звоните 103.",
+            "⚠️ Ёзиб қўйдим: {v}. Бу юқори қон босими (140/90 ва юқори). Доянгизга хабар юборилди. 15 дақиқа дам олиб, қайта ўлчанг. Бош оғриса, кўз олди учқунласа, қовурға остида оғриқ бўлса — 103 га қўнғироқ қилинг."],
+  bp_severe: ["🚑 Записано: {v}. Очень высокое давление (160/110 и выше). Звоните 103 сейчас. Ваша доя получила сообщение.",
+              "🚑 Ёзиб қўйдим: {v}. Жуда юқори қон босими (160/110 ва юқори). Ҳозир 103 га қўнғироқ қилинг. Доянгизга хабар юборилди."],
+  bp_bad: ["Не удалось разобрать цифры. Напишите так: 120/80", "Рақамларни тушунмадим. Шундай ёзинг: 120/80"],
+  bp_many: ["Сегодня записей уже много. Если давление высокое — звоните 103 или доя.", "Бугун ёзувлар кўп. Қон босими юқори бўлса — 103 га ёки доянгизга қўнғироқ қилинг."],
   rem_open: ["🔔 {name}, начался срок визита: {label}. Подойдите к доя до {to}.", "🔔 {name}, кўрик муддати бошланди: {label}. {to} гача доянгизга келинг."],
   rem_soon: ["⏰ {name}, до конца срока визита «{label}» осталось 3 дня (до {to}). Пожалуйста, подойдите к доя.", "⏰ {name}, «{label}» кўрик муддати тугашига 3 кун қолди ({to} гача). Илтимос, доянгизга келинг."],
   rem_tests: ["Нужно сдать:", "Топшириш керак:"],
@@ -98,7 +126,45 @@ export function consentButtons(lang: Lang, code: string) {
   return [[{ text: tx("yes", lang), callback_data: `mc:${lang}:${code}` }, { text: tx("no", lang), callback_data: "mn" }]];
 }
 export function menuButtons(lang: Lang, appUrl: string) {
-  return [[{ text: tx("page", lang), web_app: { url: appUrl + "?l=" + lang } }], [{ text: tx("danger", lang), callback_data: "ma" }]];
+  const b = (k: string, cb: string) => ({ text: tx(k, lang), callback_data: cb });
+  return [[{ text: tx("page", lang), web_app: { url: appUrl + "?l=" + lang } }],
+    [b("m_visit", "mi:visit"), b("m_bp", "mi:bp")],
+    [b("m_food", "mi:food"), b("m_life", "mi:life")],
+    [b("m_signs", "mi:signs"), b("m_birth", "mi:birth")],
+    [b("m_after", "mi:after"), b("m_call", "mi:call")],
+    [{ text: tx("danger", lang), callback_data: "ma" }]];
+}
+// давление, которое беременная пишет в чат: «120/80», «120 80»
+export function parseBp(text: unknown): { sys: number; dia: number } | null {
+  if (typeof text !== "string") return null;
+  const m = /^\s*(\d{2,3})\s*[\/\\ ,.-]\s*(\d{2,3})\s*$/.exec(text);
+  if (!m) return null;
+  const sys = +m[1], dia = +m[2];
+  return sys >= 60 && sys <= 260 && dia >= 30 && dia <= 180 && dia < sys ? { sys, dia } : null;
+}
+export function visitText(v: Record<string, any>, lang: Lang): string {
+  const st = v.state || {}, sch: any[] = v.schedule || [];
+  const name = (no: number) => { const r = sch.find((x) => x.no === no); return !r ? "№" + no : lang === "ru" ? r.label : lang === "uzl" ? uzLat(r.label_uz || r.label) : (r.label_uz || r.label); };
+  const tests = (no: number) => { const r = sch.find((x) => x.no === no); if (!r) return []; const a = lang === "ru" ? r.tests : (r.tests_uz && r.tests_uz.length ? r.tests_uz : r.tests); return (a || []).map((x: string) => lang === "uzl" ? uzLat(x) : x); };
+  const d = (iso: string) => iso ? iso.slice(8, 10) + "." + iso.slice(5, 7) + "." + iso.slice(0, 4) : "";
+  const out: string[] = [];
+  if (v.status === "postpartum") out.push(tx("v_pp", lang, { d: st.pp_day ?? "—" }));
+  else if (typeof st.ga_days === "number") out.push(tx("v_ga", lang, { w: Math.floor(st.ga_days / 7), d: st.ga_days % 7, edd: d(st.edd) }));
+  const missed = (st.anc || []).filter((a: any) => a.state === "missed").map((a: any) => name(a.no));
+  if (missed.length) out.push(tx("v_missed", lang, { v: missed.join(", ") }));
+  if (st.next_anc) {
+    out.push(tx(st.next_anc.state === "due" ? "v_now" : "v_next", lang, { v: name(st.next_anc.no), a: d(st.next_anc.from), b: d(st.next_anc.to) }));
+    const t = tests(st.next_anc.no);
+    if (t.length) out.push(tx("rem_tests", lang) + "\n• " + t.join("\n• "));
+  }
+  const home = (st.home || []).find((h: any) => h.state === "due" || h.state === "next");
+  if (home) out.push(tx("v_home", lang, { a: d(home.from), b: d(home.to) }));
+  return out.join("\n\n") || tx("v_none", lang);
+}
+export function doyaText(v: Record<string, any>, lang: Lang): string {
+  const dy = v.doya || {};
+  return tx("doya", lang, { name: lang === "uzl" ? uzLat(dy.name || "") : (dy.name || "—"), inst: lang === "uzl" ? uzLat(v.institution || "") : (v.institution || ""),
+    phone: dy.phone ? fmtPhone(dy.phone) : tx("no_phone", lang) });
 }
 export function signButtons(lang: Lang, postpartum: boolean) {
   return (postpartum ? SIGNS_PP : SIGNS_PREG).map((k) => [{ text: signLabel(k, lang), callback_data: `ms:${k}` }]);

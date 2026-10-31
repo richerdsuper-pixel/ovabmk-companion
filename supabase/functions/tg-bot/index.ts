@@ -8,8 +8,9 @@
 //    тревожные признаки → сигнал сотрудникам её учреждения; /stop — отключиться. action=mother_remind (x-cron-secret) — напоминания и утренняя сводка доя.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.ts";
-import { consentButtons, isLang, langButtons, type Lang, menuButtons, motherCode, parseCb, reminderText, SIGNS, signButtons, signLabel, staffAlertText,
-  staffDigestText, tx, verifyInitData } from "./mother.ts";
+import { consentButtons, doyaText, isLang, langButtons, type Lang, menuButtons, motherCode, parseBp, parseCb, reminderText, SIGNS, SIGNS_PP, SIGNS_PREG,
+  signButtons, signLabel, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
+import { tipText, type Topic, topicText, topicTitle, TOPICS } from "./info.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -123,6 +124,19 @@ async function sendAlert(tgId: number, signs: string[]): Promise<number | null> 
   }
   return sent;
 }
+// давление: запись, ответ и при высоком — сигнал сотрудникам
+async function recordBp(tgId: number, sys: number, dia: number): Promise<{ level?: string; error?: string; sent?: number }> {
+  const { data, error } = await admin().rpc("bot_mother_bp", { _tg: tgId, _sys: sys, _dia: dia });
+  if (error) return { error: "failed" };
+  const r = (data ?? {}) as { level?: string; error?: string };
+  if (r.level === "high" || r.level === "severe") return { level: r.level, sent: (await sendAlert(tgId, [r.level === "severe" ? "bp_severe" : "bp_high"])) ?? 0 };
+  return r;
+}
+function bpReply(r: { level?: string; error?: string }, sys: number, dia: number, lang: Lang): string {
+  if (r.error === "too_many") return tx("bp_many", lang);
+  if (r.error) return tx("bp_bad", lang);
+  return tx(r.level === "severe" ? "bp_severe" : r.level === "high" ? "bp_high" : "bp_ok", lang, { v: sys + "/" + dia });
+}
 async function onMotherCb(q: Record<string, any>): Promise<void> {
   const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id);
   try { await tg("answerCallbackQuery", { callback_query_id: q.id }); } catch { /* */ }
@@ -145,6 +159,12 @@ async function onMotherCb(q: Record<string, any>): Promise<void> {
   if (!mo) { await say(chat, tx("not_linked", lang)); return; }
   if (cb.k === "ma") { await sayKb(chat, tx("danger_pick", lang), signButtons(lang, mo.status === "postpartum")); return; }
   if (cb.k === "mh") { await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return; }
+  if (cb.k === "mi" && cb.sign) {
+    const k = cb.sign;
+    const text = k === "visit" ? visitText(mo, lang) : k === "call" ? doyaText(mo, lang) : k === "bp" ? tx("bp_ask", lang)
+      : (TOPICS as readonly string[]).includes(k) ? topicText(k as Topic, lang) : tx("help", lang);
+    await sayKb(chat, text, k === "signs" ? [[{ text: tx("danger", lang), callback_data: "ma" }]] : []); return;
+  }
   if (cb.k === "ms" && cb.sign) {
     const n = await sendAlert(tgId, [cb.sign]);
     await say(chat, tx(n ? "danger_sent" : "danger_nobody", lang, { sign: signLabel(cb.sign, lang), n: n ?? 0 }));
@@ -173,7 +193,11 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
   const c = startCode(m.text);
   if (!c) {
     const mo = await motherOf(Number(from.id));
-    if (mo) { const lang: Lang = isLang(mo.lang) ? mo.lang : "uz"; await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return; }
+    if (mo) {
+      const lang: Lang = isLang(mo.lang) ? mo.lang : "uz", bp = parseBp(text);
+      if (bp) { await say(chat, bpReply(await recordBp(Number(from.id), bp.sys, bp.dia), bp.sys, bp.dia, lang)); return; }
+      await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return;
+    }
   }
   if (!c) { await say(chat, helloText(SITE), { text: "Открыть сайт / Saytni ochish", url: SITE }); return; }
   const name = [from.first_name, from.last_name].filter((x: unknown) => typeof x === "string" && x).join(" ").slice(0, 200);
@@ -236,12 +260,33 @@ Deno.serve(async (req: Request) => {
       return reply({ sent: n }, 200, origin);
     }
     if (body.op === "lang" && isLang(body.lang)) { await admin().rpc("bot_mother_lang", { _tg: who.id, _lang: body.lang }); return reply({ ok: true }, 200, origin); }
+    if (body.op === "bp") {
+      const sys = Number(body.sys), dia = Number(body.dia);
+      const r = Number.isInteger(sys) && Number.isInteger(dia) ? await recordBp(who.id, sys, dia) : { error: "bad_bp" };
+      return reply(r, r.error === "failed" ? 500 : 200, origin);
+    }
     const mo = await motherOf(who.id);
-    return mo ? reply(mo, 200, origin) : reply({ error: "not_linked" }, 404, origin);
+    if (!mo) return reply({ error: "not_linked" }, 404, origin);
+    const lang: Lang = isLang(body.lang) ? body.lang : isLang(mo.lang) ? mo.lang : "uz";   // подписи для мини-приложения — из тех же текстов, что и в боте
+    mo.ui = { signs: (mo.status === "postpartum" ? SIGNS_PP : SIGNS_PREG).map((k) => ({ k, label: signLabel(k, lang) })),
+      topics: TOPICS.map((k) => ({ k, title: topicTitle(k, lang), text: topicText(k, lang).split("\n\n").slice(1).join("\n\n") })) };
+    return reply(mo, 200, origin);
   }
   if (body.action === "mother_remind") {   // планировщик: mode=mothers — напоминания беременным; mode=staff — утренняя сводка сотрудникам
     const sec = req.headers.get("x-cron-secret") ?? "";
     const db = admin();
+    if (body.mode === "weekly") {   // советы по сроку
+      const { data, error } = await db.rpc("cron_mother_weekly", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; lang: string; topic: string; first_name: string; pe: string }[]) {
+        const lang: Lang = isLang(r.lang) ? r.lang : "uz", text = tipText(r.topic, lang, r.first_name, r.pe);
+        if (!text) continue;
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text, disable_web_page_preview: true, reply_markup: { inline_keyboard: menuButtons(lang, APP_URL) } }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
     if (body.mode === "staff") {
       const { data, error } = await db.rpc("cron_staff_digest", { _secret: sec });
       if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);

@@ -16,3 +16,9 @@ select cron.schedule('staff-digest-0813', '13 3 * * 1-6', $$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
     body := '{"action":"mother_remind","mode":"staff"}'::jsonb)
 $$);
+-- 4) (после 0022) каждый день в 09:35 по Ташкенту (04:35 UTC) — советы по сроку (8, 16, 20 … 40 нед, после родов 1/2/6 нед); каждая тема — один раз.
+select cron.schedule('mother-weekly-0935', '35 4 * * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"weekly"}'::jsonb)
+$$);

@@ -760,6 +760,43 @@ expect_err("удаление: не автор и не админ", f"select publ
 expect_ok("удаление: автор в течение суток", f"select public.mother_delete('{M1}')", "authenticated", MD)
 expect_ok("журнал: Ф.И.О. в журнал не пишутся", "select count(*) from public.audit_log where action like 'mother%' and details::text like '%Каримова%'", out="0")
 
+# ---------------- группа риска по протоколу №180 (миграция 0022)
+def r180(rf, age, para, bmi): return f"private.risk180(array{rf}::text[], {age}, {para}, {bmi})"
+expect_ok("риск 180: без факторов — низкий", f"select {r180([], 25, 1, 22)}->>'level'", out="low")
+expect_ok("риск 180: первородящая 41 год — ПЭ (2 умеренных), ЗРП (большой), ГСД (40+)", f"select (r->>'pe') || '/' || (r->>'fgr') || '/' || (r->>'gdm') || '/' || (r->>'level') from (select {r180([], 41, 0, 24)} r) x", out="high/high/true/high")
+expect_ok("риск 180: хр. АГ — ПЭ высокий, ТЭО 2 балла (умеренный)", f"select (r->>'pe') || '/' || (r->>'vte_score') || '/' || (r->>'vte') from (select {r180(['chronic_htn'], 30, 1, 24)} r) x", out="high/2/moderate")
+expect_ok("риск 180: ТЭО в анамнезе — 3 балла, высокий риск", f"select (r->>'vte') || '/' || (r->>'level') from (select {r180(['vte_hist'], 30, 1, 24)} r) x", out="high/high")
+expect_ok("риск 180: ИМТ 31 — ГСД и ожирение", f"select (r->>'gdm') || '/' || (r->'reasons' ? 'bmi_risk')::text from (select {r180([], 30, 1, 31)} r) x", out="true/true")
+expect_ok("риск 180: ИМТ 36 — не нормальная беременность", f"select r->'reasons' ? 'bmi_extreme' from (select {r180([], 30, 1, 36)} r) x", out="t")
+expect_ok("риск 180: резус-отрицательная — низкий, с отметкой резуса", f"select (r->>'level') || '/' || (r->>'rh_neg') from (select {r180(['rh_neg'], 30, 1, 23)} r) x", out="low/true")
+expect_ok("риск 180: анемия <90 — риск кровотечения", f"select (r->>'pph') || '/' || (r->>'level') from (select {r180(['anemia_severe'], 30, 1, 23)} r) x", out="true/high")
+expect_ok("риск 180: 3 малых фактора ЗРП (36 лет, курит, первые роды)", f"select r->>'fgr' from (select {r180(['smoking'], 36, 0, 22)} r) x", out="high")
+expect_ok("риск 180: только первые роды — низкий", f"select {r180([], 24, 0, 22)}->>'level'", out="low")
+expect_ok("риск 180: рубец на матке — высокий и риск кровотечения", f"select (r->>'level') || '/' || (r->>'pph') from (select {r180(['cs_scar'], 28, 1, 22)} r) x", out="high/true")
+expect_ok("риск 180: предпросмотр на сайте (рост/вес → ИМТ)", "select (public.risk180_preview('{\"birth_date\":\"1990-01-01\",\"para\":\"1\",\"height_cm\":\"160\",\"weight_kg\":\"80\",\"risk_factors\":[]}')->>'bmi')", "authenticated", MD, out="31.3")
+expect_err("риск 180: предпросмотр не для посторонних", "select public.risk180_preview('{}')", "authenticated", N, "forbidden")
+F3 = json.dumps({"full_name": "Тестова Насиба Олимовна", "birth_date": "1984-03-01", "para": 0, "height_cm": 158, "weight_kg": 70, "lmp": dd(-60), "consent_at": dd(0),
+                 "risk": "low", "risk_factors": ["chronic_htn", "bad code!"]}, ensure_ascii=False)
+M3 = expect_ok("риск 180: постановка — группа считается сервером", f"select public.mother_save(null, '{F3}')", "authenticated", MD)
+expect_ok("риск 180: сохранено «высокий» несмотря на risk=low в запросе, мусорный код отброшен",
+          f"select risk || '/' || (risk_eval->>'pe') || '/' || array_to_string(risk_factors, ',') from public.mothers where id = '{M3}'", out="high/high/chronic_htn")
+expect_ok("риск 180: оценка в карточке", f"select public.mother_get('{M3}')->'risk_eval'->>'level'", "authenticated", MD, out="high")
+# дневник давления
+CODE3 = expect_ok("давление: приглашение", f"select public.mother_invite('{M3}')", "authenticated", MD)
+sql(f"select public.bot_mother_link('{CODE3}', 779, 'uz')", "service_role")
+expect_ok("давление: норма", "select public.bot_mother_bp(779, 118, 76)->>'level'", "service_role", out="ok")
+expect_ok("давление: 145/92 — высокое", "select public.bot_mother_bp(779, 145, 92)->>'level'", "service_role", out="high")
+expect_ok("давление: 165/112 — очень высокое", "select public.bot_mother_bp(779, 165, 112)->>'level'", "service_role", out="severe")
+expect_ok("давление: нижнее больше верхнего — ошибка", "select public.bot_mother_bp(779, 80, 120)->>'error'", "service_role", out="bad_bp")
+expect_ok("давление: не подключена — ошибка", "select public.bot_mother_bp(1, 120, 80)->>'error'", "service_role", out="not_linked")
+expect_ok("давление: видно в карточке доя", f"select jsonb_array_length(public.mother_get('{M3}')->'bp')", "authenticated", MD, out="3")
+expect_ok("давление: и на «Моей странице» с риском ПЭ", "select (v->>'pe') || '/' || jsonb_array_length(v->'bp') from (select public.bot_mother_view(779) v) x", "service_role", out="high/3")
+expect_err("давление: функция бота закрыта для пользователей", "select public.bot_mother_bp(779, 120, 80)", "authenticated", MD, "permission denied")
+# советы по сроку
+expect_ok("советы: 8 недель — тема w08, высокий риск ПЭ передан", f"select topic || '/' || pe from public.cron_mother_weekly('{SEC}') where telegram_id = 779", "service_role", out="w08/high")
+expect_ok("советы: второй раз не повторяются", f"select count(*) from public.cron_mother_weekly('{SEC}') where telegram_id = 779", "service_role", out="0")
+expect_err("советы: без секрета нельзя", "select * from public.cron_mother_weekly('x')", "service_role", "forbidden")
+
 # PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
 expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",
           r"""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

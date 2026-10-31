@@ -42,6 +42,17 @@ ul{padding-left:20px} li{margin:2px 0}
 .alert{background:var(--bad-soft);color:var(--bad);border-radius:12px;padding:12px;font-weight:700}
 .okmsg{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px;font-weight:700}
 .hidden{display:none}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
+.tabs button{flex:1 0 auto;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:99px;padding:8px 14px;font-family:inherit;font-weight:700;font-size:14px}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+details.tip{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel)}
+details.tip summary{font-weight:800;cursor:pointer}
+details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
+.bprow{display:flex;gap:8px;align-items:end}
+.bprow label{flex:1;display:flex;flex-direction:column;font-size:13px;font-weight:700;color:var(--mute)}
+.bprow input{font:700 22px inherit;font-family:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
+.ctbtn{display:block;width:100%;border:0;border-radius:16px;padding:26px 10px;font-family:inherit;font-weight:900;font-size:22px;color:#fff;background:var(--accent)}
+.ctbtn.on{background:#B42318}
 </style>
 </head>
 <body>
@@ -59,7 +70,17 @@ ul{padding-left:20px} li{margin:2px 0}
       danger: "⚠️ Тревожные признаки", danger_hint: "Отметьте, что случилось, и нажмите «Сообщить» — доя получит сообщение сразу.",
       send: "Сообщить доя", e103: "🚑 Позвонить 103", sent: "Сообщение отправлено ({n}). С вами свяжутся. Если состояние тяжёлое — звоните 103 сейчас.",
       sent0: "Звоните 103 или срочно поезжайте в роддом.", pick: "Отметьте хотя бы один признак.", err: "Не получилось. Проверьте интернет и попробуйте ещё раз. При опасности — звоните 103.",
-      notlinked: "Вы не подключены. Попросите у доя ссылку-приглашение.", open_tg: "Откройте эту страницу из бота @OvaBMQbot в Telegram.", wk: "{w} нед {d} дн" },
+      notlinked: "Вы не подключены. Попросите у доя ссылку-приглашение.", open_tg: "Откройте эту страницу из бота @OvaBMQbot в Telegram.", wk: "{w} нед {d} дн",
+      t_main: "Главное", t_tips: "Советы", t_bp: "Давление", t_ct: "Схватки",
+      bp_title: "Моё давление", bp_hint: "Измерьте в покое, сидя. Запишите верхнее и нижнее число.", bp_pe: "Врач отметил высокий риск преэклампсии — измеряйте давление каждый день.",
+      bp_sys: "Верхнее", bp_dia: "Нижнее", bp_save: "Записать", bp_ok: "✅ Записано. Давление в норме.",
+      bp_high: "⚠️ Давление высокое (140/90 и выше). Доя получила сообщение. Отдохните 15 минут и измерьте ещё раз. Головная боль, мелькание перед глазами, боль под рёбрами — звоните 103.",
+      bp_severe: "🚑 Очень высокое давление (160/110 и выше). Звоните 103 сейчас. Доя получила сообщение.", bp_bad: "Проверьте цифры: верхнее больше нижнего, например 120/80.",
+      bp_many: "Сегодня записей уже много.", bp_list: "Последние записи",
+      ct_title: "Счётчик схваток", ct_hint: "Нажмите, когда схватка началась, и ещё раз — когда закончилась.", ct_start: "Схватка началась", ct_stop: "Схватка закончилась",
+      ct_hour: "За последний час: {n}", ct_dur: "длится {s} с", ct_int: "через {m} мин", ct_clear: "Очистить",
+      ct_pre: "До 37 недель больше 4–5 схваток за час — опасный признак: срочно к врачу или звоните 103.", ct_term: "Схватки регулярные и частые — похоже, роды начинаются. Поезжайте в роддом, сообщите доя.",
+      ct_alert: "Сообщить доя" },
     uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
       next: "Доянгизга кейинги кўрик", now: "ҳозир", from: "{a} дан {b} гача", need: "Нимани топшириш / ўтиш керак:", none: "Таҳлил керак эмас — доя кўриги.",
       missed: "Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, доянгизга иложи борича тезроқ келинг.", plan: "Барча кўриклар", done: "бажарилди", due: "ҳозир", next_s: "олдинда", missed_s: "ўтказиб юборилди",
@@ -67,7 +88,17 @@ ul{padding-left:20px} li{margin:2px 0}
       danger: "⚠️ Хавфли белгилар", danger_hint: "Нима бўлганини белгиланг ва «Хабар бериш»ни босинг — доянгиз дарҳол хабар олади.",
       send: "Доянгизга хабар бериш", e103: "🚑 103 га қўнғироқ", sent: "Хабар юборилди ({n}). Сиз билан боғланишади. Аҳвол оғир бўлса — ҳозир 103 га қўнғироқ қилинг.",
       sent0: "103 га қўнғироқ қилинг ёки дарҳол туғруқхонага боринг.", pick: "Камида битта белгини белгиланг.", err: "Бўлмади. Интернетни текшириб, қайта уриниб кўринг. Хавф бўлса — 103 га қўнғироқ қилинг.",
-      notlinked: "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг.", open_tg: "Бу саҳифани Telegramдаги @OvaBMQbot ботидан очинг.", wk: "{w} ҳафта {d} кун" }
+      notlinked: "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг.", open_tg: "Бу саҳифани Telegramдаги @OvaBMQbot ботидан очинг.", wk: "{w} ҳафта {d} кун",
+      t_main: "Асосий", t_tips: "Маслаҳатлар", t_bp: "Қон босими", t_ct: "Тўлғоқлар",
+      bp_title: "Қон босимим", bp_hint: "Тинч ҳолатда, ўтириб ўлчанг. Юқори ва пастки рақамни ёзинг.", bp_pe: "Шифокор преэклампсия хавфи юқори деб белгилаган — қон босимини ҳар куни ўлчанг.",
+      bp_sys: "Юқори", bp_dia: "Пастки", bp_save: "Ёзиш", bp_ok: "✅ Ёзилди. Қон босими меъёрда.",
+      bp_high: "⚠️ Қон босими юқори (140/90 ва юқори). Доянгизга хабар юборилди. 15 дақиқа дам олиб, қайта ўлчанг. Бош оғриғи, кўз олди учқунлаши, қовурға остида оғриқ — 103 га қўнғироқ қилинг.",
+      bp_severe: "🚑 Жуда юқори қон босими (160/110 ва юқори). Ҳозир 103 га қўнғироқ қилинг. Доянгизга хабар юборилди.", bp_bad: "Рақамларни текширинг: юқориси пасткисидан катта, масалан 120/80.",
+      bp_many: "Бугун ёзувлар кўп.", bp_list: "Охирги ёзувлар",
+      ct_title: "Тўлғоқ ҳисоблагич", ct_hint: "Тўлғоқ бошланганда босинг, тугаганда яна босинг.", ct_start: "Тўлғоқ бошланди", ct_stop: "Тўлғоқ тугади",
+      ct_hour: "Охирги бир соатда: {n}", ct_dur: "{s} сония", ct_int: "{m} дақиқадан кейин", ct_clear: "Тозалаш",
+      ct_pre: "37 ҳафтагача бир соатда 4–5 тадан кўп тўлғоқ — хавфли белги: дарҳол шифокорга ёки 103 га қўнғироқ қилинг.", ct_term: "Тўлғоқлар мунтазам ва тез-тез — туғруқ бошланаётганга ўхшайди. Туғруқхонага боринг, доянгизга хабар беринг.",
+      ct_alert: "Доянгизга хабар бериш" }
   };
   var SG = { bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
     convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
@@ -113,12 +144,16 @@ ul{padding-left:20px} li{margin:2px 0}
   function langBar() {
     Array.prototype.forEach.call(document.querySelectorAll(".langs button"), function (b) {
       b.classList.toggle("on", b.getAttribute("data-l") === L);
-      b.onclick = function () { L = b.getAttribute("data-l"); api({ op: "lang", lang: L }); draw(); };
+      b.onclick = async function () { L = b.getAttribute("data-l"); draw(); api({ op: "lang", lang: L }); var r = await api({ op: "view", lang: L }); if (r.ok) { DATA = r.data; draw(); } };
     });
   }
   function vName(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; return !r ? "№" + no : L === "ru" ? r.label : u(r.label_uz || r.label); }
   function vTests(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; if (!r) return []; var a = L === "ru" ? r.tests : (r.tests_uz && r.tests_uz.length ? r.tests_uz : r.tests); return (a || []).map(u); }
   function hName(k) { var r = (DATA.home_schedule || []).filter(function (x) { return x.kind === k; })[0]; return !r ? k : L === "ru" ? r.label : u(r.label_uz || r.label); }
+  var TAB = "main", CT = [];
+  try { CT = JSON.parse(localStorage.getItem("ovabmq_ct") || "[]") || []; } catch (e) { CT = []; }
+  function saveCt() { try { localStorage.setItem("ovabmq_ct", JSON.stringify(CT.slice(-60))); } catch (e) {} }
+  function sg2(k) { var x = ((DATA && DATA.ui && DATA.ui.signs) || []).filter(function (y) { return y.k === k; })[0]; return x ? x.label : sg(k); }
   function draw() {
     langBar();
     document.documentElement.lang = L === "ru" ? "ru" : L === "uzl" ? "uz-Latn" : "uz-Cyrl";
@@ -127,6 +162,79 @@ ul{padding-left:20px} li{margin:2px 0}
     var s = DATA.state || {}, first = (DATA.full_name || "").split(" ")[1] || DATA.full_name || "";
     document.getElementById("hello").textContent = tr("hello", { n: u(first) });
     document.getElementById("sub").textContent = tr("sub");
+    var tabs = ["main", "tips", "bp"]; if (DATA.status === "pregnant" && s.ga_days >= 168) tabs.push("ct");
+    if (tabs.indexOf(TAB) < 0) TAB = "main";
+    main.appendChild(el("div", { class: "tabs", id: "tabs" }, tabs.map(function (k) {
+      return el("button", { type: "button", "data-t": k, class: k === TAB ? "on" : "", text: tr("t_" + k), onclick: function () { TAB = k; draw(); window.scrollTo(0, 0); } });
+    })));
+    if (TAB === "tips") return drawTips(main);
+    if (TAB === "bp") return drawBp(main);
+    if (TAB === "ct") return drawCt(main, s);
+    drawMain(main, s);
+  }
+  function drawTips(main) {
+    ((DATA.ui && DATA.ui.topics) || []).forEach(function (t, i) {
+      main.appendChild(el("details", { class: "tip", open: i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
+    });
+    main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+  }
+  function drawBp(main) {
+    var sys = el("input", { type: "number", id: "bp_sys", inputmode: "numeric", min: "60", max: "260", placeholder: "120" });
+    var dia = el("input", { type: "number", id: "bp_dia", inputmode: "numeric", min: "30", max: "180", placeholder: "80" });
+    var out = el("div", { id: "bp_out" });
+    var save = el("button", { class: "btn call", type: "button", id: "bp_save", text: tr("bp_save"), onclick: async function () {
+      out.textContent = "";
+      var a = parseInt(sys.value, 10), b = parseInt(dia.value, 10);
+      if (!(a >= 60 && a <= 260 && b >= 30 && b <= 180 && b < a)) { out.appendChild(el("div", { class: "alert", text: tr("bp_bad") })); return; }
+      save.disabled = true;
+      var r = await api({ op: "bp", sys: a, dia: b });
+      save.disabled = false;
+      var lv = r.data && r.data.level, er = r.data && r.data.error;
+      if (!r.ok || er) { out.appendChild(el("div", { class: "alert", text: er === "too_many" ? tr("bp_many") : er === "bad_bp" ? tr("bp_bad") : tr("err") })); return; }
+      out.appendChild(el("div", { class: lv === "ok" ? "okmsg" : "alert", text: tr(lv === "severe" ? "bp_severe" : lv === "high" ? "bp_high" : "bp_ok") }));
+      if (lv !== "ok") out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+      DATA.bp = [{ sys: a, dia: b, at: new Date().toISOString() }].concat(DATA.bp || []);
+      listBox.textContent = ""; listBox.appendChild(bpList());
+      sys.value = ""; dia.value = "";
+    } });
+    function bpList() {
+      var l = DATA.bp || [];
+      if (!l.length) return el("span");
+      return el("div", null, el("b", { class: "small", text: tr("bp_list") }), l.slice(0, 14).map(function (x) {
+        var c = x.sys >= 160 || x.dia >= 110 ? "bad" : x.sys >= 140 || x.dia >= 90 ? "warn" : "ok", t = new Date(x.at);
+        return el("div", { class: "vis" }, el("span", { class: "mute small", text: (isNaN(t) ? "" : t.toLocaleString(L === "ru" ? "ru-RU" : "uz", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })) }),
+          el("span", { class: "chip " + c, text: x.sys + "/" + x.dia }));
+      }));
+    }
+    var listBox = el("div", { id: "bp_list" }, bpList());
+    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("bp_title") }), DATA.pe === "high" ? el("div", { class: "alert", text: tr("bp_pe") }) : null,
+      el("p", { class: "small mute", text: tr("bp_hint") }), el("div", { class: "bprow" }, el("label", null, tr("bp_sys"), sys), el("label", null, tr("bp_dia"), dia)), save, out));
+    main.appendChild(el("div", { class: "card" }, listBox));
+  }
+  function drawCt(main, s) {
+    var now = Date.now(), open = CT.length && !CT[CT.length - 1].e;
+    var hour = CT.filter(function (c) { return c.s > now - 3600000; });
+    var b = el("button", { class: "ctbtn" + (open ? " on" : ""), type: "button", id: "ct_btn", text: open ? tr("ct_stop") : tr("ct_start"), onclick: function () {
+      if (open) CT[CT.length - 1].e = Date.now(); else CT.push({ s: Date.now() });
+      saveCt(); draw();
+    } });
+    var warn = null, wk = Math.floor((s.ga_days || 0) / 7);
+    if (hour.length >= 4 && wk < 37) warn = el("div", { class: "alert", id: "ct_warn" }, tr("ct_pre"));
+    else if (hour.length >= 6 && wk >= 37) warn = el("div", { class: "okmsg", id: "ct_warn" }, tr("ct_term"));
+    var alertBtn = warn ? el("button", { class: "btn danger", type: "button", text: tr("ct_alert"), onclick: async function () {
+      alertBtn.disabled = true; var r = await api({ op: "alert", signs: ["contractions"] });
+      alertBtn.textContent = r.ok ? tr("sent", { n: (r.data && r.data.sent) || 0 }) : tr("err");
+    } }) : null;
+    var rows = CT.slice(-12).reverse().map(function (c, i, arr) {
+      var prev = arr[i + 1], t = new Date(c.s);
+      return el("div", { class: "vis" }, el("b", { text: t.toLocaleTimeString(L === "ru" ? "ru-RU" : "uz", { hour: "2-digit", minute: "2-digit" }) }),
+        el("span", { class: "mute small", text: [c.e ? tr("ct_dur", { s: Math.round((c.e - c.s) / 1000) }) : "…", prev ? tr("ct_int", { m: Math.round((c.s - prev.s) / 60000) }) : ""].filter(Boolean).join(" · ") }));
+    });
+    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("ct_title") }), el("p", { class: "small mute", text: tr("ct_hint") }), b,
+      el("div", { class: "chip", id: "ct_hour", text: tr("ct_hour", { n: hour.length }) }), warn, alertBtn, warn ? el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }) : null));
+    if (rows.length) main.appendChild(el("div", { class: "card" }, rows, el("button", { class: "btn call", type: "button", text: tr("ct_clear"), onclick: function () { CT = []; saveCt(); draw(); } })));
+  }
+  function drawMain(main, s) {
     if (DATA.status === "postpartum") main.appendChild(el("div", { class: "card" }, el("div", { class: "big", text: tr("pp", { d: s.pp_day == null ? "—" : s.pp_day }) })));
     else main.appendChild(el("div", { class: "card" }, el("div", { class: "mute small", text: tr("ga") }), el("div", { class: "big", id: "ga", text: tr("wk", { w: Math.floor(s.ga_days / 7), d: s.ga_days % 7 }) }),
       el("div", { class: "mute", text: tr("edd", { d: d(s.edd) }) })));
@@ -145,7 +253,8 @@ ul{padding-left:20px} li{margin:2px 0}
         el("span", { class: "chip " + (h.state === "due" ? "warn" : ""), text: tr(h.state === "due" ? "due" : "next_s") }));
     })));
     // опасные признаки
-    var list = DATA.status === "postpartum" ? PP : PREG, box = el("div", { class: "signs" }, list.map(function (k) { return el("label", null, el("input", { type: "checkbox", value: k }), sg(k)); }));
+    var list = (DATA.ui && DATA.ui.signs) ? DATA.ui.signs.map(function (x) { return x.k; }) : (DATA.status === "postpartum" ? PP : PREG);
+    var box = el("div", { class: "signs" }, list.map(function (k) { return el("label", null, el("input", { type: "checkbox", value: k }), sg2(k)); }));
     var out = el("div");
     var send = el("button", { class: "btn danger", type: "button", id: "send", text: tr("send"), onclick: async function () {
       var picked = Array.prototype.map.call(box.querySelectorAll("input:checked"), function (x) { return x.value; });
@@ -176,7 +285,7 @@ ul{padding-left:20px} li{margin:2px 0}
     if (TG) { try { TG.ready(); TG.expand(); if (TG.colorScheme) document.documentElement.setAttribute("data-theme", TG.colorScheme); } catch (e) {} }
     langBar();
     if (!TG || !TG.initData) { document.getElementById("boot").textContent = tr("open_tg"); return; }
-    var r = await api({ op: "view" });
+    var r = await api({ op: "view", lang: q ? L : null });
     if (!r.ok) { document.getElementById("boot").textContent = r.status === 404 ? tr("notlinked") : tr("err"); return; }
     DATA = r.data; if (!q && (DATA.lang === "ru" || DATA.lang === "uz" || DATA.lang === "uzl")) L = DATA.lang;
     draw();

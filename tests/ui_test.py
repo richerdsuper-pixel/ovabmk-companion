@@ -1124,14 +1124,17 @@ with sync_playwright() as p:
          "lmp": "2026-07-20", "edd_us": None, "risk": "low", "risk_factors": [], "status": "pregnant", "outcome": None, "outcome_date": None, "tg": True, "alerts": 0,
          "state": st(123, {"no": 2, "from": "2026-11-04", "to": "2026-11-24", "state": "due"}, due=True), "created_at": "2026-09-01T05:00:00Z"},
         {"id": M1, "institution_id": 1, "mahalla_id": 2, "full_name": "Каримова Дилноза Анваровна", "birth_date": "1989-04-02", "phone": "+998901234567", "address": "ул. Навбаҳор, 12", "card_no": "А-15",
-         "lmp": "2026-06-10", "edd_us": None, "risk": "high", "risk_factors": ["age_35", "cs_scar"], "status": "pregnant", "outcome": None, "outcome_date": None, "tg": False, "alerts": 1,
+         "lmp": "2026-06-10", "edd_us": None, "risk": "high", "risk_factors": ["cs_scar", "chronic_htn"], "status": "pregnant", "outcome": None, "outcome_date": None, "tg": False, "alerts": 1,
          "state": st(163, {"no": 2, "from": "2026-11-04", "to": "2026-11-24", "state": "due"}, due=True, missed=1, home=[{"kind": "ant12", "from": "2026-09-02", "to": "2026-09-15", "state": "missed", "date": None}], hm=1, anc=ANC1),
          "created_at": "2026-07-01T05:00:00Z"},
         {"id": M3, "institution_id": 1, "mahalla_id": 2, "full_name": "Турсунова Малика", "birth_date": "1997-01-01", "phone": None, "address": "ул. Навбаҳор, 2", "card_no": "",
          "lmp": "2026-02-10", "edd_us": None, "risk": "mid", "risk_factors": ["anemia"], "status": "postpartum", "outcome": "delivered", "outcome_date": "2026-11-17", "tg": True, "alerts": 0,
          "state": st(None, None, home=[{"kind": "pp3", "from": "2026-11-18", "to": "2026-11-21", "state": "due", "date": None}], hd=1, pp=3), "created_at": "2026-03-01T05:00:00Z"}]
     MGET = dict(MLIST[1]); MGET.update({"edd_us": None, "gravida": 3, "para": 2, "notes": "", "consent_at": "2026-07-01", "discharge_date": None, "babies": None,
-        "created_by": S_, "tg": None, "created_by_name": "Сотрудник Тест",
+        "created_by": S_, "tg": None, "created_by_name": "Сотрудник Тест", "height_cm": 160, "weight_kg": 70,
+        "risk_eval": {"level": "high", "reasons": ["cs_scar", "chronic_htn", "pe_risk", "pph_risk"], "bmi": 27.3, "pe": "high", "pe_high": ["chronic_htn"], "pe_mod": [], "gdm": False, "gdm_f": [],
+                      "fgr": "high", "fgr_major": ["chronic_htn"], "fgr_minor": [], "vte_score": 3, "vte": "high", "pph": True, "pph_f": ["cs_scar"], "ptb": False, "ptb_f": [], "rh_neg": False, "anemia": False, "teen": False},
+        "bp": [{"sys": 146, "dia": 94, "at": "2026-11-20T03:00:00Z"}, {"sys": 122, "dia": 80, "at": "2026-11-19T03:00:00Z"}],
         "visits": [{"id": 5, "no": 0, "date": "2026-10-01", "bp_sys": 118, "bp_dia": 76, "weight": 64, "tests": [], "note": "жалоб нет", "by": "Сотрудник Тест"}], "home": [],
         "alerts": [{"id": 77, "signs": ["bleeding", "abd_pain"], "at": "2026-11-20T03:00:00Z", "seen_at": None, "seen_by": None}]})
     MSUM = [{"institution_id": 1, "mahalla_id": 1, "active": 1, "pregnant": 1, "postpartum": 0, "high_risk": 0, "mid_risk": 0, "early": 0, "anc_due": 1, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 1, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 0, "age35": 0},
@@ -1155,6 +1158,9 @@ with sync_playwright() as p:
                  "window.__MOCK.rpc.home_schedule_list = function(){ return " + json.dumps(HSCH, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mother_save = function(a){ return window.__moErr ? {error:{message:window.__moErr}} : '" + M1 + "'; };"
                  "window.__MOCK.rpc.mother_invite = function(){ return 'm0123456789abcdef01234567'; };"
+                 "window.__MOCK.rpc.risk180_preview = function(a){ var d=a._d, f=d.risk_factors||[], h=+d.height_cm, w=+d.weight_kg, b=h&&w? Math.round(w/(h*h/10000)*10)/10 : null;"
+                 " var pe=f.indexOf('chronic_htn')>=0; var hi=f.length>0||(b&&b>=30); return {level:hi?'high':'low', reasons:pe?['chronic_htn','pe_risk']:(b>=30?['bmi_risk']:[]), bmi:b, pe:pe?'high':'low', pe_high:pe?['chronic_htn']:[], pe_mod:[],"
+                 " gdm:b>=30, gdm_f:b>=30?['bmi_30']:[], fgr:'low', vte_score:0, vte:'none', pph:false, ptb:false, rh_neg:f.indexOf('rh_neg')>=0, anemia:false, teen:false}; };"
                  "['anc_visit_save','home_visit_save','mother_alert_seen','mother_outcome','mother_archive','mother_unlink','anc_visit_delete','home_visit_delete'].forEach(function(n){ window.__MOCK.rpc[n] = function(){ return null; }; });")
         c_.add_init_script("window.__MOCK=" + json.dumps(sc_, ensure_ascii=False) + ";" + RPC + FN + ";" + extra)
         c_.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
@@ -1189,7 +1195,13 @@ with sync_playwright() as p:
     pg.fill("#mf_phone", "93 555 66 77"); pg.select_option("#mf_mahalla", "2"); pg.fill("#mf_address", "ул. Мустақиллик, 5")
     pg.fill("#mf_lmp", "2026-09-25"); pg.dispatch_event("#mf_lmp", "input")
     ok("постановка: срок считается сразу", "8 нед" in pg.inner_text("#mf_ga"), pg.inner_text("#mf_ga"))
-    ok("постановка: возраст 38 — фактор «35+» отмечен сам, риск не ниже среднего", pg.is_checked("input[value=age_35]") and pg.input_value("#mf_risk") == "mid")
+    pg.wait_for_timeout(400)
+    ok("постановка: без факторов — низкий риск и стандартный уход", "Низкий риск" in pg.inner_text("#mf_riskbox") and "8 визитов" in pg.inner_text("#mf_riskbox"), pg.inner_text("#mf_riskout"))
+    pg.fill("#mf_height_cm", "160"); pg.fill("#mf_weight_kg", "80"); pg.dispatch_event("#mf_weight_kg", "input"); pg.wait_for_timeout(500)
+    ok("постановка: рост и вес → ИМТ 31.3, высокий риск, ПГТТ в I триместре", "ИМТ 31.3" in pg.inner_text("#mf_riskbox") and "Высокий риск" in pg.inner_text("#mf_riskbox") and "12–14 нед" in pg.inner_text("#mf_riskbox"), pg.inner_text("#mf_riskbox"))
+    pg.check("#mf_rf input[value=chronic_htn]"); pg.select_option("#mf_smoke", "smoking"); pg.wait_for_timeout(500)
+    ok("постановка: хр. АГ → преэклампсия, аспирин 150 мг по протоколу", "аспирин 150 мг" in pg.inner_text("#mf_riskbox") and "Хроническая артериальная гипертензия" in pg.inner_text("#mf_riskbox"), pg.inner_text("#mf_riskbox"))
+    ok("постановка: группы факторов по протоколу", all(x in pg.inner_text("#mf_rf") for x in ("Акушерский анамнез", "Соматические заболевания", "Семейный анамнез", "Эта беременность")))
     pg.click("#mf_save"); pg.wait_for_timeout(250)
     ok("постановка: без отметки согласия не отправляется", "согласие подписано" in pg.inner_text("#mf_err") and not rpcs(pg, "mother_save"))
     pg.check("#mf_consent"); pg.evaluate("window.__moErr='duplicate'"); pg.click("#mf_save"); pg.wait_for_timeout(250)
@@ -1197,12 +1209,14 @@ with sync_playwright() as p:
     pg.evaluate("window.__moErr=null"); pg.click("#mf_save"); pg.wait_for_timeout(500)
     a = rpcs(pg, "mother_save")[-1][2]
     ok("постановка: отправлены данные с согласием", a["_id"] is None and a["_d"]["full_name"] == "Норова Гулчеҳра Ботировна" and a["_d"]["mahalla_id"] == 2 and a["_d"]["consent_at"] == "2026-11-20"
-       and "age_35" in a["_d"]["risk_factors"] and a["_d"]["institution_id"] == 1, a)
+       and a["_d"]["risk_factors"] == ["chronic_htn", "smoking"] and a["_d"]["height_cm"] == "160" and a["_d"]["weight_kg"] == "80" and "risk" not in a["_d"] and a["_d"]["institution_id"] == 1, a)
     ok("постановка: переход в карточку", pg.url.endswith("#/mother/" + M1), pg.url)
     # карточка
     t_ = pg.inner_text("#app")
-    ok("карточка: имя, телефон, факторы", "Каримова Дилноза Анваровна" in t_ and "+998 90 123 45 67" in t_ and "Рубец на матке" in t_)
-    ok("карточка: сигнал с признаками", "Кровотечение" in pg.inner_text("#mc_alerts") and "Сильная боль в животе" in pg.inner_text("#mc_alerts"))
+    ok("карточка: имя, телефон, рост/вес", "Каримова Дилноза Анваровна" in t_ and "+998 90 123 45 67" in t_ and "160 см / 70 кг" in t_)
+    ok("карточка: группа риска по протоколу — причины и что делать", all(x in pg.inner_text("#mc_riskbox") for x in ("Высокий риск", "Рубец на матке", "Высокий риск преэклампсии", "гематолога", "2–3 уровне")), pg.inner_text("#mc_riskbox"))
+    ok("карточка: дневник давления беременной", "146/94" in pg.inner_text("#mc_bp") and pg.locator("#mc_bp .chip.warn").count() == 1)
+    ok("карточка: сигнал с признаками", "Кровянистые выделения" in pg.inner_text("#mc_alerts") or "Кровотечение" in pg.inner_text("#mc_alerts") and "Сильная боль в животе" in pg.inner_text("#mc_alerts"))
     pg.click("#mc_alerts button"); pg.wait_for_timeout(250)
     ok("карточка: «связалась» отмечает сигнал", rpcs(pg, "mother_alert_seen")[-1][2] == {"_id": 77})
     ok("карточка: план визитов — пропуск, сейчас, впереди", all(x in pg.inner_text("#mc_anc") for x in ("пропущен", "сейчас", "впереди")))

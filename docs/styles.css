@@ -407,3 +407,7 @@ input[type=search],input[type=tel]{background:var(--panel);border:1px solid var(
   .pbreak{page-break-before:always}
   .route .vrow{break-inside:avoid}
 }
+.riskbox{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line)}
+.riskbox.hi{background:var(--bad-soft);border-color:transparent}
+.riskbox.lo{background:var(--ok-soft);border-color:transparent}
+.riskbox ul{color:var(--ink)}

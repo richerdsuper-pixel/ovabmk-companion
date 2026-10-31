@@ -848,7 +848,7 @@ with sync_playwright() as p:
     b, ctx = pg_ctx(S_, ("staff",))
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(SITE + "#/pregnant"); pg.wait_for_timeout(600)
-    ok("помощник: пункт меню и поле даты", "Беременные" in pg.inner_text("nav.nav") and pg.locator("#pg_lmp").count() == 1)
+    ok("помощник: пункт меню и поле даты", "Стандарт №180" in pg.inner_text("nav.nav") and pg.locator("#pg_lmp").count() == 1)
     txt = pg.inner_text("#app")
     ok("помощник: сказано, что дата нигде не сохраняется", "не сохраняется" in txt and "никуда не отправляется" in txt, txt[:300])
     ok("помощник: нет полей для Ф.И.О., телефона и номера карты", pg.locator("input[type=tel]").count() == 0 and pg.locator("#pg_card").count() == 0 and pg.locator("input[type=text]").count() == 0)
@@ -872,11 +872,11 @@ with sync_playwright() as p:
     ok("помощник: дата не сохраняется в браузере", lm not in pg.evaluate("JSON.stringify(Object.assign({}, localStorage)) + JSON.stringify(Object.assign({}, sessionStorage))"))
     ok("помощник: у сотрудника нет редактирования окон", pg.locator("details.panel").locator("input[type=number]").count() == 0 and pg.locator("button:has-text('сводк')").count() == 0)
     pg.click(".seg button:nth-child(2)"); pg.wait_for_timeout(300)
-    ok("помощник: узбекский интерфейс", "Ҳомиладорлар" in pg.inner_text("nav.nav") and "сақланмайди" in pg.inner_text("#app"), pg.inner_text("nav.nav"))
+    ok("помощник: узбекский интерфейс", "180-сон стандарт" in pg.inner_text("nav.nav") and "сақланмайди" in pg.inner_text("#app"), pg.inner_text("nav.nav"))
     set_lmp(pg, lmp_ago(10)); t_uz = pg.inner_text("#pg_res")
     ok("помощник: узбекский — анализы из базы", "Умумий қон таҳлили" in t_uz and "Муддат: 10 ҳафта" in t_uz, t_uz[:300])
     pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(300)
-    ok("помощник: латиница — меню", "Homiladorlar" in pg.inner_text("nav.nav") and pg.evaluate("document.documentElement.lang") == "uz-Latn", pg.inner_text("nav.nav"))
+    ok("помощник: латиница — меню", "180-son standart" in pg.inner_text("nav.nav") and pg.evaluate("document.documentElement.lang") == "uz-Latn", pg.inner_text("nav.nav"))
     set_lmp(pg, lmp_ago(10)); t_l = pg.inner_text("#pg_res")
     ok("помощник: латиница — анализы и заметка из базы переведены", "Umumiy qon tahlili" in t_l and "Xavf omillarini baholash" in t_l and "Общий анализ" not in t_l and "Muddat: 10 hafta" in t_l, t_l[:400])
     ok("латиница: язык запоминается", pg.evaluate("localStorage.getItem('ovabmk-lang')") == "uzl")
@@ -962,7 +962,7 @@ with sync_playwright() as p:
     b, ctx = pg_ctx(S_, ("staff",))
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(SITE + "#/offline"); pg.wait_for_timeout(500)
-    ok("офлайн: пункт меню у сотрудника", "Офлайн-программа" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    ok("офлайн: программа отложена — пункта меню нет (страница по прямой ссылке)", "Офлайн-программа" not in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
     ok("офлайн: сотрудник не видит ключ шифрования администратора", pg.locator("#off_akey").count() == 0)
     pg.click("#off_get"); pg.wait_for_timeout(300); t = pg.inner_text("#off_res")
     ok("офлайн: ключ получен, ссылка на программу с ключом", "Доя кабинета" in t and "/app/#a=eyJ2IjoxfQ.c2ln" in t, t)
@@ -982,20 +982,8 @@ with sync_playwright() as p:
     sk = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_offline_key"]
     ok("офлайн (админ): ключ сохранён (две половины)", sk and sk[-1][2]["_x"] == "A" * 43 and sk[-1][2]["_y"] == "B" * 43 and "Ключ сохранён" in pg.inner_text("#off_akey_state"), sk)
     pg.goto(SITE + "#/admin/users"); pg.wait_for_timeout(500)
-    rows = pg.locator("table tbody tr")
-    sel_a, sel_s = rows.nth(0).locator("td").nth(4).locator("select"), rows.nth(1).locator("td").nth(4).locator("select")
-    ok("сотрудники: колонка офлайн-программы, у сотрудника — доя кабинета", sel_s.input_value() == "cab" and sel_a.input_value() == "")
-    ok("сотрудники: «Администратор» есть только у админа", sel_a.locator("option[value=coord]").count() == 1 and sel_s.locator("option[value=coord]").count() == 0)
-    sel_s.select_option("pat"); pg.wait_for_timeout(300)
-    so = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "rpc" and x[1] == "admin_set_offline_role"]
-    ok("сотрудники: должность в офлайн-программе назначена", so and so[-1][2]["_role"] == "pat" and so[-1][2]["_uid"] == "%s" % S_, so)
-    rows.nth(1).locator("td").nth(4).locator("button").click(); pg.wait_for_timeout(300)
-    fk = [x for x in pg.evaluate("window.__MOCK.log") if x[0] == "fn" and x[1] == "offline-key"]
-    ok("сотрудники: администратор выдаёт ключ сотруднику", fk and fk[-1][2]["uid"] == S_ and "/app/#a=eyJ2IjoxfQ.c2lnU" in rows.nth(1).inner_text(), fk)
-    rows.nth(0).locator("td").nth(4).locator("button").click(); pg.wait_for_timeout(300)
-    ok("сотрудники: без должности ключ не выдаётся", "Сначала выберите должность" in pg.inner_text("#toast"), pg.inner_text("#toast"))
-    pg.click(".seg button:nth-child(3)"); pg.wait_for_timeout(300)
-    ok("латиница: офлайн-программа в меню", "Oflayn-dastur" in pg.inner_text("nav.nav"), pg.inner_text("nav.nav"))
+    ok("сотрудники: столбец офлайн-программы скрыт (программа отложена)", "Офлайн-программа" not in pg.inner_text("table thead") and pg.locator("table tbody tr").first.locator("td").count() == 4,
+       pg.inner_text("table thead"))
     pg.click(".seg button:nth-child(1)"); pg.wait_for_timeout(200)
     ok("ошибок JS нет (офлайн: админ)", not errs, errs); b.close()
 
@@ -1122,6 +1110,166 @@ with sync_playwright() as p:
     pg.locator("#sf-10\\.3 form input[type=number]").fill("5"); pg.locator("#sf-10\\.3 form button[type=submit]").click(); pg.wait_for_timeout(300)
     ok("сотрудник: ошибка базы показана понятно", "Нет доступа" in pg.inner_text("#sf-10\\.3") and "forbidden" not in pg.inner_text("#sf-10\\.3"), pg.inner_text("#sf-10\\.3")[-200:])
     ok("ошибок JS нет (подпапки: сотрудник)", not errs, errs); b.close()
+
+
+    # ---------------- беременные: список, постановка, карточка, патронаж, сводка (миграция 0021)
+    M1, M2, M3 = "11111111-aaaa-4aaa-8aaa-000000000001", "11111111-aaaa-4aaa-8aaa-000000000002", "11111111-aaaa-4aaa-8aaa-000000000003"
+    def st(ga, nxt, due=False, missed=0, home=None, hd=0, hm=0, pp=None, anc=None):
+        return {"ga_days": ga, "edd": "2027-03-01", "next_anc": nxt, "due": due, "missed": missed, "home": home or [], "home_due": hd, "home_missed": hm, "pp_day": pp,
+                "anc": anc or [], "next_home": None}
+    ANC1 = [{"no": 1, "from": "2026-07-01", "to": "2026-09-29", "state": "missed", "date": None}, {"no": 2, "from": "2026-11-04", "to": "2026-11-24", "state": "due", "date": None},
+            {"no": 3, "from": "2026-12-09", "to": "2026-12-29", "state": "next", "date": None}]
+    MLIST = [
+        {"id": M2, "institution_id": 1, "mahalla_id": 1, "full_name": "Бобоева Зарина Ахмедовна", "birth_date": "2000-05-05", "phone": "+998901112233", "address": "ул. Боғ, 3", "card_no": "12",
+         "lmp": "2026-07-20", "edd_us": None, "risk": "low", "risk_factors": [], "status": "pregnant", "outcome": None, "outcome_date": None, "tg": True, "alerts": 0,
+         "state": st(123, {"no": 2, "from": "2026-11-04", "to": "2026-11-24", "state": "due"}, due=True), "created_at": "2026-09-01T05:00:00Z"},
+        {"id": M1, "institution_id": 1, "mahalla_id": 2, "full_name": "Каримова Дилноза Анваровна", "birth_date": "1989-04-02", "phone": "+998901234567", "address": "ул. Навбаҳор, 12", "card_no": "А-15",
+         "lmp": "2026-06-10", "edd_us": None, "risk": "high", "risk_factors": ["age_35", "cs_scar"], "status": "pregnant", "outcome": None, "outcome_date": None, "tg": False, "alerts": 1,
+         "state": st(163, {"no": 2, "from": "2026-11-04", "to": "2026-11-24", "state": "due"}, due=True, missed=1, home=[{"kind": "ant12", "from": "2026-09-02", "to": "2026-09-15", "state": "missed", "date": None}], hm=1, anc=ANC1),
+         "created_at": "2026-07-01T05:00:00Z"},
+        {"id": M3, "institution_id": 1, "mahalla_id": 2, "full_name": "Турсунова Малика", "birth_date": "1997-01-01", "phone": None, "address": "ул. Навбаҳор, 2", "card_no": "",
+         "lmp": "2026-02-10", "edd_us": None, "risk": "mid", "risk_factors": ["anemia"], "status": "postpartum", "outcome": "delivered", "outcome_date": "2026-11-17", "tg": True, "alerts": 0,
+         "state": st(None, None, home=[{"kind": "pp3", "from": "2026-11-18", "to": "2026-11-21", "state": "due", "date": None}], hd=1, pp=3), "created_at": "2026-03-01T05:00:00Z"}]
+    MGET = dict(MLIST[1]); MGET.update({"edd_us": None, "gravida": 3, "para": 2, "notes": "", "consent_at": "2026-07-01", "discharge_date": None, "babies": None,
+        "created_by": S_, "tg": None, "created_by_name": "Сотрудник Тест",
+        "visits": [{"id": 5, "no": 0, "date": "2026-10-01", "bp_sys": 118, "bp_dia": 76, "weight": 64, "tests": [], "note": "жалоб нет", "by": "Сотрудник Тест"}], "home": [],
+        "alerts": [{"id": 77, "signs": ["bleeding", "abd_pain"], "at": "2026-11-20T03:00:00Z", "seen_at": None, "seen_by": None}]})
+    MSUM = [{"institution_id": 1, "mahalla_id": 1, "active": 1, "pregnant": 1, "postpartum": 0, "high_risk": 0, "mid_risk": 0, "early": 0, "anc_due": 1, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 1, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 0, "age35": 0},
+            {"institution_id": 1, "mahalla_id": 2, "active": 2, "pregnant": 1, "postpartum": 1, "high_risk": 1, "mid_risk": 0, "early": 1, "anc_due": 1, "anc_missed_women": 1, "home_due": 1, "home_missed": 1, "tg": 1, "alerts": 1, "delivered_month": 1, "registered_month": 2, "teen": 0, "age35": 1},
+            {"institution_id": 2, "mahalla_id": None, "active": 4, "pregnant": 4, "postpartum": 0, "high_risk": 2, "mid_risk": 1, "early": 0, "anc_due": 0, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 0, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 1, "age35": 0}]
+    HSCH = [{"kind": "ant12", "sort": 1, "base": "lmp", "from_day": 84, "until_day": 97, "label_ru": "Патронаж беременной, 12 недель", "label_uz": "Ҳомиладор патронажи, 12 ҳафта", "who": "mother"},
+            {"kind": "pp3", "sort": 3, "base": "birth", "from_day": 0, "until_day": 3, "label_ru": "После выписки: в первые 3 дня (мать и ребёнок)", "label_uz": "Туғруқхонадан кейин 3 кун ичида (она ва бола)", "who": "both"}]
+    def mo_page(uid, roles, hash, w=1200, h_=900, lang=None, position="Акушерка СВП (кабинет доя)"):
+        sc_ = scenario(uid, roles)
+        sc_["db"]["profiles"] = [{"id": A, "full_name": "Администратор Тест", "position": "Заместитель главного врача", "institution_id": None, "positions": []},
+                                 {"id": S_, "full_name": "Сотрудник Тест", "position": position, "institution_id": 1, "positions": []}]
+        sc_["db"]["institutions"] = [{"id": 1, "name": "ОШП №3", "kind": "svp"}, {"id": 2, "name": "ОШП №5", "kind": "svp"}]
+        sc_["db"]["mahallas"] = [{"id": 1, "name": "Боғишамол"}, {"id": 2, "name": "Навбаҳор"}]
+        sc_["db"]["mahalla_links"] = [{"mahalla_id": 1, "institution_id": 1}, {"mahalla_id": 2, "institution_id": 1}]
+        b_ = p.chromium.launch(); c_ = b_.new_context(viewport={"width": w, "height": h_}, accept_downloads=True)
+        c_.add_init_script("window.__NOW='2026-11-20T09:00:00'")
+        if lang: c_.add_init_script("try{localStorage.setItem('ovabmk-lang','" + lang + "')}catch(e){}")
+        extra = ("window.__MOCK.rpc.mothers_list = function(a){ return a._archive ? [] : " + json.dumps(MLIST, ensure_ascii=False) + "; };"
+                 "window.__MOCK.rpc.mother_get = function(a){ return " + json.dumps(MGET, ensure_ascii=False) + "; };"
+                 "window.__MOCK.rpc.mothers_summary = function(){ return " + json.dumps(MSUM) + "; };"
+                 "window.__MOCK.rpc.home_schedule_list = function(){ return " + json.dumps(HSCH, ensure_ascii=False) + "; };"
+                 "window.__MOCK.rpc.mother_save = function(a){ return window.__moErr ? {error:{message:window.__moErr}} : '" + M1 + "'; };"
+                 "window.__MOCK.rpc.mother_invite = function(){ return 'm0123456789abcdef01234567'; };"
+                 "['anc_visit_save','home_visit_save','mother_alert_seen','mother_outcome','mother_archive','mother_unlink','anc_visit_delete','home_visit_delete'].forEach(function(n){ window.__MOCK.rpc[n] = function(){ return null; }; });")
+        c_.add_init_script("window.__MOCK=" + json.dumps(sc_, ensure_ascii=False) + ";" + RPC + FN + ";" + extra)
+        c_.route("**/supabase.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=MOCK))
+        c_.route("**/qrcode-generator*/**", lambda r: r.fulfill(status=200, content_type="application/javascript",
+            body="window.qrcode=function(){return{addData:function(){},make:function(){},createSvgTag:function(){return '<svg id=\"qrsvg\"></svg>';}}};"))
+        c_.route("**/fonts.g*/**", lambda r: r.abort())
+        pg_ = c_.new_page(); er = []; pg_.on("pageerror", lambda e: er.append(str(e)))
+        pg_.goto(SITE + hash); pg_.wait_for_timeout(600)
+        return b_, pg_, er
+
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers")
+    navt = pg.inner_text("nav.nav")
+    ok("беременные: в меню доя — «Беременные» и «Патронаж», без офлайн-программы", "Беременные" in navt and "Патронаж" in navt and "Офлайн" not in navt, navt)
+    ok("беременные: значок сигналов в меню", pg.locator("nav a[href='#/mothers'] .nbadge").inner_text() == "1")
+    names = pg.locator(".mcard .mname").all_inner_texts()
+    ok("беременные: сначала — с сигналом и пропуском", names[0] == "Каримова Дилноза Анваровна", names)
+    c0 = pg.locator(".mcard").first.inner_text()
+    ok("беременные: на карточке срок, пропуск, визит, риск", all(x in c0 for x in ("23 нед 2 дн", "пропущено визитов: 1", "визит №2 до 24.11.2026", "Высокий риск", "сигнал: 1")), c0)
+    ok("беременные: родильница — день после родов", "после родов: 3-й день" in pg.locator(".mcard").nth(2).inner_text() or "после родов: 3-й день" in pg.inner_text("#mo_list"))
+    pg.click(".fchip[data-f=missed]"); pg.wait_for_timeout(150)
+    ok("беременные: фильтр «Пропущен визит»", pg.locator(".mcard").count() == 1)
+    pg.click(".fchip[data-f=all]"); pg.fill("#mo_q", "малика"); pg.wait_for_timeout(150)
+    ok("беременные: поиск по имени", pg.locator(".mcard").count() == 1 and "Турсунова" in pg.inner_text("#mo_list"))
+    pg.fill("#mo_q", ""); pg.select_option("#mo_mah", "1"); pg.wait_for_timeout(150)
+    ok("беременные: фильтр по махалле", pg.locator(".mcard").count() == 1)
+    with pg.expect_download() as dl: pg.click("button:has-text('Скачать Excel')")
+    ok("беременные: выгрузка в Excel", dl.value.suggested_filename.endswith(".xlsx"))
+    pg.screenshot(path=str(SHOTS / "c_mothers.png"), full_page=True)
+    # постановка на учёт
+    pg.click("#mo_add"); pg.wait_for_timeout(400)
+    pg.fill("#mf_full_name", "Норова Гулчеҳра Ботировна"); pg.fill("#mf_birth_date", "1988-03-03"); pg.dispatch_event("#mf_birth_date", "change")
+    pg.fill("#mf_phone", "93 555 66 77"); pg.select_option("#mf_mahalla", "2"); pg.fill("#mf_address", "ул. Мустақиллик, 5")
+    pg.fill("#mf_lmp", "2026-09-25"); pg.dispatch_event("#mf_lmp", "input")
+    ok("постановка: срок считается сразу", "8 нед" in pg.inner_text("#mf_ga"), pg.inner_text("#mf_ga"))
+    ok("постановка: возраст 38 — фактор «35+» отмечен сам, риск не ниже среднего", pg.is_checked("input[value=age_35]") and pg.input_value("#mf_risk") == "mid")
+    pg.click("#mf_save"); pg.wait_for_timeout(250)
+    ok("постановка: без отметки согласия не отправляется", "согласие подписано" in pg.inner_text("#mf_err") and not rpcs(pg, "mother_save"))
+    pg.check("#mf_consent"); pg.evaluate("window.__moErr='duplicate'"); pg.click("#mf_save"); pg.wait_for_timeout(250)
+    ok("постановка: дубликат — понятное сообщение", "уже на учёте" in pg.inner_text("#mf_err"), pg.inner_text("#mf_err"))
+    pg.evaluate("window.__moErr=null"); pg.click("#mf_save"); pg.wait_for_timeout(500)
+    a = rpcs(pg, "mother_save")[-1][2]
+    ok("постановка: отправлены данные с согласием", a["_id"] is None and a["_d"]["full_name"] == "Норова Гулчеҳра Ботировна" and a["_d"]["mahalla_id"] == 2 and a["_d"]["consent_at"] == "2026-11-20"
+       and "age_35" in a["_d"]["risk_factors"] and a["_d"]["institution_id"] == 1, a)
+    ok("постановка: переход в карточку", pg.url.endswith("#/mother/" + M1), pg.url)
+    # карточка
+    t_ = pg.inner_text("#app")
+    ok("карточка: имя, телефон, факторы", "Каримова Дилноза Анваровна" in t_ and "+998 90 123 45 67" in t_ and "Рубец на матке" in t_)
+    ok("карточка: сигнал с признаками", "Кровотечение" in pg.inner_text("#mc_alerts") and "Сильная боль в животе" in pg.inner_text("#mc_alerts"))
+    pg.click("#mc_alerts button"); pg.wait_for_timeout(250)
+    ok("карточка: «связалась» отмечает сигнал", rpcs(pg, "mother_alert_seen")[-1][2] == {"_id": 77})
+    ok("карточка: план визитов — пропуск, сейчас, впереди", all(x in pg.inner_text("#mc_anc") for x in ("пропущен", "сейчас", "впереди")))
+    pg.click("#mc_anc button[data-visit='2']"); pg.wait_for_timeout(150)
+    pg.fill("#mc_anc .vf_sys", "150"); pg.fill("#mc_anc .vf_dia", "95"); pg.dispatch_event("#mc_anc .vf_sys", "input")
+    ok("визит: высокое АД — предупреждение", "140/90" in pg.inner_text("#mc_anc"))
+    pg.check("#mc_anc input[value='УЗИ плода']"); pg.fill("#mc_anc .vf_wt", "66.5")
+    pg.click("#mc_anc form button[type=submit]"); pg.wait_for_timeout(300)
+    v = rpcs(pg, "anc_visit_save")[-1][2]
+    ok("визит: сохранён с АД, весом и анализами", v["_visit"] == 2 and v["_bp_sys"] == 150 and v["_weight"] == 66.5 and v["_tests"] == ["УЗИ плода"] and v["_date"] == "2026-11-20", v)
+    pg.click("#mc_home button[data-home='ant12']"); pg.wait_for_timeout(150)
+    pg.select_option("#mc_home .hf_mother", "1"); pg.check("#mc_home .hf_ref"); pg.click("#mc_home form button[type=submit]"); pg.wait_for_timeout(300)
+    hv = rpcs(pg, "home_visit_save")[-1][2]
+    ok("патронаж из карточки: сохранён", hv["_kind"] == "ant12" and hv["_mother_ok"] is True and hv["_referred"] is True and hv["_baby_ok"] is None, hv)
+    pg.click("#mc_invite"); pg.wait_for_timeout(500)
+    ok("telegram: ссылка-приглашение и QR", pg.input_value("#mc_link") == "https://t.me/OvaBMQbot?start=m0123456789abcdef01234567" and pg.locator("#qrsvg").count() == 1)
+    pg.click("summary:has-text('Роды или снятие с учёта')"); pg.select_option("#mo_out", "delivered"); pg.fill("#mo_out_date", "2026-11-19"); pg.fill("#mo_out_dis", "2026-11-20")
+    pg.click("#mo_out_save"); pg.wait_for_timeout(300)
+    oc = rpcs(pg, "mother_outcome")[-1][2]
+    ok("роды: отмечены с датой выписки", oc == {"_id": M1, "_outcome": "delivered", "_date": "2026-11-19", "_discharge": "2026-11-20", "_babies": 1}, oc)
+    ok("карточка: история визитов", "жалоб нет" in pg.inner_text("#app"))
+    pg.screenshot(path=str(SHOTS / "c_mother_card.png"), full_page=True)
+    # патронаж
+    pg.goto(SITE + "#/patronage"); pg.wait_for_timeout(500)
+    rt = pg.inner_text("#app")
+    ok("патронаж: сгруппировано по махаллям", "Навбаҳор · " in rt and "Боғишамол" not in rt.split("Патронаж: обход")[1].split("Навбаҳор")[0], rt[:600])
+    ok("патронаж: родильница 3 дня и пропущенный патронаж 12 нед, приглашение на визит", all(x in rt for x in ("После выписки", "Патронаж беременной, 12 недель", "пригласить")), rt[:900])
+    pg.locator(".route button[data-home='pp3']").click(); pg.wait_for_timeout(300)
+    pg.select_option(".route .hf_mother", "1"); pg.select_option(".route .hf_baby", "0"); pg.click(".route form button[type=submit]"); pg.wait_for_timeout(300)
+    hv = rpcs(pg, "home_visit_save")[-1][2]
+    ok("патронаж: отмечен на месте (ребёнок — проблема)", hv["_kind"] == "pp3" and hv["_baby_ok"] is False, hv)
+    pg.goto(SITE + "#/consent"); pg.wait_for_timeout(400)
+    ct = pg.inner_text("#app")
+    ok("согласие: бланк на узбекском и русском с учреждением", "РОЗИЛИК" in ct and "СОГЛАСИЕ на обработку" in ct and "«ОШП №3»" in ct)
+    ok("ошибок JS нет (беременные: доя)", not errs, errs); b.close()
+
+    # мобильный телефон: без горизонтальной прокрутки
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers", w=375, h_=800)
+    ok("беременные (телефон): список без прокрутки вбок", not hscroll(pg))
+    pg.goto(SITE + "#/mother/" + M1); pg.wait_for_timeout(500)
+    ok("беременные (телефон): карточка без прокрутки вбок", not hscroll(pg))
+    pg.screenshot(path=str(SHOTS / "m_mother_card.png"), full_page=True)
+    ok("ошибок JS нет (беременные: телефон)", not errs, errs); b.close()
+
+    # не клиническая должность не видит раздел
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers", position="Отдел кадров")
+    ok("беременные: кадровику раздел закрыт", "Беременные" not in pg.inner_text("nav.nav").replace("Стандарт", "") and "Нет доступа" in pg.inner_text("#app") or "доступ" in pg.inner_text("#app").lower(), pg.inner_text("#app")[:300])
+    b.close()
+
+    # администратор: сводка и узбекская латиница
+    b, pg, errs = mo_page(A, ("admin",), "#/mothers/summary")
+    st_ = pg.inner_text("#ms_tbl")
+    ok("сводка: учреждения, махалли и итог", "ОШП №3" in st_.upper() and "— НАВБАҲОР" in st_.upper() and "ИТОГО ПО РАЙОНУ" in st_.upper(), st_[-500:])
+    ok("сводка: итог «На учёте» = 7", pg.locator("#ms_tbl tr.tot td").first.inner_text() == "7")
+    ok("сводка: ссылка на пропуски ведёт в список", pg.locator("#ms_tbl a[href='#/mothers?i=1&f=missed']").count() == 1)
+    with pg.expect_download() as dl: pg.click("button:has-text('Скачать Excel')")
+    ok("сводка: выгрузка в Excel", dl.value.suggested_filename.startswith("Homiladorlar_svodka"))
+    pg.goto(SITE + "#/mothers?i=1&f=missed"); pg.wait_for_timeout(500)
+    ok("сводка → список: фильтр по учреждению и пропускам", pg.locator(".mcard").count() == 1, pg.locator(".mcard").count())
+    pg.goto(SITE + "#/mothers?i=2"); pg.wait_for_timeout(500)
+    ok("список: фильтр по другому учреждению — пусто", pg.locator(".mcard").count() == 0)
+    pg.screenshot(path=str(SHOTS / "c_mothers_summary.png"), full_page=True)
+    ok("ошибок JS нет (сводка)", not errs, errs); b.close()
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers", lang="uzl")
+    lt = pg.inner_text("#app")
+    ok("беременные: узбекская латиница", "Homiladorlar va tuqqan ayollar" in lt and "Yuqori xavf" in lt, lt[:400])
+    ok("ошибок JS нет (латиница)", not errs, errs); b.close()
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

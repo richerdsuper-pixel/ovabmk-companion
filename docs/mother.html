@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Менинг саҳифам · OvaBMҚ</title>
+<meta name="description" content="Ҳомиладорнинг саҳифаси: муддат, кўриклар, таҳлиллар, хавфли белгилар">
+<script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+<script src="config.js"></script>
+<style>
+:root{--bg:#EEF3FA;--panel:#fff;--ink:#111827;--mute:#4B5563;--line:#D9E1EE;--head:#1E3A8A;--accent:#1E40AF;--soft:#E3EAFB;
+  --ok:#1B6E3A;--ok-soft:#DFF3E6;--warn:#8A5200;--warn-soft:#FFF1CC;--bad:#B42318;--bad-soft:#FDE8E6;--gold:#F5B843}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;
+  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17}}
+:root[data-theme=dark]{--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;
+  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:0 0 32px}
+.band{background:#1E40AF;color:#fff;padding:16px 16px 20px;border-bottom:4px solid var(--gold)}
+.band h1{font-size:20px;font-weight:800}
+.band p{opacity:.9;font-size:14px}
+.langs{display:flex;gap:6px;margin-top:10px}
+.langs button{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font-family:inherit;font-weight:600;font-size:13px}
+.langs button.on{background:#fff;color:#1E40AF}
+main{max-width:640px;margin:0 auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.big{font-size:30px;font-weight:900;color:var(--head);line-height:1.1}
+h2{font-size:17px;font-weight:800;color:var(--head)}
+.mute{color:var(--mute)} .small{font-size:14px}
+.chip{display:inline-block;border-radius:99px;padding:2px 10px;font-size:13px;font-weight:700;background:var(--soft);color:var(--accent)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.bad{background:var(--bad-soft);color:var(--bad)}
+ul{padding-left:20px} li{margin:2px 0}
+.vis{display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.vis:first-of-type{border-top:0}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:12px;padding:13px;font-family:inherit;font-weight:800;font-size:16px;text-decoration:none;cursor:pointer}
+.btn.call{background:var(--soft);color:var(--accent)}
+.btn.danger{background:#B42318;color:#fff}
+.btn.e103{background:#B42318;color:#fff;font-size:22px}
+.signs{display:grid;grid-template-columns:1fr;gap:6px}
+.signs label{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-weight:600}
+.signs input{width:22px;height:22px;accent-color:#B42318;flex:none}
+.alert{background:var(--bad-soft);color:var(--bad);border-radius:12px;padding:12px;font-weight:700}
+.okmsg{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px;font-weight:700}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="band"><h1 id="hello">OvaBMҚ</h1><p id="sub"></p>
+  <div class="langs"><button data-l="uz">Ўзб</button><button data-l="uzl">Oʻzb</button><button data-l="ru">Рус</button></div></div>
+<main id="main"><div class="card"><p class="mute" id="boot">…</p></div></main>
+<script>
+(function () {
+  var CFG = window.OVABMK_CONFIG, TG = window.Telegram && window.Telegram.WebApp;
+  var D = {
+    ru: { hello: "Здравствуйте, {n}!", sub: "Ваша страница беременной", ga: "Срок беременности", edd: "Предполагаемая дата родов: {d}", pp: "После родов: {d}-й день",
+      next: "Следующий визит к доя", now: "сейчас", from: "с {a} по {b}", need: "Что сдать / пройти:", none: "Анализы не нужны — осмотр доя.",
+      missed: "Вы пропустили визит: {v}. Пожалуйста, подойдите к доя как можно скорее.", plan: "Все визиты", done: "сделано", due: "сейчас", next_s: "впереди", missed_s: "пропущен",
+      home: "Доя придёт к вам домой", contact: "Ваша доя", call: "📞 Позвонить доя", inst: "Учреждение",
+      danger: "⚠️ Тревожные признаки", danger_hint: "Отметьте, что случилось, и нажмите «Сообщить» — доя получит сообщение сразу.",
+      send: "Сообщить доя", e103: "🚑 Позвонить 103", sent: "Сообщение отправлено ({n}). С вами свяжутся. Если состояние тяжёлое — звоните 103 сейчас.",
+      sent0: "Звоните 103 или срочно поезжайте в роддом.", pick: "Отметьте хотя бы один признак.", err: "Не получилось. Проверьте интернет и попробуйте ещё раз. При опасности — звоните 103.",
+      notlinked: "Вы не подключены. Попросите у доя ссылку-приглашение.", open_tg: "Откройте эту страницу из бота @OvaBMQbot в Telegram.", wk: "{w} нед {d} дн" },
+    uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
+      next: "Доянгизга кейинги кўрик", now: "ҳозир", from: "{a} дан {b} гача", need: "Нимани топшириш / ўтиш керак:", none: "Таҳлил керак эмас — доя кўриги.",
+      missed: "Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, доянгизга иложи борича тезроқ келинг.", plan: "Барча кўриклар", done: "бажарилди", due: "ҳозир", next_s: "олдинда", missed_s: "ўтказиб юборилди",
+      home: "Доя уйингизга келади", contact: "Доянгиз", call: "📞 Доянгизга қўнғироқ", inst: "Муассаса",
+      danger: "⚠️ Хавфли белгилар", danger_hint: "Нима бўлганини белгиланг ва «Хабар бериш»ни босинг — доянгиз дарҳол хабар олади.",
+      send: "Доянгизга хабар бериш", e103: "🚑 103 га қўнғироқ", sent: "Хабар юборилди ({n}). Сиз билан боғланишади. Аҳвол оғир бўлса — ҳозир 103 га қўнғироқ қилинг.",
+      sent0: "103 га қўнғироқ қилинг ёки дарҳол туғруқхонага боринг.", pick: "Камида битта белгини белгиланг.", err: "Бўлмади. Интернетни текшириб, қайта уриниб кўринг. Хавф бўлса — 103 га қўнғироқ қилинг.",
+      notlinked: "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг.", open_tg: "Бу саҳифани Telegramдаги @OvaBMQbot ботидан очинг.", wk: "{w} ҳафта {d} кун" }
+  };
+  var SG = { bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
+    convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
+    waters: ["Подтекают воды", "Сув кетяпти"], less_move: ["Ребёнок мало шевелится", "Бола кам қимирлаяпти"], swelling: ["Отёки лица и рук", "Юз ва қўл шиши"],
+    breath: ["Трудно дышать", "Нафас олиш қийин"], pp_bleeding: ["Сильное кровотечение после родов", "Туғруқдан кейин кучли қон кетиши"],
+    pp_discharge: ["Выделения с неприятным запахом", "Ёқимсиз ҳидли ажралма"], baby_feed: ["Малыш не сосёт", "Чақалоқ эммаяпти"],
+    baby_fever: ["Малыш горячий или холодный", "Чақалоқ иссиқ ёки совуқ"], baby_breath: ["Малыш дышит часто или с трудом", "Чақалоқ тез ёки қийналиб нафас оляпти"],
+    baby_jaundice: ["Малыш жёлтый", "Чақалоқ сарғайган"], baby_cord: ["Пупок красный или гноится", "Киндик қизарган ёки йиринглаган"], baby_convulsions: ["У малыша судороги", "Чақалоқда тутқаноқ"] };
+  var PREG = ["bleeding", "headache", "convulsions", "abd_pain", "fever", "waters", "less_move", "swelling", "breath"];
+  var PP = ["pp_bleeding", "fever", "pp_discharge", "headache", "convulsions", "breath", "baby_feed", "baby_fever", "baby_breath", "baby_jaundice", "baby_cord", "baby_convulsions"];
+  var M = { "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x",
+    "ц": "ts", "ч": "ch", "ш": "sh", "ъ": "ʼ", "ь": "", "э": "e", "ю": "yu", "я": "ya", "ё": "yo", "ў": "oʻ", "қ": "q", "ғ": "gʻ", "ҳ": "h", "ы": "i", "е": "e" };
+  function lat(str) {
+    var out = "", prev = "";
+    for (var i = 0; i < (str || "").length; i++) {
+      var c = str.charAt(i), lo = c.toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(M, lo)) { out += c; prev = c; continue; }
+      var r = M[lo];
+      if (lo === "е" && (prev === "" || !/[A-Za-zЀ-ӿʻʼ]/.test(prev) || "аеёиоуўэюяъАЕЁИОУЎЭЮЯ".indexOf(prev) >= 0)) r = "ye";
+      if (c !== lo && r) { var nx = str.charAt(i + 1), up = nx && nx === nx.toUpperCase() && nx !== nx.toLowerCase(); r = up && r.length > 1 ? r.toUpperCase() : r.charAt(0).toUpperCase() + r.slice(1); }
+      out += r; prev = c;
+    }
+    return out;
+  }
+  var q = /[?&]l=(uz|uzl|ru)/.exec(location.search), L = q ? q[1] : "uz", DATA = null;
+  function tr(k, v) { var s = (L === "ru" ? D.ru : D.uz)[k] || k; if (L === "uzl") s = lat(s); if (v) Object.keys(v).forEach(function (n) { s = s.split("{" + n + "}").join(v[n]); }); return s; }
+  function u(s) { return L === "uzl" ? lat(s) : s; }
+  function sg(k) { var x = SG[k]; return !x ? k : L === "ru" ? x[0] : u(x[1]); }
+  function el(tag, attrs) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { var v = attrs[k]; if (v == null || v === false) return; if (k === "text") e.textContent = v; else if (k === "class") e.className = v; else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); });
+    for (var i = 2; i < arguments.length; i++) { var c = arguments[i]; if (c == null || c === false) continue; (Array.isArray(c) ? c : [c]).forEach(function (x) { if (x != null && x !== false) e.appendChild(typeof x === "string" ? document.createTextNode(x) : x); }); }
+    return e;
+  }
+  function d(iso) { return iso ? iso.slice(8, 10) + "." + iso.slice(5, 7) + "." + iso.slice(0, 4) : ""; }
+  function fmtPhone(p) { var x = String(p || "").replace(/\D/g, ""); return x.length === 12 ? "+" + x.slice(0, 3) + " " + x.slice(3, 5) + " " + x.slice(5, 8) + " " + x.slice(8, 10) + " " + x.slice(10) : p; }
+  async function api(body) {
+    var r = await fetch(CFG.supabaseUrl + "/functions/v1/tg-bot", { method: "POST", headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey },
+      body: JSON.stringify(Object.assign({ action: "mother_app", init: TG ? TG.initData : "" }, body)) });
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    return { ok: r.ok, status: r.status, data: j };
+  }
+  function langBar() {
+    Array.prototype.forEach.call(document.querySelectorAll(".langs button"), function (b) {
+      b.classList.toggle("on", b.getAttribute("data-l") === L);
+      b.onclick = function () { L = b.getAttribute("data-l"); api({ op: "lang", lang: L }); draw(); };
+    });
+  }
+  function vName(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; return !r ? "№" + no : L === "ru" ? r.label : u(r.label_uz || r.label); }
+  function vTests(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; if (!r) return []; var a = L === "ru" ? r.tests : (r.tests_uz && r.tests_uz.length ? r.tests_uz : r.tests); return (a || []).map(u); }
+  function hName(k) { var r = (DATA.home_schedule || []).filter(function (x) { return x.kind === k; })[0]; return !r ? k : L === "ru" ? r.label : u(r.label_uz || r.label); }
+  function draw() {
+    langBar();
+    document.documentElement.lang = L === "ru" ? "ru" : L === "uzl" ? "uz-Latn" : "uz-Cyrl";
+    var main = document.getElementById("main"); main.textContent = "";
+    if (!DATA) return;
+    var s = DATA.state || {}, first = (DATA.full_name || "").split(" ")[1] || DATA.full_name || "";
+    document.getElementById("hello").textContent = tr("hello", { n: u(first) });
+    document.getElementById("sub").textContent = tr("sub");
+    if (DATA.status === "postpartum") main.appendChild(el("div", { class: "card" }, el("div", { class: "big", text: tr("pp", { d: s.pp_day == null ? "—" : s.pp_day }) })));
+    else main.appendChild(el("div", { class: "card" }, el("div", { class: "mute small", text: tr("ga") }), el("div", { class: "big", id: "ga", text: tr("wk", { w: Math.floor(s.ga_days / 7), d: s.ga_days % 7 }) }),
+      el("div", { class: "mute", text: tr("edd", { d: d(s.edd) }) })));
+    var missed = (s.anc || []).filter(function (a) { return a.state === "missed"; });
+    if (missed.length) main.appendChild(el("div", { class: "alert", text: tr("missed", { v: missed.map(function (a) { return vName(a.no); }).join(", ") }) }));
+    if (s.next_anc) {
+      var t = vTests(s.next_anc.no);
+      main.appendChild(el("div", { class: "card", id: "next" }, el("h2", { text: tr("next") }), el("div", null, el("b", { text: vName(s.next_anc.no) }), " ",
+        s.next_anc.state === "due" ? el("span", { class: "chip warn", text: tr("now") }) : null),
+        el("div", { class: "mute", text: tr("from", { a: d(s.next_anc.from), b: d(s.next_anc.to) }) }),
+        el("b", { class: "small", text: tr("need") }), t.length ? el("ul", null, t.map(function (x) { return el("li", { text: x }); })) : el("p", { class: "small mute", text: tr("none") })));
+    }
+    var home = (s.home || []).filter(function (h) { return h.state === "due" || h.state === "next"; });
+    if (home.length) main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("home") }), home.map(function (h) {
+      return el("div", { class: "vis" }, el("div", null, el("b", { text: hName(h.kind) }), el("div", { class: "mute small", text: tr("from", { a: d(h.from), b: d(h.to) }) })),
+        el("span", { class: "chip " + (h.state === "due" ? "warn" : ""), text: tr(h.state === "due" ? "due" : "next_s") }));
+    })));
+    // опасные признаки
+    var list = DATA.status === "postpartum" ? PP : PREG, box = el("div", { class: "signs" }, list.map(function (k) { return el("label", null, el("input", { type: "checkbox", value: k }), sg(k)); }));
+    var out = el("div");
+    var send = el("button", { class: "btn danger", type: "button", id: "send", text: tr("send"), onclick: async function () {
+      var picked = Array.prototype.map.call(box.querySelectorAll("input:checked"), function (x) { return x.value; });
+      out.textContent = "";
+      if (!picked.length) { out.appendChild(el("div", { class: "alert", text: tr("pick") })); return; }
+      send.disabled = true;
+      var r = await api({ op: "alert", signs: picked });
+      send.disabled = false;
+      out.appendChild(el("div", { class: r.ok && r.data.sent ? "okmsg" : "alert", text: r.ok ? (r.data.sent ? tr("sent", { n: r.data.sent }) : tr("sent0")) : tr("err") }));
+      out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+      if (TG && TG.HapticFeedback) try { TG.HapticFeedback.notificationOccurred("warning"); } catch (e) {}
+    } });
+    main.appendChild(el("div", { class: "card", id: "danger" }, el("h2", { text: tr("danger") }), el("p", { class: "small", text: tr("danger_hint") }), box, send, out,
+      el("a", { class: "btn e103", href: "tel:103", text: tr("e103") })));
+    // план
+    if (DATA.status === "pregnant" && (s.anc || []).length) main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("plan") }), s.anc.filter(function (a) { return a.state !== "skip"; }).map(function (a) {
+      var c = a.state === "done" ? "ok" : a.state === "missed" ? "bad" : a.state === "due" ? "warn" : "";
+      return el("div", { class: "vis" }, el("div", null, el("b", { text: vName(a.no) }), el("div", { class: "mute small", text: a.date ? d(a.date) : tr("from", { a: d(a.from), b: d(a.to) }) })),
+        el("span", { class: "chip " + c, text: tr(a.state === "done" ? "done" : a.state === "missed" ? "missed_s" : a.state === "due" ? "due" : "next_s") }));
+    })));
+    // контакт
+    var dy = DATA.doya || {};
+    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("contact") }), el("div", null, el("b", { text: u(dy.name || "") })),
+      DATA.institution ? el("div", { class: "mute small", text: tr("inst") + ": " + DATA.institution }) : null,
+      dy.phone ? el("a", { class: "btn call", href: "tel:" + dy.phone, text: tr("call") + " · " + fmtPhone(dy.phone) }) : null));
+  }
+  async function start() {
+    if (TG) { try { TG.ready(); TG.expand(); if (TG.colorScheme) document.documentElement.setAttribute("data-theme", TG.colorScheme); } catch (e) {} }
+    langBar();
+    if (!TG || !TG.initData) { document.getElementById("boot").textContent = tr("open_tg"); return; }
+    var r = await api({ op: "view" });
+    if (!r.ok) { document.getElementById("boot").textContent = r.status === 404 ? tr("notlinked") : tr("err"); return; }
+    DATA = r.data; if (!q && (DATA.lang === "ru" || DATA.lang === "uz" || DATA.lang === "uzl")) L = DATA.lang;
+    draw();
+  }
+  start();
+})();
+</script>
+</body>
+</html>

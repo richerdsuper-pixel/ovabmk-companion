@@ -286,8 +286,9 @@
   }
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/due", "nav_due", "due"], ["#/indicators", "nav_ind", "ind"],
-      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/leaves", "nav_leaves", "leaves", "lv"], ["#/offline", "nav_offline", "offline"]];
-    if (canSummary()) items.push(["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
+      ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/leaves", "nav_leaves", "leaves", "lv"]];
+    if (mv().canMothers()) items.splice(1, 0, ["#/mothers", "nav_mothers", "mothers", "mo"], ["#/patronage", "nav_patronage", "patronage"]);
+    if (canSummary()) items.push(["#/mothers/summary", "nav_mosum", "mosum"], ["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
       var n = i[3] && S.badge ? S.badge[i[3]] : 0;
@@ -314,6 +315,12 @@
     if (route === "/indicators") return indicatorsView();
     if (route === "/indicators/summary") return canSummary() ? indSummaryView() : forbidden("indsum");
     if (route === "/pregnant") return pregnantView();
+    if (route === "/mothers/summary") return canSummary() ? mv().summaryView() : forbidden("mosum");
+    if (route === "/consent") return mv().consentView();
+    if (route === "/mothers" || route.indexOf("/mothers?") === 0) return mv().canMothers() ? mv().listView(route) : forbidden("mothers");
+    if (route === "/mother/new") return mv().canMothers() ? mv().formView(null) : forbidden("mothers");
+    if ((m = /^\/mother\/([0-9a-f-]{36})(\/edit)?$/.exec(route))) return m[2] ? mv().formView(m[1]) : mv().cardView(m[1]);
+    if (route === "/patronage" || route.indexOf("/patronage?") === 0) return mv().canMothers() ? mv().patronageView(route) : forbidden("patronage");
     if (route === "/broadcasts") return broadcastsView();
     if (route === "/tasks") return tasksView();
     if (route === "/leaves") return leavesView();
@@ -327,6 +334,14 @@
     return overviewView();
   }
   function shell(cur, body) { mount(h("div", null, hero(nav(cur)), body)); }
+  // модуль «Беременные» (docs/mothers.js) получает нужные помощники
+  var MV = null;
+  function mv() {
+    return MV || (MV = window.MothersModule({ h: h, t: t, sb: sb, S: S, CFG: CFG, shell: shell, toast: toast, errMsg: errMsg, fmtPhone: fmtPhone, fmtDT: fmtDT,
+      loadingBox: loadingBox, failBox: failBox, token: function () { return renderToken; }, armed: armed, isAdmin: isAdmin, isManager: isManager, isHead: isHead,
+      myPosCodes: myPosCodes, instName: instName, mahName: mahName, mahInsts: mahInsts, uzT: uzT, ancRow: ancRow, ancLabel: ancLabel, ancTestLabel: ancTestLabel,
+      loadInstitutions: loadInstitutions, todayS: todayS, addDays: addDays, dayDiff: dayDiff }));
+  }
   function forbidden(cur) { shell(cur, h("div", { class: "notice warn", text: t("forbidden") })); }
   function loadingBox() { return h("p", { class: "boot", text: t("loading") }); }
   function failBox(e) { return h("div", { class: "notice bad", text: t("load_failed", { msg: errMsg(e) }) }); }
@@ -1888,11 +1903,11 @@
         h("td", null, h("div", { class: "stack", style: "gap:4px" }, roleBoxes)),
         h("td", { style: "min-width:220px" }, picks, h("div", { style: "margin-top:8px" }, byPos)),
         h("td", { style: "min-width:240px" }, scopeEditor(u)),
-        h("td", { style: "min-width:200px" }, offlineCell(u, offRole[u.user_id] || "")));
+        OFFLINE_ON ? h("td", { style: "min-width:200px" }, offlineCell(u, offRole[u.user_id] || "")) : null);
     });
     shell("users", h("section", { class: "panel stack" }, h("h2", { text: t("u_title") }), h("p", { class: "mute small", text: t("u_folders_hint") }),
       h("div", { class: "tbl" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", { text: t("u_name") + " / " + t("u_position") }), h("th", { text: t("u_roles") }), h("th", { text: t("u_folders") }), h("th", { text: t("u_scope") }), h("th", { text: t("off_col") }))),
+        h("thead", null, h("tr", null, h("th", { text: t("u_name") + " / " + t("u_position") }), h("th", { text: t("u_roles") }), h("th", { text: t("u_folders") }), h("th", { text: t("u_scope") }), OFFLINE_ON ? h("th", { text: t("off_col") }) : null)),
         h("tbody", null, rows)))));
   }
 
@@ -1911,6 +1926,7 @@
       } })),
       h("p", { class: "mute small", text: t("off_link_hint") }));
   }
+  var OFFLINE_ON = false;   // офлайн-программа отложена: столбец должности в ней скрыт (страница #/offline остаётся по прямой ссылке)
   function offlineCell(u, cur) {
     var sel = h("select", { "aria-label": t("off_col") }, [["", "off_role_none"], ["cab", "off_role_cab"], ["pat", "off_role_pat"]].concat((u.roles || []).indexOf("admin") >= 0 ? [["coord", "off_role_coord"]] : [])
       .map(function (x) { return h("option", { value: x[0], text: t(x[1]) }); }));
@@ -2031,6 +2047,10 @@
   async function loadBadges() {
     var a = await sb.rpc("my_broadcasts"), b = await sb.rpc("my_tasks"), c = await sb.rpc("leaves_list");
     S.badge = { bc: (a.data || []).filter(function (x) { return !x.viewed; }).length, tk: (b.data || []).filter(function (x) { return !x.done_at; }).length, lv: leaveActionCount(c.data || []) };
+    if (mv().canMothers()) {   // сигналы беременных, которые ещё никто не видел
+      var d = await sb.rpc("mothers_summary");
+      S.badge.mo = (d.data || []).reduce(function (n, x) { return n + (x.alerts || 0); }, 0);
+    }
   }
   // что ждёт моего действия: согласие на замещение, рассмотрение, просроченная заявка (администратору)
   function leaveActionCount(list) { return list.filter(function (x) { return (x.i_substitute && x.consent === "pending" && x.status === "pending") || x.i_decide; }).length; }

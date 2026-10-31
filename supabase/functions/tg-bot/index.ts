@@ -4,9 +4,12 @@
 // 2) Telegram (webhook, заголовок X-Telegram-Bot-Api-Secret-Token): /start <код> — привязать Telegram, подать заявку, ответить.
 // 3) Администратор: action=approved — сотруднику уходит «Доступ открыт» с кнопкой входа (без повторного подтверждения).
 // 4) action=setup (x-cron-secret) — один раз прописать webhook у Telegram.
-// Данных пациентов здесь нет: анкета — ФИО, телефон, место работы и должности сотрудника.
+// 5) Беременная: /start m<код> от доя → язык → согласие → привязка; «Моя страница» (мини-приложение docs/mother.html, action=mother_app с initData),
+//    тревожные признаки → сигнал сотрудникам её учреждения; /stop — отключиться. action=mother_remind (x-cron-secret) — напоминания и утренняя сводка доя.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.ts";
+import { consentButtons, isLang, langButtons, type Lang, menuButtons, motherCode, parseCb, reminderText, SIGNS, signButtons, signLabel, staffAlertText,
+  staffDigestText, tx, verifyInitData } from "./mother.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -14,6 +17,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SITE = Deno.env.get("SITE_URL") ?? "https://richerdsuper-pixel.github.io/ovabmk-companion/";
 const ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://richerdsuper-pixel.github.io").split(",").map((s) => s.trim());
+const APP_URL = SITE.replace(/\/?$/, "/") + "mother.html";
 const EMAIL_DOMAIN = "tg.ovabmk-companion.example.com"; // как в tg-login: служебный адрес, писем нет
 const FORM_ERRORS = ["bad_full_name", "bad_phone", "need_institution", "bad_positions", "bad_rate", "over_rate", "bad_form", "too_many_requests"];
 const ACCEPT_ERRORS = ["invite_invalid", "invite_used", "invite_expired", "invite_revoked", "telegram_taken", "request_not_approved"];
@@ -100,12 +104,77 @@ async function poll(pollCode: string, origin: string): Promise<Response> {
   return reply({ state: "login", token_hash: th }, 200, origin);
 }
 
+// ---------------------------------------------------------------- беременная
+async function sayKb(chat: number, text: string, kb: unknown[][]) {
+  try { await tg("sendMessage", { chat_id: chat, text, disable_web_page_preview: true, reply_markup: { inline_keyboard: kb } }); } catch { /* не страшно */ }
+}
+async function motherOf(tgId: number): Promise<Record<string, any> | null> {
+  const { data } = await admin().rpc("bot_mother_view", { _tg: tgId });
+  return (data as Record<string, any>) ?? null;
+}
+async function sendAlert(tgId: number, signs: string[]): Promise<number | null> {
+  const { data, error } = await admin().rpc("bot_mother_alert", { _tg: tgId, _signs: signs });
+  if (error) return null;
+  const rows = (data ?? []) as { telegram_id: number; mother_id: string; mother_name: string; mother_phone: string | null; mahalla: string | null; address: string | null }[];
+  let sent = 0;
+  for (const r of rows) {
+    const x = await tg("sendMessage", { chat_id: r.telegram_id, text: staffAlertText(signs, r, SITE.replace(/\/?$/, "/")), disable_web_page_preview: true }).catch(() => null);
+    if (x && x.ok) sent++;
+  }
+  return sent;
+}
+async function onMotherCb(q: Record<string, any>): Promise<void> {
+  const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id);
+  try { await tg("answerCallbackQuery", { callback_query_id: q.id }); } catch { /* */ }
+  const cb = parseCb(q.data);
+  if (!cb || !chat || !tgId) return;
+  if (cb.k === "ml") {
+    const { data: ok } = await admin().rpc("bot_mother_code_ok", { _code: cb.code });
+    if (ok !== true) { await say(chat, tx("expired", cb.lang!)); return; }
+    await sayKb(chat, tx("consent", cb.lang!), consentButtons(cb.lang!, cb.code!)); return;
+  }
+  if (cb.k === "mc") {
+    const { data } = await admin().rpc("bot_mother_link", { _code: cb.code, _tg: tgId, _lang: cb.lang });
+    const r = (data ?? {}) as { ok?: boolean; first_name?: string };
+    if (!r.ok) { await say(chat, tx("expired", cb.lang!)); return; }
+    try { await tg("setChatMenuButton", { chat_id: chat, menu_button: { type: "web_app", text: tx("page", cb.lang!).replace("📋 ", ""), web_app: { url: APP_URL + "?l=" + cb.lang } } }); } catch { /* */ }
+    await sayKb(chat, tx("welcome", cb.lang!, { name: r.first_name || "" }), menuButtons(cb.lang!, APP_URL)); return;
+  }
+  const mo = await motherOf(tgId), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
+  if (cb.k === "mn") { await say(chat, tx("declined", lang)); return; }
+  if (!mo) { await say(chat, tx("not_linked", lang)); return; }
+  if (cb.k === "ma") { await sayKb(chat, tx("danger_pick", lang), signButtons(lang, mo.status === "postpartum")); return; }
+  if (cb.k === "mh") { await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return; }
+  if (cb.k === "ms" && cb.sign) {
+    const n = await sendAlert(tgId, [cb.sign]);
+    await say(chat, tx(n ? "danger_sent" : "danger_nobody", lang, { sign: signLabel(cb.sign, lang), n: n ?? 0 }));
+  }
+}
+
 // ---------------------------------------------------------------- Telegram webhook
 async function onUpdate(u: Record<string, any>): Promise<void> {
+  if (u.callback_query) { await onMotherCb(u.callback_query); return; }
   const m = u.message;
   if (!m || !m.from || m.chat?.type !== "private") return;
   const from = m.from, chat = Number(m.chat.id);
+  const mc = motherCode(m.text);
+  if (mc) {
+    const { data: ok } = await admin().rpc("bot_mother_code_ok", { _code: mc });
+    if (ok !== true) { await say(chat, tx("expired", "uz") + "\n" + tx("expired", "ru")); return; }
+    await sayKb(chat, tx("choose_lang", "uz") + " / " + tx("choose_lang", "uzl") + " / " + tx("choose_lang", "ru"), langButtons(mc)); return;
+  }
+  const text = typeof m.text === "string" ? m.text.trim() : "";
+  if (/^\/stop(@\w+)?$/.test(text)) {
+    const mo = await motherOf(Number(from.id)), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
+    const { data: was } = await admin().rpc("bot_mother_stop", { _tg: Number(from.id) });
+    if (was === true) { try { await tg("setChatMenuButton", { chat_id: chat, menu_button: { type: "default" } }); } catch { /* */ } }
+    await say(chat, was === true ? tx("stopped", lang) : tx("not_linked", lang)); return;
+  }
   const c = startCode(m.text);
+  if (!c) {
+    const mo = await motherOf(Number(from.id));
+    if (mo) { const lang: Lang = isLang(mo.lang) ? mo.lang : "uz"; await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return; }
+  }
   if (!c) { await say(chat, helloText(SITE), { text: "Открыть сайт / Saytni ochish", url: SITE }); return; }
   const name = [from.first_name, from.last_name].filter((x: unknown) => typeof x === "string" && x).join(" ").slice(0, 200);
   const { data, error } = await admin().rpc("ticket_bind", { _start: c, _tg_id: Number(from.id), _tg_username: typeof from.username === "string" ? from.username : null, _tg_name: name });
@@ -156,12 +225,50 @@ Deno.serve(async (req: Request) => {
       reply_markup: { inline_keyboard: [[{ text: "Войти / Kirish", url }]] } }).catch(() => null);
     return reply({ sent: !!(r && r.ok) }, 200, origin);
   }
+  if (body.action === "mother_app") {   // мини-приложение «Моя страница»: подпись Telegram вместо входа
+    const who = await verifyInitData(typeof body.init === "string" ? body.init : "", BOT_TOKEN);
+    if (!who) return reply({ error: "unauthorized" }, 401, origin);
+    if (body.op === "alert") {
+      const signs = Array.isArray(body.signs) ? (body.signs as unknown[]).filter((x): x is string => typeof x === "string" && SIGNS.includes(x)).slice(0, 10) : [];
+      if (!signs.length) return reply({ error: "bad_request" }, 400, origin);
+      const n = await sendAlert(who.id, signs);
+      if (n === null) return reply({ error: "failed" }, 500, origin);
+      return reply({ sent: n }, 200, origin);
+    }
+    if (body.op === "lang" && isLang(body.lang)) { await admin().rpc("bot_mother_lang", { _tg: who.id, _lang: body.lang }); return reply({ ok: true }, 200, origin); }
+    const mo = await motherOf(who.id);
+    return mo ? reply(mo, 200, origin) : reply({ error: "not_linked" }, 404, origin);
+  }
+  if (body.action === "mother_remind") {   // планировщик: mode=mothers — напоминания беременным; mode=staff — утренняя сводка сотрудникам
+    const sec = req.headers.get("x-cron-secret") ?? "";
+    const db = admin();
+    if (body.mode === "staff") {
+      const { data, error } = await db.rpc("cron_staff_digest", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; full_name: string; due: number; missed: number; home_due: number; home_missed: number; alerts: number }[]) {
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: staffDigestText(r, SITE.replace(/\/?$/, "/")), disable_web_page_preview: true }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
+    const { data, error } = await db.rpc("cron_mother_reminders", { _secret: sec });
+    if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+    let sent = 0;
+    for (const r of (data ?? []) as { telegram_id: number; lang: string; kind: string; label: string; date_to: string; tests: unknown; first_name: string }[]) {
+      const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+      const x = await tg("sendMessage", { chat_id: r.telegram_id, text: reminderText(r), disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: menuButtons(lang, APP_URL) } }).catch(() => null);
+      if (x && x.ok) sent++;
+    }
+    return reply({ total: (data ?? []).length, sent }, 200, origin);
+  }
   if (body.action === "setup") {   // один раз: x-cron-secret
     const sec = req.headers.get("x-cron-secret") ?? "";
     const { data: ok } = await admin().rpc("cron_secret_ok", { _secret: sec });
     if (ok !== true) return reply({ error: "forbidden" }, 403, origin);
     if (body.info === true) { const i = await tg("getWebhookInfo", {}); return reply(await i.json(), 200, origin); }
-    const r = await tg("setWebhook", { url: `${SUPABASE_URL}/functions/v1/tg-bot`, secret_token: await webhookSecret(), allowed_updates: ["message"], drop_pending_updates: true });
+    const r = await tg("setWebhook", { url: `${SUPABASE_URL}/functions/v1/tg-bot`, secret_token: await webhookSecret(), allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
     return reply(await r.json(), 200, origin);
   }
   return reply({ error: "bad_request" }, 400, origin);

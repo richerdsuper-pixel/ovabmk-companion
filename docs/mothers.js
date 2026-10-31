@@ -15,6 +15,11 @@ window.MothersModule = function (A) {
   function today() { return A.todayS(); }
   function fmtD(s) { return s ? s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) : ""; }
   function gaTxt(days) { return days == null ? "" : t("mo_ga", { w: Math.floor(days / 7), d: days % 7 }); }
+  function ageTxt(n) {   // «21 год», «22 года», «25 лет»; по-узбекски — «25 ёш»
+    if (S.lang !== "ru") return t("mo_age", { n: n });
+    var d = n % 10, h = n % 100;
+    return n + " " + (d === 1 && h !== 11 ? "год" : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "года" : "лет");
+  }
   function ageOf(bd) { if (!bd) return null; var a = today(), y = +a.slice(0, 4) - +bd.slice(0, 4); if (a.slice(5) < bd.slice(5)) y--; return y; }
   function errText(e) {
     var m = A.errMsg(e), k = ["duplicate", "need_consent", "bad_lmp", "bad_edd", "bad_birth_date", "bad_phone", "bad_full_name", "need_institution", "bad_date", "bad_values", "bad_form", "forbidden"]
@@ -96,7 +101,7 @@ window.MothersModule = function (A) {
         var age = ageOf(m.birth_date);
         listBox.appendChild(h("a", { class: "mcard" + (m.alerts ? " alert" : ""), href: "#/mother/" + m.id },
           h("div", { class: "row", style: "justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap" },
-            h("b", { class: "mname", text: m.full_name }), h("span", { class: "mute small", text: [age != null ? t("mo_age", { n: age }) : "", m.card_no ? "№ " + m.card_no : ""].filter(Boolean).join(" · ") })),
+            h("b", { class: "mname", text: m.full_name }), h("span", { class: "mute small", text: [age != null ? ageTxt(age) : "", m.card_no ? "№ " + m.card_no : ""].filter(Boolean).join(" · ") })),
           h("div", { class: "chips" }, stateChips(m)),
           h("div", { class: "mute small", text: [A.mahName(m.mahalla_id), m.address, m.phone ? A.fmtPhone(m.phone) : "", insts.length > 1 ? A.instName(m.institution_id) : ""].filter(Boolean).join(" · ") })));
       });
@@ -253,7 +258,7 @@ window.MothersModule = function (A) {
     parts.push(h("section", { class: "panel stack" },
       h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap" },
         h("div", null, h("a", { href: "#/mothers", class: "small", text: "← " + t("mo_title") }), h("h2", { id: "mc_name", text: m.full_name }),
-          h("div", { class: "mute small", text: [age != null ? t("mo_age", { n: age }) : "", m.card_no ? "№ " + m.card_no : "", A.instName(m.institution_id)].filter(Boolean).join(" · ") })),
+          h("div", { class: "mute small", text: [age != null ? ageTxt(age) : "", m.card_no ? "№ " + m.card_no : "", A.instName(m.institution_id)].filter(Boolean).join(" · ") })),
         h("div", { class: "row", style: "gap:6px;flex-wrap:wrap;align-items:start" },
           h("a", { class: "btn sm", href: "#/mother/" + id + "/edit", text: t("edit") }),
           m.status !== "closed" ? archiveBtn(m, reload) : h("button", { class: "btn sm", type: "button", text: t("mo_unarchive"), onclick: async function () {

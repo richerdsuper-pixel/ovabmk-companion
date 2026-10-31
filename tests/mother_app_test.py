@@ -14,7 +14,9 @@ VIEW = {"lang": "uz", "full_name": "Каримова Дилноза Анваро
                      {"no": 2, "label": "Визит 2 (18–20 недель)", "label_uz": "2-кўрик (18–20 ҳафта)", "tests": ["УЗИ плода"], "tests_uz": ["Ҳомила УТТ"]},
                      {"no": 3, "label": "Визит 3", "label_uz": "3-кўрик", "tests": [], "tests_uz": []}],
         "home_schedule": [{"kind": "ant32", "label": "Патронаж беременной, 32 недели", "label_uz": "Ҳомиладор патронажи, 32 ҳафта"}], "visits": [],
-        "pe": "high", "bp": [{"sys": 128, "dia": 82, "at": "2026-10-31T08:00:00Z"}],
+        "pe": "high", "bp": [{"sys": 128, "dia": 82, "at": "2026-10-31T08:00:00Z"}, {"sys": 122, "dia": 78, "at": "2026-10-25T08:00:00Z"}], "today": "2026-11-01", "bmi": 22.5, "height_cm": 160,
+        "weights": [{"d": "2026-08-01", "kg": 58, "src": "reg", "ga": 36}, {"d": "2026-10-01", "kg": 61.5, "src": "visit", "ga": 97}, {"d": "2026-10-30", "kg": 66, "src": "self", "ga": 126}],
+        "pills": [{"day": "2026-10-30", "kind": "iron"}, {"day": "2026-11-01", "kind": "iodine"}],
         "ui": {"signs": [{"k": "bleeding", "label": "Қонли ажралма, қон кетиши"}, {"k": "contractions", "label": "Бир соатда 4–5 тадан кўп тўлғоқ"}, {"k": "vomit", "label": "5 мартадан кўп қусиш"}],
                "topics": [{"k": "food", "title": "🍎 Овқатланиш ва витаминлар", "text": "• Фолий кислотаси 400 мкг"}, {"k": "signs", "title": "⚠️ Қачон дарҳол шифокорга", "text": "• 5 мартадан кўп қусиш"}]}}
 def run(p, view, tg=True, status=200, search="?l=uz"):
@@ -23,13 +25,14 @@ def run(p, view, tg=True, status=200, search="?l=uz"):
     def fn(route):
         body = json.loads(route.request.post_data or "{}"); calls.append(body)
         if body.get("op") == "alert": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
+        elif body.get("op") in ("weight", "pill"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
         elif body.get("op") == "bp":
             a, b = body["sys"], body["dia"]; lv = "severe" if a >= 160 or b >= 110 else "high" if a >= 140 or b >= 90 else "ok"
             route.fulfill(status=200, content_type="application/json", body=json.dumps({"level": lv}))
         else: route.fulfill(status=status, content_type="application/json", body=json.dumps(view if status == 200 else {"error": "not_linked"}))
     ctx.route("**/functions/v1/tg-bot", fn)
     ctx.route("**/telegram-web-app.js*", lambda r: r.fulfill(status=200, content_type="application/javascript",
-        body=("window.Telegram={WebApp:{initData:'query_id=1&user=%7B%22id%22%3A777%7D&auth_date=1&hash=ab',colorScheme:'light',ready:function(){},expand:function(){},HapticFeedback:{notificationOccurred:function(){}}}};" if tg else "")))
+        body=("window.Telegram={WebApp:{initData:'query_id=1&user=%7B%22id%22%3A777%7D&auth_date=1&hash=ab',colorScheme:'light',ready:function(){},expand:function(){},setHeaderColor:function(){},BackButton:{show:function(){},hide:function(){},onClick:function(){}},HapticFeedback:{notificationOccurred:function(){},impactOccurred:function(){}}}};" if tg else "")))
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(URL + search); pg.wait_for_timeout(500)
     return b, pg, errs, calls
@@ -42,23 +45,44 @@ with sync_playwright() as p:
     ok("следующий визит с анализами", "2-кўрик (18–20 ҳафта)" in pg.inner_text("#next") and "Ҳомила УТТ" in pg.inner_text("#next"))
     ok("контакт доя: кнопка звонка", pg.get_attribute("a.call", "href") == "tel:+998901112233")
     ok("подпись Telegram отправлена на сервер", calls and calls[0]["init"].startswith("query_id=") and calls[0]["action"] == "mother_app" and calls[0]["op"] == "view", calls[:1])
+    ok("главная: кольцо срока, триместр, до родов", pg.locator("#herocard svg.ring").count() == 1 and "2-триместр" in t and "Туғруққача ≈ 136 кун" in t, t[:400])
+    ok("главная: размер малыша по неделям", "банан" not in pg.inner_text("#baby") and "булғор қалампири" in pg.inner_text("#baby"), pg.inner_text("#baby"))
+    ok("главная: полоса визитов (пропущен — красный)", pg.locator("#dots .d.missed").count() == 1 and pg.locator("#dots .d.due").count() == 1)
+    ok("главная: витамины сегодня (после 12 нед без фолиевой)", [x.get_attribute("data-k") for x in pg.query_selector_all("#pills .pill")] == ["iodine", "iron"] and pg.locator("#pills .pill.on").count() == 1)
+    pg.click("#pills .pill[data-k=iron]"); pg.wait_for_timeout(300)
+    ok("витамины: отметка уходит на сервер", calls[-1].get("op") == "pill" and calls[-1].get("kind") == "iron" and calls[-1].get("on") is True and pg.locator("#pills .pill.on").count() == 2, calls[-1])
+    ok("нижнее меню: 5 разделов", [b.get_attribute("data-t") for b in pg.query_selector_all("#tabs button")] == ["home", "charts", "diary", "tips", "more"], [b.inner_text() for b in pg.query_selector_all("#tabs button")])
+    pg.click("#sosbtn"); pg.wait_for_timeout(200)
     pg.click("#send"); pg.wait_for_timeout(200)
     ok("без отметки признака — подсказка", "Камида битта" in pg.inner_text("#danger"))
     ok("признаки — с сервера (список протокола)", pg.locator("input[value=vomit]").count() == 1 and "5 мартадан кўп қусиш" in pg.inner_text("#danger"))
     pg.check("input[value=bleeding]"); pg.click("#send"); pg.wait_for_timeout(400)
     ok("сигнал: отправлены признаки", calls[-1].get("op") == "alert" and calls[-1].get("signs") == ["bleeding"], calls[-1])
-    ok("сигнал: ответ и кнопка 103", "Хабар юборилди (3)" in pg.inner_text("#danger") and pg.locator("#danger a[href='tel:103']").count() >= 1)
-    ok("вкладки: главное, советы, давление (без схваток до 24 нед)", [b.inner_text() for b in pg.query_selector_all("#tabs button")] == ["Асосий", "Маслаҳатлар", "Қон босими"], [b.inner_text() for b in pg.query_selector_all("#tabs button")])
+    ok("сигнал: ответ и кнопка 103", "Хабар юборилди (3)" in pg.inner_text("#danger") and pg.locator("a[href='tel:103']").count() >= 1)
+    pg.click("#sosmini"); pg.wait_for_timeout(100)
+    ok("SOS в шапке открывает тревожные признаки", pg.locator("#danger").count() == 1)
+    pg.click("#tabs button[data-t=charts]"); pg.wait_for_timeout(200)
+    ok("графики: давление — линия, границы 140/90, последнее значение", pg.locator("#c_bp svg.chart polyline").count() == 2 and pg.locator("#c_bp line.lim").count() == 2 and "128/82" in pg.inner_text("#c_bp"))
+    cw = pg.inner_text("#c_w")
+    ok("графики: прибавка веса с полосой нормы IOM", pg.locator("#c_w polygon.bandf").count() == 1 and "+8" in cw and "18 ҳафтагача" in cw, cw)
+    ok("графики: прибавка больше нормы — совет", "меъёрдан кўп" in cw, cw)
+    ok("графики: витамины за 14 дней", pg.locator("#c_pills .c.on").count() == 3 and "2 кун" in pg.inner_text("#c_pills"), pg.inner_text("#c_pills"))
+    pg.screenshot(path=str(ROOT / "tests/shots/m_mother_charts.png"), full_page=True)
     pg.click("#tabs button[data-t=tips]"); pg.wait_for_timeout(200)
     ok("советы: разделы справки", "Овқатланиш ва витаминлар" in pg.inner_text("main") and "400 мкг" in pg.inner_text("main"))
-    pg.click("#tabs button[data-t=bp]"); pg.wait_for_timeout(200)
-    ok("давление: подсказка про риск ПЭ и прошлая запись", "преэклампсия хавфи юқори" in pg.inner_text("main") and "128/82" in pg.inner_text("#bp_list"))
+    pg.click("#tabs button[data-t=diary]"); pg.wait_for_timeout(200)
+    ok("дневник: подсказка про риск ПЭ и прошлая запись", "преэклампсия хавфи юқори" in pg.inner_text("main") and "128/82" in pg.inner_text("#bp_list"))
     pg.fill("#bp_sys", "80"); pg.fill("#bp_dia", "120"); pg.click("#bp_save"); pg.wait_for_timeout(200)
     ok("давление: проверка цифр", "текширинг" in pg.inner_text("#bp_out") and not any(c.get("op") == "bp" for c in calls))
     pg.fill("#bp_sys", "150"); pg.fill("#bp_dia", "95"); pg.click("#bp_save"); pg.wait_for_timeout(400)
     ok("давление: 150/95 — высокое, совет и 103", calls[-1].get("op") == "bp" and calls[-1].get("sys") == 150 and "юқори" in pg.inner_text("#bp_out") and pg.locator("#bp_out a[href='tel:103']").count() == 1)
     ok("давление: запись появилась в списке", "150/95" in pg.inner_text("#bp_list"))
-    pg.click("#tabs button[data-t=main]"); pg.wait_for_timeout(200)
+    pg.fill("#w_kg", "15"); pg.click("#w_save"); pg.wait_for_timeout(200)
+    ok("вес: проверка диапазона", "30 дан 200" in pg.inner_text("#w_out") and not any(c.get("op") == "weight" for c in calls))
+    pg.fill("#w_kg", "66,4"); pg.click("#w_save"); pg.wait_for_timeout(300)
+    ok("вес: запись (запятая как точка)", calls[-1].get("op") == "weight" and calls[-1].get("kg") == 66.4 and "Вазн ёзилди" in pg.inner_text("#w_out"), calls[-1])
+    pg.screenshot(path=str(ROOT / "tests/shots/m_mother_diary.png"), full_page=True)
+    pg.click("#tabs button[data-t=home]"); pg.wait_for_timeout(200)
     pg.click(".langs button[data-l=uzl]"); pg.wait_for_timeout(300)
     ok("латиница", "Assalomu alaykum, Dilnoza!" in pg.inner_text("body") and pg.inner_text("#ga") == "18 hafta 3 kun", pg.inner_text("body")[:200])
     ok("смена языка сохраняется", any(c.get("op") == "lang" and c.get("lang") == "uzl" for c in calls))
@@ -69,17 +93,24 @@ with sync_playwright() as p:
     ok("ошибок JS нет", not errs, errs); b.close()
     late = json.loads(json.dumps(VIEW)); late["state"]["ga_days"] = 230
     b, pg, errs, calls = run(p, late)
-    ok("схватки: вкладка с 24 недель", pg.locator("#tabs button[data-t=ct]").count() == 1)
-    pg.click("#tabs button[data-t=ct]"); pg.wait_for_timeout(200)
+    pg.click("#tabs button[data-t=more]"); pg.wait_for_timeout(200)
+    ok("ещё: счётчик схваток с 24 недель, шевелений — с 28 (33 нед: оба)", pg.locator("#ct_btn").count() == 1 and pg.locator("#k_btn").count() == 1 and pg.locator("#bag").count() == 1)
     for i in range(4):
         pg.click("#ct_btn"); pg.wait_for_timeout(60); pg.click("#ct_btn"); pg.wait_for_timeout(60)
-    ok("схватки: 4 за час до 37 нед — опасный признак и кнопка «сообщить доя»", "4" in pg.inner_text("#ct_hour") and "37 ҳафтагача" in pg.inner_text("#ct_warn") and pg.locator("main button.danger").count() == 1)
-    pg.click("main button.danger"); pg.wait_for_timeout(300)
+    ok("схватки: 4 за час до 37 нед — опасный признак и кнопка «сообщить доя»", "4" in pg.inner_text("#ct_hour") and "37 ҳафтагача" in pg.inner_text("#ct_warn") and pg.locator("#ct_alert").count() == 1)
+    pg.click("#ct_alert"); pg.wait_for_timeout(300)
     ok("схватки: сигнал доя с признаком «схватки»", calls[-1].get("op") == "alert" and calls[-1].get("signs") == ["contractions"])
+    for i in range(10): pg.click("#k_btn"); pg.wait_for_timeout(30)
+    ok("шевеления: 10 — хорошо", "10 та қимирлаш — яхши" in pg.inner_text("#kick"), pg.inner_text("#kick"))
+    pg.locator("#bag input").nth(0).check(); pg.wait_for_timeout(100); pg.locator("#bag input").nth(2).check(); pg.wait_for_timeout(100)
+    ok("сумка в роддом: отметки считаются", "10 тадан 2 таси" in pg.inner_text("#bag_n"), pg.inner_text("#bag_n"))
+    pg.screenshot(path=str(ROOT / "tests/shots/m_mother_more.png"), full_page=True)
     ok("ошибок JS нет (схватки)", not errs, errs); b.close()
     pp = dict(VIEW); pp["status"] = "postpartum"; pp.pop("ui"); pp["state"] = {"pp_day": 5, "anc": [], "home": [{"kind": "pp15", "from": "2026-12-01", "to": "2026-12-04", "state": "next"}]}
     b, pg, errs, calls = run(p, pp)
-    ok("после родов: день и признаки ребёнка", "Туғруқдан кейин 5-кун" in pg.inner_text("body") and pg.locator("input[value=baby_feed]").count() == 1 and pg.locator("input[value=waters]").count() == 0)
+    ok("после родов: день и признаки ребёнка", "Туғруқдан кейин 5-кун" in pg.inner_text("body") and pg.locator("#tabs button[data-t=more]").count() == 0)
+    pg.click("#sosbtn"); pg.wait_for_timeout(200)
+    ok("после родов: признаки ребёнка", pg.locator("input[value=baby_feed]").count() == 1 and pg.locator("input[value=waters]").count() == 0)
     ok("ошибок JS нет (после родов)", not errs, errs); b.close()
     b, pg, errs, calls = run(p, VIEW, status=404)
     ok("не подключена — понятное сообщение", "уланмагансиз" in pg.inner_text("body"))

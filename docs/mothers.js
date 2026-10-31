@@ -309,6 +309,19 @@ window.MothersModule = function (A) {
       })));
   }
 
+  function weightPanel(m) {
+    var ws = m.weights || [], pills = m.pills || [];
+    if (!ws.length && !pills.length) return null;
+    var days = {}; pills.forEach(function (p) { days[p.day] = 1; });
+    var gain = ws.length > 1 ? Math.round((ws[ws.length - 1].kg - ws[0].kg) * 10) / 10 : null;
+    return h("section", { class: "panel stack", id: "mc_w" }, h("h3", { text: t("mo_w_diary") }),
+      ws.length ? h("div", { class: "chips" }, ws.slice(-12).map(function (w) {
+        return h("span", { class: "chip" + (w.src === "self" ? "" : " ok"), text: A.fmtD(w.d).slice(0, 5) + " · " + w.kg + " kg" });
+      })) : null,
+      gain != null ? h("div", { class: "small", text: t("mo_w_gain", { k: (gain > 0 ? "+" : "") + gain }) }) : null,
+      pills.length ? h("div", { class: "small", text: t("mo_pills14", { n: Object.keys(days).length }) }) : null);
+  }
+
   // ------------------------------------------------------------------ карточка
   async function cardView(id) {
     var my = A.token();
@@ -348,6 +361,7 @@ window.MothersModule = function (A) {
       }), h("p", { class: "small", text: t("mo_alert_hint") })));
     parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk180_title") }), riskPanel(m.risk_eval, false)));
     var bpp = bpPanel(m); if (bpp) parts.push(bpp);
+    var wp = weightPanel(m); if (wp) parts.push(wp);
     // план визитов
     if (m.status === "pregnant") parts.push(ancPanel(m, s, reload));
     parts.push(homePanel(m, s, reload));

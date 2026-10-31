@@ -4,26 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Менинг саҳифам · OvaBMҚ</title>
-<meta name="description" content="Ҳомиладорнинг саҳифаси: муддат, кўриклар, таҳлиллар, хавфли белгилар">
+<meta name="description" content="Ҳомиладорнинг саҳифаси: муддат, кўриклар, графиклар, кундалик, хавфли белгилар">
 <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
 <script src="config.js"></script>
 <style>
-:root{--bg:#EEF3FA;--panel:#fff;--ink:#111827;--mute:#4B5563;--line:#D9E1EE;--head:#1E3A8A;--accent:#1E40AF;--soft:#E3EAFB;
-  --ok:#1B6E3A;--ok-soft:#DFF3E6;--warn:#8A5200;--warn-soft:#FFF1CC;--bad:#B42318;--bad-soft:#FDE8E6;--gold:#F5B843}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;
-  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17}}
-:root[data-theme=dark]{--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;
-  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17}
+:root{--bg:#EEF3FA;--panel:#fff;--ink:#111827;--mute:#4B5563;--line:#D9E1EE;--head:#1E3A8A;--accent:#1E40AF;--soft:#E3EAFB;--c2:#0F8A7E;
+  --ok:#1B6E3A;--ok-soft:#DFF3E6;--warn:#8A5200;--warn-soft:#FFF1CC;--bad:#B42318;--bad-soft:#FDE8E6;--gold:#F5B843;--band:#DFF3E6}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;--c2:#4FD1C0;
+  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17;--band:#173524}}
+:root[data-theme=dark]{--bg:#0C1324;--panel:#141D33;--ink:#E7EDF7;--mute:#A3B0C6;--line:#26324D;--head:#B9CCF7;--accent:#8FB0F5;--soft:#1A2A52;--c2:#4FD1C0;
+  --ok:#7BD99A;--ok-soft:#14301F;--warn:#F2B34A;--warn-soft:#3A2D10;--bad:#F2877C;--bad-soft:#3A1A17;--band:#173524}
 *{box-sizing:border-box;margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:0 0 32px}
-.band{background:#1E40AF;color:#fff;padding:16px 16px 20px;border-bottom:4px solid var(--gold)}
-.band h1{font-size:20px;font-weight:800}
-.band p{opacity:.9;font-size:14px}
-.langs{display:flex;gap:6px;margin-top:10px}
-.langs button{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font-family:inherit;font-weight:600;font-size:13px}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:0 0 calc(84px + env(safe-area-inset-bottom))}
+.band{background:#1E40AF;color:#fff;padding:12px 16px 14px;border-bottom:4px solid var(--gold);display:flex;align-items:center;gap:10px}
+.band .who{flex:1;min-width:0}
+.band h1{font-size:18px;font-weight:800;line-height:1.2}
+.band p{opacity:.9;font-size:13px}
+.langs{display:flex;gap:4px;margin-top:6px}
+.langs button{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:8px;padding:2px 8px;font-family:inherit;font-weight:600;font-size:12px}
 .langs button.on{background:#fff;color:#1E40AF}
+.sosmini{border:0;border-radius:12px;background:#B42318;color:#fff;font:800 14px inherit;font-family:inherit;padding:10px 12px;flex:none}
 main{max-width:640px;margin:0 auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:8px}
 .big{font-size:30px;font-weight:900;color:var(--head);line-height:1.1}
 h2{font-size:17px;font-weight:800;color:var(--head)}
 .mute{color:var(--mute)} .small{font-size:14px}
@@ -32,73 +34,139 @@ h2{font-size:17px;font-weight:800;color:var(--head)}
 ul{padding-left:20px} li{margin:2px 0}
 .vis{display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
 .vis:first-of-type{border-top:0}
-.btn{display:block;width:100%;text-align:center;border:0;border-radius:12px;padding:13px;font-family:inherit;font-weight:800;font-size:16px;text-decoration:none;cursor:pointer}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:14px;padding:13px;font-family:inherit;font-weight:800;font-size:16px;text-decoration:none;cursor:pointer}
 .btn.call{background:var(--soft);color:var(--accent)}
 .btn.danger{background:#B42318;color:#fff}
 .btn.e103{background:#B42318;color:#fff;font-size:22px}
+.btn.sos{background:#B42318;color:#fff;font-size:18px;padding:16px}
 .signs{display:grid;grid-template-columns:1fr;gap:6px}
 .signs label{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-weight:600}
 .signs input{width:22px;height:22px;accent-color:#B42318;flex:none}
 .alert{background:var(--bad-soft);color:var(--bad);border-radius:12px;padding:12px;font-weight:700}
 .okmsg{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px;font-weight:700}
-.hidden{display:none}
-.tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
-.tabs button{flex:1 0 auto;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:99px;padding:8px 14px;font-family:inherit;font-weight:700;font-size:14px}
-.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-details.tip{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel)}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;font-weight:600;font-size:14px}
+details.tip{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--panel)}
 details.tip summary{font-weight:800;cursor:pointer}
 details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
-.bprow{display:flex;gap:8px;align-items:end}
-.bprow label{flex:1;display:flex;flex-direction:column;font-size:13px;font-weight:700;color:var(--mute)}
-.bprow input{font:700 22px inherit;font-family:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
-.ctbtn{display:block;width:100%;border:0;border-radius:16px;padding:26px 10px;font-family:inherit;font-weight:900;font-size:22px;color:#fff;background:var(--accent)}
+.row2{display:flex;gap:8px;align-items:end}
+.row2 label{flex:1;display:flex;flex-direction:column;font-size:13px;font-weight:700;color:var(--mute)}
+.row2 input{font-size:22px;font-weight:700;font-family:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
+.ctbtn{display:block;width:100%;border:0;border-radius:18px;padding:26px 10px;font-family:inherit;font-weight:900;font-size:22px;color:#fff;background:var(--accent)}
 .ctbtn.on{background:#B42318}
+/* главная */
+.hero{display:flex;gap:14px;align-items:center}
+.ring{flex:none;width:118px;height:118px}
+.ring .bg{stroke:var(--soft)} .ring .fg{stroke:var(--accent)} .ring text{fill:var(--head);font-family:inherit}
+.baby{display:flex;gap:12px;align-items:center;background:var(--soft);border-radius:14px;padding:10px 12px}
+.baby .emo{font-size:40px;line-height:1}
+.dots{display:flex;gap:4px;align-items:center}
+.dots .d{flex:1;height:10px;border-radius:99px;background:var(--line)}
+.dots .d.done{background:var(--ok)} .dots .d.missed{background:var(--bad)} .dots .d.due{background:var(--gold)}
+.dotlbl{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.pills{display:flex;flex-direction:column;gap:6px}
+.pill{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-weight:700;background:var(--panel);color:var(--ink);font-family:inherit;font-size:15px;text-align:left;width:100%}
+.pill .box{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none;font-size:16px}
+.pill.on{border-color:var(--ok);background:var(--ok-soft)} .pill.on .box{background:var(--ok);border-color:var(--ok);color:#fff}
+/* графики */
+svg.chart{width:100%;height:auto;display:block;overflow:visible}
+svg.chart text{font-family:inherit;font-size:11px;fill:var(--mute)}
+svg.chart .grid{stroke:var(--line);stroke-width:1}
+svg.chart .lim{stroke:var(--bad);stroke-width:1.5;stroke-dasharray:5 4}
+svg.chart .s1{stroke:var(--accent);fill:none;stroke-width:2.5}
+svg.chart .s2{stroke:var(--c2);fill:none;stroke-width:2.5}
+svg.chart .p1{fill:var(--accent)} svg.chart .p2{fill:var(--c2)} svg.chart .pb{fill:var(--bad)}
+svg.chart .bandf{fill:var(--band)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--mute)}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.grid14{display:grid;grid-template-columns:72px repeat(14,1fr);gap:3px;align-items:center;font-size:12px;color:var(--mute)}
+.grid14 .c{aspect-ratio:1;border-radius:5px;background:var(--line)} .grid14 .c.on{background:var(--ok)}
+.kick{display:block;width:100%;border:0;border-radius:18px;padding:22px 10px;font-family:inherit;font-weight:900;font-size:22px;color:#fff;background:var(--c2)}
+.bag label{display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-weight:600}
+.bag label:first-child{border-top:0}
+.bag input{width:22px;height:22px;accent-color:#1B6E3A;flex:none}
+/* нижнее меню */
+nav.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:10}
+nav.bar .in{display:flex;max-width:640px;width:100%}
+nav.bar button{flex:1;border:0;background:transparent;color:var(--mute);font-family:inherit;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;border-radius:12px}
+nav.bar button .i{font-size:21px;line-height:1.1}
+nav.bar button.on{color:var(--accent);background:var(--soft)}
 </style>
 </head>
 <body>
-<div class="band"><h1 id="hello">OvaBMҚ</h1><p id="sub"></p>
+<div class="band"><div class="who"><h1 id="hello">OvaBMҚ</h1><p id="sub"></p>
   <div class="langs"><button data-l="uz">Ўзб</button><button data-l="uzl">Oʻzb</button><button data-l="ru">Рус</button></div></div>
+  <button class="sosmini hidden" id="sosmini" type="button">⚠️ SOS</button></div>
 <main id="main"><div class="card"><p class="mute" id="boot">…</p></div></main>
+<nav class="bar hidden" id="bar"><div class="in" id="tabs"></div></nav>
+<style>.hidden{display:none!important}</style>
 <script>
 (function () {
   var CFG = window.OVABMK_CONFIG, TG = window.Telegram && window.Telegram.WebApp;
   var D = {
-    ru: { hello: "Здравствуйте, {n}!", sub: "Ваша страница беременной", ga: "Срок беременности", edd: "Предполагаемая дата родов: {d}", pp: "После родов: {d}-й день",
+    ru: { hello: "Здравствуйте, {n}!", sub: "Ваша страница беременной", sub_pp: "Ваша страница после родов", ga: "Срок беременности", edd: "Предполагаемая дата родов: {d}", pp: "После родов: {d}-й день",
       next: "Следующий визит к доя", now: "сейчас", from: "с {a} по {b}", need: "Что сдать / пройти:", none: "Анализы не нужны — осмотр доя.",
       missed: "Вы пропустили визит: {v}. Пожалуйста, подойдите к доя как можно скорее.", plan: "Все визиты", done: "сделано", due: "сейчас", next_s: "впереди", missed_s: "пропущен",
       home: "Доя придёт к вам домой", contact: "Ваша доя", call: "📞 Позвонить доя", inst: "Учреждение",
       danger: "⚠️ Тревожные признаки", danger_hint: "Отметьте, что случилось, и нажмите «Сообщить» — доя получит сообщение сразу.",
       send: "Сообщить доя", e103: "🚑 Позвонить 103", sent: "Сообщение отправлено ({n}). С вами свяжутся. Если состояние тяжёлое — звоните 103 сейчас.",
       sent0: "Звоните 103 или срочно поезжайте в роддом.", pick: "Отметьте хотя бы один признак.", err: "Не получилось. Проверьте интернет и попробуйте ещё раз. При опасности — звоните 103.",
-      notlinked: "Вы не подключены. Попросите у доя ссылку-приглашение.", open_tg: "Откройте эту страницу из бота @OvaBMQbot в Telegram.", wk: "{w} нед {d} дн",
-      t_main: "Главное", t_tips: "Советы", t_bp: "Давление", t_ct: "Схватки",
+      notlinked: "Вы не подключены. Попросите у доя ссылку-приглашение.", open_tg: "Откройте эту страницу из бота @OvaBMQbot в Telegram.", wk: "{w} нед {d} дн", wk_s: "{w} нед",
+      n_home: "Главное", n_charts: "Графики", n_diary: "Дневник", n_tips: "Советы", n_more: "Ещё",
+      tri: "{n}-й триместр", left: "До родов ≈ {n} дн.", over: "Срок родов наступил — будьте на связи с доя.",
+      baby: "Малыш сейчас — размером как {f}", baby_sz: "примерно {l} см и {g} г",
+      sos_btn: "⚠️ Мне плохо — тревожные признаки", visits_line: "Визиты по приказу №180", legend_v: "зелёный — сделано · жёлтый — сейчас · красный — пропущен",
+      pills_title: "Витамины сегодня", pills_hint: "Отмечайте, что выпили, — как назначила доя или врач.", p_folic: "Фолиевая кислота 400 мкг", p_iodine: "Калия йодид 200 мкг", p_iron: "Железо 30–60 мг",
+      p_folic_s: "Фолиевая", p_iodine_s: "Йод", p_iron_s: "Железо", pills_14: "За 14 дней витамины отмечены {n} дн.",
+      c_bp: "Давление", c_bp_empty: "Запишите давление на вкладке «Дневник» — здесь появится график.", c_sys: "верхнее", c_dia: "нижнее", c_lim: "граница 140/90",
+      c_bp_last: "Последнее: {v}", c_w: "Прибавка веса", c_w_empty: "Запишите вес на вкладке «Дневник» — здесь появится график прибавки.", c_w_now: "Прибавка: {k} кг к {w} нед.",
+      c_w_norm: "Норма к этому сроку: {a}–{b} кг (ИМТ до беременности {m}).", c_w_src: "Зелёная полоса — норма прибавки по рекомендациям IOM (2009) для вашего ИМТ.",
+      c_w_high: "Прибавка больше нормы — обсудите питание с доя.", c_w_low: "Прибавка меньше нормы — скажите доя.", c_w_noh: "Чтобы показать норму, доя должна указать ваш рост.",
+      c_w_me: "вы", c_w_band: "норма", c_pills: "Витамины за 14 дней",
       bp_title: "Моё давление", bp_hint: "Измерьте в покое, сидя. Запишите верхнее и нижнее число.", bp_pe: "Врач отметил высокий риск преэклампсии — измеряйте давление каждый день.",
       bp_sys: "Верхнее", bp_dia: "Нижнее", bp_save: "Записать", bp_ok: "✅ Записано. Давление в норме.",
       bp_high: "⚠️ Давление высокое (140/90 и выше). Доя получила сообщение. Отдохните 15 минут и измерьте ещё раз. Головная боль, мелькание перед глазами, боль под рёбрами — звоните 103.",
       bp_severe: "🚑 Очень высокое давление (160/110 и выше). Звоните 103 сейчас. Доя получила сообщение.", bp_bad: "Проверьте цифры: верхнее больше нижнего, например 120/80.",
       bp_many: "Сегодня записей уже много.", bp_list: "Последние записи",
+      w_title: "Мой вес", w_hint: "Взвешивайтесь утром натощак, раз в неделю.", w_kg: "Вес, кг", w_save: "Записать вес", w_ok: "✅ Вес записан.", w_bad: "Проверьте вес: от 30 до 200 кг.", w_many: "Сегодня вес уже записан.",
       ct_title: "Счётчик схваток", ct_hint: "Нажмите, когда схватка началась, и ещё раз — когда закончилась.", ct_start: "Схватка началась", ct_stop: "Схватка закончилась",
       ct_hour: "За последний час: {n}", ct_dur: "длится {s} с", ct_int: "через {m} мин", ct_clear: "Очистить",
       ct_pre: "До 37 недель больше 4–5 схваток за час — опасный признак: срочно к врачу или звоните 103.", ct_term: "Схватки регулярные и частые — похоже, роды начинаются. Поезжайте в роддом, сообщите доя.",
-      ct_alert: "Сообщить доя" },
-    uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
+      ct_alert: "Сообщить доя",
+      k_title: "Шевеления малыша", k_hint: "Лягте на бок и нажимайте при каждом шевелении. Обычно 10 шевелений набирается меньше чем за 2 часа.",
+      k_btn: "👣 Малыш шевельнулся", k_count: "{n} из 10 · {m} мин", k_done: "✅ 10 шевелений за {m} мин — хорошо.", k_slow: "Прошло больше 2 часов, а шевелений меньше 10 — сообщите доя или поезжайте в роддом.",
+      k_reset: "Начать заново", bag_title: "Сумка в роддом", bag_n: "Собрано {n} из {t}", more_none: "Счётчики схваток и шевелений появятся с 24 и 28 недель." },
+    uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", sub_pp: "Туғруқдан кейинги саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
       next: "Доянгизга кейинги кўрик", now: "ҳозир", from: "{a} дан {b} гача", need: "Нимани топшириш / ўтиш керак:", none: "Таҳлил керак эмас — доя кўриги.",
       missed: "Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, доянгизга иложи борича тезроқ келинг.", plan: "Барча кўриклар", done: "бажарилди", due: "ҳозир", next_s: "олдинда", missed_s: "ўтказиб юборилди",
       home: "Доя уйингизга келади", contact: "Доянгиз", call: "📞 Доянгизга қўнғироқ", inst: "Муассаса",
       danger: "⚠️ Хавфли белгилар", danger_hint: "Нима бўлганини белгиланг ва «Хабар бериш»ни босинг — доянгиз дарҳол хабар олади.",
       send: "Доянгизга хабар бериш", e103: "🚑 103 га қўнғироқ", sent: "Хабар юборилди ({n}). Сиз билан боғланишади. Аҳвол оғир бўлса — ҳозир 103 га қўнғироқ қилинг.",
       sent0: "103 га қўнғироқ қилинг ёки дарҳол туғруқхонага боринг.", pick: "Камида битта белгини белгиланг.", err: "Бўлмади. Интернетни текшириб, қайта уриниб кўринг. Хавф бўлса — 103 га қўнғироқ қилинг.",
-      notlinked: "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг.", open_tg: "Бу саҳифани Telegramдаги @OvaBMQbot ботидан очинг.", wk: "{w} ҳафта {d} кун",
-      t_main: "Асосий", t_tips: "Маслаҳатлар", t_bp: "Қон босими", t_ct: "Тўлғоқлар",
+      notlinked: "Сиз уланмагансиз. Доядан таклиф ҳаволасини сўранг.", open_tg: "Бу саҳифани Telegramдаги @OvaBMQbot ботидан очинг.", wk: "{w} ҳафта {d} кун", wk_s: "{w} ҳафта",
+      n_home: "Асосий", n_charts: "Графиклар", n_diary: "Кундалик", n_tips: "Маслаҳатлар", n_more: "Яна",
+      tri: "{n}-триместр", left: "Туғруққача ≈ {n} кун", over: "Туғиш муддати келди — доянгиз билан алоқада бўлинг.",
+      baby: "Чақалоқ ҳозир {f} катталигида", baby_sz: "тахминан {l} см ва {g} г",
+      sos_btn: "⚠️ Ўзимни ёмон ҳис қиляпман — хавфли белгилар", visits_line: "№180 буйруқ бўйича кўриклар", legend_v: "яшил — бажарилди · сариқ — ҳозир · қизил — ўтказиб юборилди",
+      pills_title: "Бугунги витаминлар", pills_hint: "Ичганингизни белгиланг — доя ёки шифокор тайинлагандек.", p_folic: "Фолий кислотаси 400 мкг", p_iodine: "Калий йодиди 200 мкг", p_iron: "Темир 30–60 мг",
+      p_folic_s: "Фолий", p_iodine_s: "Йод", p_iron_s: "Темир", pills_14: "14 кунда витаминлар {n} кун белгиланди.",
+      c_bp: "Қон босими", c_bp_empty: "Қон босимини «Кундалик» бўлимида ёзинг — бу ерда график пайдо бўлади.", c_sys: "юқори", c_dia: "пастки", c_lim: "чегара 140/90",
+      c_bp_last: "Охиргиси: {v}", c_w: "Вазн ортиши", c_w_empty: "Вазнни «Кундалик» бўлимида ёзинг — бу ерда ортиш графиги пайдо бўлади.", c_w_now: "Ортиш: {w} ҳафтагача {k} кг.",
+      c_w_norm: "Бу муддатга меъёр: {a}–{b} кг (ҳомиладорликдан олдинги ТВИ {m}).", c_w_src: "Яшил йўлак — ТВИингиз бўйича IOM (2009) тавсиясидаги вазн ортиш меъёри.",
+      c_w_high: "Вазн меъёрдан кўп ортган — овқатланишни доянгиз билан муҳокама қилинг.", c_w_low: "Вазн меъёрдан кам ортган — доянгизга айтинг.", c_w_noh: "Меъёрни кўрсатиш учун доя бўйингизни ёзиши керак.",
+      c_w_me: "сиз", c_w_band: "меъёр", c_pills: "14 кунлик витаминлар",
       bp_title: "Қон босимим", bp_hint: "Тинч ҳолатда, ўтириб ўлчанг. Юқори ва пастки рақамни ёзинг.", bp_pe: "Шифокор преэклампсия хавфи юқори деб белгилаган — қон босимини ҳар куни ўлчанг.",
       bp_sys: "Юқори", bp_dia: "Пастки", bp_save: "Ёзиш", bp_ok: "✅ Ёзилди. Қон босими меъёрда.",
       bp_high: "⚠️ Қон босими юқори (140/90 ва юқори). Доянгизга хабар юборилди. 15 дақиқа дам олиб, қайта ўлчанг. Бош оғриғи, кўз олди учқунлаши, қовурға остида оғриқ — 103 га қўнғироқ қилинг.",
       bp_severe: "🚑 Жуда юқори қон босими (160/110 ва юқори). Ҳозир 103 га қўнғироқ қилинг. Доянгизга хабар юборилди.", bp_bad: "Рақамларни текширинг: юқориси пасткисидан катта, масалан 120/80.",
       bp_many: "Бугун ёзувлар кўп.", bp_list: "Охирги ёзувлар",
+      w_title: "Вазним", w_hint: "Эрталаб наҳорга, ҳафтада бир марта тортилинг.", w_kg: "Вазн, кг", w_save: "Вазнни ёзиш", w_ok: "✅ Вазн ёзилди.", w_bad: "Вазнни текширинг: 30 дан 200 кг гача.", w_many: "Бугун вазн ёзилган.",
       ct_title: "Тўлғоқ ҳисоблагич", ct_hint: "Тўлғоқ бошланганда босинг, тугаганда яна босинг.", ct_start: "Тўлғоқ бошланди", ct_stop: "Тўлғоқ тугади",
       ct_hour: "Охирги бир соатда: {n}", ct_dur: "{s} сония", ct_int: "{m} дақиқадан кейин", ct_clear: "Тозалаш",
       ct_pre: "37 ҳафтагача бир соатда 4–5 тадан кўп тўлғоқ — хавфли белги: дарҳол шифокорга ёки 103 га қўнғироқ қилинг.", ct_term: "Тўлғоқлар мунтазам ва тез-тез — туғруқ бошланаётганга ўхшайди. Туғруқхонага боринг, доянгизга хабар беринг.",
-      ct_alert: "Доянгизга хабар бериш" }
+      ct_alert: "Доянгизга хабар бериш",
+      k_title: "Чақалоқ қимирлаши", k_hint: "Ёнбошлаб ётинг ва ҳар қимирлашда босинг. Одатда 10 та қимирлаш 2 соатдан камроқ вақтда бўлади.",
+      k_btn: "👣 Чақалоқ қимирлади", k_count: "10 тадан {n} · {m} дақиқа", k_done: "✅ {m} дақиқада 10 та қимирлаш — яхши.", k_slow: "2 соатдан кўп ўтди, қимирлаш 10 тадан кам — доянгизга хабар беринг ёки туғруқхонага боринг.",
+      k_reset: "Қайтадан бошлаш", bag_title: "Туғруқхона сумкаси", bag_n: "{t} тадан {n} таси йиғилди", more_none: "Тўлғоқ ва қимирлаш ҳисоблагичлари 24 ва 28 ҳафтадан пайдо бўлади." }
   };
   var SG = { bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
     convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
@@ -109,6 +177,16 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
     baby_jaundice: ["Малыш жёлтый", "Чақалоқ сарғайган"], baby_cord: ["Пупок красный или гноится", "Киндик қизарган ёки йиринглаган"], baby_convulsions: ["У малыша судороги", "Чақалоқда тутқаноқ"] };
   var PREG = ["bleeding", "headache", "convulsions", "abd_pain", "fever", "waters", "less_move", "swelling", "breath"];
   var PP = ["pp_bleeding", "fever", "pp_discharge", "headache", "convulsions", "breath", "baby_feed", "baby_fever", "baby_breath", "baby_jaundice", "baby_cord", "baby_convulsions"];
+  // размер малыша по неделям (примерно; с 20 недель — длина от макушки до пяток)
+  var BABY = [[8, 1.6, 1, "🍇", "виноградина", "узум донаси"], [10, 3.1, 4, "🍓", "клубника", "қулупнай"], [12, 5.4, 14, "🍋", "лимон", "лимон"],
+    [14, 8.7, 43, "🍑", "персик", "шафтоли"], [16, 11.6, 100, "🍎", "яблоко", "олма"], [18, 14.2, 190, "🫑", "сладкий перец", "булғор қалампири"],
+    [20, 25.6, 300, "🍌", "банан", "банан"], [22, 27.8, 430, "🥕", "морковь", "сабзи"], [24, 30, 600, "🌽", "початок кукурузы", "маккажўхори сўтаси"],
+    [26, 35.6, 760, "🥬", "кочан капусты", "карам"], [28, 37.6, 1000, "🍆", "баклажан", "бақлажон"], [30, 39.9, 1300, "🥥", "кокос", "кокос"],
+    [32, 42.4, 1700, "🍍", "ананас", "ананас"], [34, 45, 2100, "🍈", "дыня", "қовун"], [36, 47.4, 2600, "🎃", "тыква", "ошқовоқ"],
+    [38, 49.8, 3100, "🍉", "небольшой арбуз", "кичик тарвуз"], [40, 51.2, 3400, "🍉", "арбуз", "тарвуз"]];
+  var BAG = [["Паспорт", "Паспорт"], ["Обменная карта", "Алмашинув картаси"], ["Телефон и зарядка", "Телефон ва қувватлагич"], ["Халат и тапочки", "Халат ва шиппак"],
+    ["Рубашка для кормления", "Эмизиш учун кўйлак"], ["Послеродовые прокладки, бельё", "Туғруқдан кейинги прокладкалар, ички кийим"], ["Средства гигиены, полотенце", "Гигиена воситалари, сочиқ"],
+    ["Вода", "Сув"], ["Малышу: подгузники, распашонки, шапочка, носочки, пелёнки", "Чақалоққа: таглик, кўйлакча, қалпоқча, пайпоқча, йўргак"], ["Одежда малышу на выписку", "Чақалоққа чиқиш учун кийим"]];
   var M = { "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x",
     "ц": "ts", "ч": "ch", "ш": "sh", "ъ": "ʼ", "ь": "", "э": "e", "ю": "yu", "я": "ya", "ё": "yo", "ў": "oʻ", "қ": "q", "ғ": "gʻ", "ҳ": "h", "ы": "i", "е": "e" };
   function lat(str) {
@@ -126,21 +204,28 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
   var q = /[?&]l=(uz|uzl|ru)/.exec(location.search), L = q ? q[1] : "uz", DATA = null;
   function tr(k, v) { var s = (L === "ru" ? D.ru : D.uz)[k] || k; if (L === "uzl") s = lat(s); if (v) Object.keys(v).forEach(function (n) { s = s.split("{" + n + "}").join(v[n]); }); return s; }
   function u(s) { return L === "uzl" ? lat(s) : s; }
-  function sg(k) { var x = SG[k]; return !x ? k : L === "ru" ? x[0] : u(x[1]); }
+  function pair(x) { return L === "ru" ? x[0] : u(x[1]); }
+  function sg(k) { var x = SG[k]; return !x ? k : pair(x); }
+  var SVGNS = "http://www.w3.org/2000/svg";
   function el(tag, attrs) {
-    var e = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) { var v = attrs[k]; if (v == null || v === false) return; if (k === "text") e.textContent = v; else if (k === "class") e.className = v; else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); });
+    var svg = /^(svg|g|line|path|circle|rect|text|polyline|polygon)$/.test(tag);
+    var e = svg ? document.createElementNS(SVGNS, tag) : document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { var v = attrs[k]; if (v == null || v === false) return; if (k === "text") e.textContent = v; else if (k === "class") e.setAttribute("class", v); else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); });
     for (var i = 2; i < arguments.length; i++) { var c = arguments[i]; if (c == null || c === false) continue; (Array.isArray(c) ? c : [c]).forEach(function (x) { if (x != null && x !== false) e.appendChild(typeof x === "string" ? document.createTextNode(x) : x); }); }
     return e;
   }
   function d(iso) { return iso ? iso.slice(8, 10) + "." + iso.slice(5, 7) + "." + iso.slice(0, 4) : ""; }
+  function dm(t) { var x = new Date(t); return isNaN(x) ? "" : ("0" + x.getDate()).slice(-2) + "." + ("0" + (x.getMonth() + 1)).slice(-2); }
   function fmtPhone(p) { var x = String(p || "").replace(/\D/g, ""); return x.length === 12 ? "+" + x.slice(0, 3) + " " + x.slice(3, 5) + " " + x.slice(5, 8) + " " + x.slice(8, 10) + " " + x.slice(10) : p; }
+  function num(x, n) { return (Math.round(x * Math.pow(10, n)) / Math.pow(10, n)).toLocaleString(L === "ru" ? "ru-RU" : "uz-UZ"); }
+  function haptic(k) { if (TG && TG.HapticFeedback) try { if (k === "warn") TG.HapticFeedback.notificationOccurred("warning"); else TG.HapticFeedback.impactOccurred("light"); } catch (e) {} }
   async function api(body) {
     var r = await fetch(CFG.supabaseUrl + "/functions/v1/tg-bot", { method: "POST", headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey },
       body: JSON.stringify(Object.assign({ action: "mother_app", init: TG ? TG.initData : "" }, body)) });
     var j = {}; try { j = await r.json(); } catch (e) {}
     return { ok: r.ok, status: r.status, data: j };
   }
+  function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || "null"); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
   function langBar() {
     Array.prototype.forEach.call(document.querySelectorAll(".langs button"), function (b) {
       b.classList.toggle("on", b.getAttribute("data-l") === L);
@@ -150,10 +235,15 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
   function vName(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; return !r ? "№" + no : L === "ru" ? r.label : u(r.label_uz || r.label); }
   function vTests(no) { var r = (DATA.schedule || []).filter(function (x) { return x.no === no; })[0]; if (!r) return []; var a = L === "ru" ? r.tests : (r.tests_uz && r.tests_uz.length ? r.tests_uz : r.tests); return (a || []).map(u); }
   function hName(k) { var r = (DATA.home_schedule || []).filter(function (x) { return x.kind === k; })[0]; return !r ? k : L === "ru" ? r.label : u(r.label_uz || r.label); }
-  var TAB = "main", CT = [];
-  try { CT = JSON.parse(localStorage.getItem("ovabmq_ct") || "[]") || []; } catch (e) { CT = []; }
-  function saveCt() { try { localStorage.setItem("ovabmq_ct", JSON.stringify(CT.slice(-60))); } catch (e) {} }
+  var TAB = "home", CT = store("ovabmq_ct") || [], KICK = store("ovabmq_kick") || null, BAGS = store("ovabmq_bag") || {};
+  function saveCt() { store("ovabmq_ct", CT.slice(-60)); }
   function sg2(k) { var x = ((DATA && DATA.ui && DATA.ui.signs) || []).filter(function (y) { return y.k === k; })[0]; return x ? x.label : sg(k); }
+  function preg() { return DATA.status === "pregnant"; }
+  function gaW() { return Math.floor(((DATA.state || {}).ga_days || 0) / 7); }
+  function today() { return DATA.today || new Date().toISOString().slice(0, 10); }
+  function pillKinds() { return preg() ? (gaW() < 12 ? ["folic", "iodine", "iron"] : ["iodine", "iron"]) : []; }
+  function pillOn(k, day) { return (DATA.pills || []).some(function (p) { return p.kind === k && p.day === (day || today()); }); }
+
   function draw() {
     langBar();
     document.documentElement.lang = L === "ru" ? "ru" : L === "uzl" ? "uz-Latn" : "uz-Cyrl";
@@ -161,24 +251,169 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
     if (!DATA) return;
     var s = DATA.state || {}, first = (DATA.full_name || "").split(" ")[1] || DATA.full_name || "";
     document.getElementById("hello").textContent = tr("hello", { n: u(first) });
-    document.getElementById("sub").textContent = tr("sub");
-    var tabs = ["main", "tips", "bp"]; if (DATA.status === "pregnant" && s.ga_days >= 168) tabs.push("ct");
-    if (tabs.indexOf(TAB) < 0) TAB = "main";
-    main.appendChild(el("div", { class: "tabs", id: "tabs" }, tabs.map(function (k) {
-      return el("button", { type: "button", "data-t": k, class: k === TAB ? "on" : "", text: tr("t_" + k), onclick: function () { TAB = k; draw(); window.scrollTo(0, 0); } });
+    document.getElementById("sub").textContent = tr(preg() ? "sub" : "sub_pp");
+    var sos = document.getElementById("sosmini"); sos.classList.remove("hidden"); sos.onclick = function () { go("sos"); };
+    var tabs = [["home", "🏠"], ["charts", "📈"], ["diary", "✍️"], ["tips", "💡"]]; if (preg()) tabs.push(["more", "🧰"]);
+    if (TAB !== "sos" && !tabs.some(function (x) { return x[0] === TAB; })) TAB = "home";
+    var bar = document.getElementById("tabs"); bar.textContent = ""; document.getElementById("bar").classList.remove("hidden");
+    tabs.forEach(function (x) { bar.appendChild(el("button", { type: "button", "data-t": x[0], class: x[0] === TAB ? "on" : "", onclick: function () { go(x[0]); } }, el("span", { class: "i", text: x[1] }), el("span", { text: tr("n_" + x[0]) }))); });
+    if (TG && TG.BackButton) try { if (TAB === "home") TG.BackButton.hide(); else { TG.BackButton.show(); } } catch (e) {}
+    ({ home: drawHome, charts: drawCharts, diary: drawDiary, tips: drawTips, more: drawMore, sos: drawSos })[TAB](main, s);
+  }
+  function go(t) { TAB = t; haptic(); draw(); window.scrollTo(0, 0); }
+
+  // ------------------------------------------------------------ главное
+  function ring(frac, big, small) {
+    var r = 50, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, frac));
+    return el("svg", { class: "ring", viewBox: "0 0 120 120", role: "img", "aria-label": big },
+      el("circle", { class: "bg", cx: 60, cy: 60, r: r, fill: "none", "stroke-width": 11 }),
+      el("circle", { class: "fg", cx: 60, cy: 60, r: r, fill: "none", "stroke-width": 11, "stroke-linecap": "round", "stroke-dasharray": (c * f).toFixed(1) + " " + c.toFixed(1), transform: "rotate(-90 60 60)" }),
+      el("text", { x: 60, y: 58, "text-anchor": "middle", "font-size": 28, "font-weight": 900, text: big }),
+      el("text", { x: 60, y: 80, "text-anchor": "middle", "font-size": 12, "font-weight": 700, text: small }));
+  }
+  function drawHome(main, s) {
+    if (!preg()) {
+      main.appendChild(el("div", { class: "card hero" }, ring((s.pp_day || 0) / 42, String(s.pp_day == null ? "—" : s.pp_day), "/ 42"),
+        el("div", null, el("div", { class: "big", text: tr("pp", { d: s.pp_day == null ? "—" : s.pp_day }) }))));
+    } else {
+      var w = gaW(), left = s.edd ? Math.round((new Date(s.edd) - new Date(today())) / 86400000) : null, tri = w < 13 ? 1 : w < 28 ? 2 : 3;
+      main.appendChild(el("div", { class: "card", id: "herocard" }, el("div", { class: "hero" }, ring((s.ga_days || 0) / 280, String(w), tr("wk_s", { w: "" }).trim() + " / 40"),
+        el("div", null, el("div", { class: "mute small", text: tr("ga") }), el("div", { class: "big", id: "ga", text: tr("wk", { w: w, d: (s.ga_days || 0) % 7 }) }),
+          el("div", { class: "chip", text: tr("tri", { n: tri }) }), el("div", { class: "mute small", text: tr("edd", { d: d(s.edd) }) }),
+          left != null ? el("div", { class: "small", style: "font-weight:700", text: left > 0 ? tr("left", { n: left }) : tr("over") }) : null)),
+        babyBox(w)));
+    }
+    main.appendChild(el("button", { class: "btn sos", type: "button", id: "sosbtn", text: tr("sos_btn"), onclick: function () { go("sos"); } }));
+    var missed = (s.anc || []).filter(function (a) { return a.state === "missed"; });
+    if (missed.length) main.appendChild(el("div", { class: "alert", text: tr("missed", { v: missed.map(function (a) { return vName(a.no); }).join(", ") }) }));
+    if (s.next_anc) {
+      var t = vTests(s.next_anc.no);
+      main.appendChild(el("div", { class: "card", id: "next" }, el("h2", { text: tr("next") }), el("div", null, el("b", { text: vName(s.next_anc.no) }), " ",
+        s.next_anc.state === "due" ? el("span", { class: "chip warn", text: tr("now") }) : null),
+        el("div", { class: "mute", text: tr("from", { a: d(s.next_anc.from), b: d(s.next_anc.to) }) }),
+        el("b", { class: "small", text: tr("need") }), t.length ? el("ul", null, t.map(function (x) { return el("li", { text: x }); })) : el("p", { class: "small mute", text: tr("none") })));
+    }
+    var anc = (s.anc || []).filter(function (a) { return a.state !== "skip"; });
+    if (preg() && anc.length) main.appendChild(el("div", { class: "card", id: "dots" }, el("h2", { text: tr("visits_line") }),
+      el("div", { class: "dots" }, anc.map(function (a) { return el("span", { class: "d " + a.state, title: vName(a.no) }); })),
+      el("div", { class: "dotlbl" }, anc.map(function (a) { return el("span", { text: String(a.no) }); })), el("div", { class: "mute small", text: tr("legend_v") })));
+    var home = (s.home || []).filter(function (h) { return h.state === "due" || h.state === "next"; });
+    if (home.length) main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("home") }), home.map(function (h) {
+      return el("div", { class: "vis" }, el("div", null, el("b", { text: hName(h.kind) }), el("div", { class: "mute small", text: tr("from", { a: d(h.from), b: d(h.to) }) })),
+        el("span", { class: "chip " + (h.state === "due" ? "warn" : ""), text: tr(h.state === "due" ? "due" : "next_s") }));
     })));
-    if (TAB === "tips") return drawTips(main);
-    if (TAB === "bp") return drawBp(main);
-    if (TAB === "ct") return drawCt(main, s);
-    drawMain(main, s);
+    if (pillKinds().length) main.appendChild(pillsCard());
+    var dy = DATA.doya || {};
+    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("contact") }), el("div", null, el("b", { text: u(dy.name || "") })),
+      DATA.institution ? el("div", { class: "mute small", text: tr("inst") + ": " + u(DATA.institution) }) : null,
+      dy.phone ? el("a", { class: "btn call", href: "tel:" + dy.phone, text: tr("call") + " · " + fmtPhone(dy.phone) }) : null));
   }
-  function drawTips(main) {
-    ((DATA.ui && DATA.ui.topics) || []).forEach(function (t, i) {
-      main.appendChild(el("details", { class: "tip", open: i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
+  function babyBox(w) {
+    var b = null; BABY.forEach(function (x) { if (w >= x[0]) b = x; });
+    if (!b) return null;
+    return el("div", { class: "baby", id: "baby" }, el("span", { class: "emo", text: b[3] }),
+      el("div", null, el("b", { text: tr("baby", { f: L === "ru" ? b[4] : u(b[5]) }) }), el("div", { class: "mute small", text: tr("baby_sz", { l: num(b[1], 1), g: num(b[2], 0) }) })));
+  }
+  function pillsCard() {
+    return el("div", { class: "card", id: "pills" }, el("h2", { text: tr("pills_title") }), el("p", { class: "small mute", text: tr("pills_hint") }),
+      el("div", { class: "pills" }, pillKinds().map(function (k) {
+        var on = pillOn(k);
+        return el("button", { type: "button", class: "pill" + (on ? " on" : ""), "data-k": k, onclick: async function () {
+          var want = !pillOn(k);
+          DATA.pills = (DATA.pills || []).filter(function (p) { return !(p.kind === k && p.day === today()); });
+          if (want) DATA.pills.push({ day: today(), kind: k });
+          haptic(); draw();
+          var r = await api({ op: "pill", kind: k, on: want });
+          if (!r.ok || (r.data && r.data.error)) { var b = document.querySelector("#pills"); if (b) b.appendChild(el("div", { class: "alert", text: tr("err") })); }
+        } }, el("span", { class: "box", text: on ? "✓" : "" }), tr("p_" + k));
+      })));
+  }
+
+  // ------------------------------------------------------------ графики
+  // простой линейный график: xs — [мин, макс], ys — [мин, макс], series — [{cls, pts:[[x,y]]}], band — {lo:[[x,y]], hi:[[x,y]]}, lims — [{y, label}]
+  function chart(o) {
+    var W = 340, H = 190, l = 34, r = 8, t = 10, b = 24;
+    var X = function (x) { return l + (x - o.xs[0]) / ((o.xs[1] - o.xs[0]) || 1) * (W - l - r); }, Y = function (y) { return H - b - (y - o.ys[0]) / ((o.ys[1] - o.ys[0]) || 1) * (H - t - b); };
+    var g = [];
+    o.yt.forEach(function (y) { g.push(el("line", { class: "grid", x1: l, x2: W - r, y1: Y(y), y2: Y(y) }), el("text", { x: l - 5, y: Y(y) + 4, "text-anchor": "end", text: String(y) })); });
+    o.xt.forEach(function (x) { g.push(el("text", { x: X(x[0]), y: H - 6, "text-anchor": "middle", text: x[1] })); });
+    if (o.band) {
+      var pts = o.band.lo.map(function (p) { return X(p[0]) + "," + Y(p[1]); }).concat(o.band.hi.slice().reverse().map(function (p) { return X(p[0]) + "," + Y(p[1]); }));
+      g.push(el("polygon", { class: "bandf", points: pts.join(" ") }));
+    }
+    (o.lims || []).forEach(function (m) { g.push(el("line", { class: "lim", x1: l, x2: W - r, y1: Y(m.y), y2: Y(m.y) }), el("text", { x: W - r, y: Y(m.y) - 3, "text-anchor": "end", style: "fill:var(--bad);font-weight:700", text: String(m.y) })); });
+    o.series.forEach(function (sr) {
+      if (sr.pts.length > 1) g.push(el("polyline", { class: sr.cls, points: sr.pts.map(function (p) { return X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1); }).join(" ") }));
+      sr.pts.forEach(function (p) { g.push(el("circle", { class: p[2] ? "pb" : sr.dot, cx: X(p[0]).toFixed(1), cy: Y(p[1]).toFixed(1), r: 3.5 })); });
     });
-    main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+    return el("svg", { class: "chart", viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": o.label }, g);
   }
-  function drawBp(main) {
+  function ticks(a, b, n) { var raw = (b - a) / n, st = [1, 2, 5, 10, 20, 50].filter(function (x) { return x >= raw; })[0] || 50, out = []; for (var v = Math.ceil(a / st) * st; v <= b; v += st) out.push(v); return out; }
+  function bpPoints() {
+    var a = (DATA.bp || []).map(function (x) { return { t: new Date(x.at).getTime(), s: x.sys, d: x.dia }; });
+    (DATA.visits || []).forEach(function (v) { if (v.bp_sys && v.bp_dia) a.push({ t: new Date(v.date + "T09:00:00").getTime(), s: v.bp_sys, d: v.bp_dia }); });
+    return a.filter(function (x) { return !isNaN(x.t); }).sort(function (x, y) { return x.t - y.t; }).slice(-30);
+  }
+  function bpChart() {
+    var p = bpPoints();
+    if (p.length < 2) return el("div", { class: "card", id: "c_bp" }, el("h2", { text: tr("c_bp") }), el("p", { class: "mute small", text: tr("c_bp_empty") }),
+      p.length ? el("div", { text: tr("c_bp_last", { v: p[0].s + "/" + p[0].d }) }) : null);
+    var t0 = p[0].t, t1 = p[p.length - 1].t, lo = Math.min(60, Math.min.apply(null, p.map(function (x) { return x.d; })) - 5), hi = Math.max(160, Math.max.apply(null, p.map(function (x) { return x.s; })) + 5);
+    var mid = p[Math.floor(p.length / 2)].t, last = p[p.length - 1];
+    var c = chart({ label: tr("c_bp"), xs: [t0, t1], ys: [lo, hi], yt: [60, 80, 100, 120, 140, 160, 180, 200].filter(function (y) { return y >= lo && y <= hi; }),
+      xt: [[t0, dm(t0)], [mid, dm(mid)], [t1, dm(t1)]].filter(function (x, i, a) { return i === 0 || x[1] !== a[i - 1][1]; }),
+      lims: [{ y: 140 }, { y: 90 }],
+      series: [{ cls: "s1", dot: "p1", pts: p.map(function (x) { return [x.t, x.s, x.s >= 140]; }) }, { cls: "s2", dot: "p2", pts: p.map(function (x) { return [x.t, x.d, x.d >= 90]; }) }] });
+    var lv = last.s >= 160 || last.d >= 110 ? "bad" : last.s >= 140 || last.d >= 90 ? "warn" : "ok";
+    return el("div", { class: "card", id: "c_bp" }, el("div", { class: "vis", style: "border:0;padding:0" }, el("h2", { text: tr("c_bp") }), el("span", { class: "chip " + lv, text: last.s + "/" + last.d })), c,
+      el("div", { class: "legend" }, el("span", null, el("i", { style: "background:var(--accent)" }), tr("c_sys")), el("span", null, el("i", { style: "background:var(--c2)" }), tr("c_dia")),
+        el("span", null, el("i", { style: "background:var(--bad)" }), tr("c_lim"))));
+  }
+  // норма прибавки веса (IOM 2009) по ИМТ до беременности: за I триместр 0,5–2 кг, далее кг/нед
+  function iom(bmi) { return bmi < 18.5 ? [0.44, 0.58] : bmi < 25 ? [0.35, 0.50] : bmi < 30 ? [0.23, 0.33] : [0.17, 0.27]; }
+  function gainLo(w, bmi) { return w <= 13 ? 0.5 * w / 13 : 0.5 + (w - 13) * iom(bmi)[0]; }
+  function gainHi(w, bmi) { return w <= 13 ? 2 * w / 13 : 2 + (w - 13) * iom(bmi)[1]; }
+  function weightChart() {
+    var ws = (DATA.weights || []).filter(function (x) { return x.ga != null && x.ga >= 0 && x.ga <= 300; });
+    if (!preg() || ws.length < 1) return el("div", { class: "card", id: "c_w" }, el("h2", { text: tr("c_w") }), el("p", { class: "mute small", text: tr("c_w_empty") }));
+    var base = ws[0].kg, bmi = DATA.bmi ? Number(DATA.bmi) : (DATA.height_cm ? base / Math.pow(DATA.height_cm / 100, 2) : null);
+    var pts = ws.map(function (x) { return [x.ga / 7, Math.round((x.kg - base) * 10) / 10]; });
+    var wNow = Math.max(gaW(), pts[pts.length - 1][0]), xmax = Math.max(20, Math.min(42, Math.ceil(wNow / 4) * 4 + 4));
+    var band = null, lo = Math.min(-2, Math.min.apply(null, pts.map(function (p) { return p[1]; })) - 1), hi = Math.max(6, Math.max.apply(null, pts.map(function (p) { return p[1]; })) + 1);
+    if (bmi) {
+      var bl = [], bh = []; for (var w = 0; w <= xmax; w += 1) { bl.push([w, gainLo(w, bmi)]); bh.push([w, gainHi(w, bmi)]); }
+      band = { lo: bl, hi: bh }; hi = Math.max(hi, gainHi(xmax, bmi) + 1);
+    }
+    var yt = ticks(lo, hi, 5);
+    var c = chart({ label: tr("c_w"), xs: [0, xmax], ys: [lo, hi], yt: yt, xt: [0, 10, 20, 30, 40].filter(function (x) { return x <= xmax; }).map(function (x) { return [x, String(x)]; }),
+      band: band, series: [{ cls: "s1", dot: "p1", pts: pts }] });
+    var last = pts[pts.length - 1], info = [el("div", { style: "font-weight:700", text: tr("c_w_now", { k: (last[1] > 0 ? "+" : "") + num(last[1], 1), w: Math.round(last[0]) }) })];
+    if (bmi) {
+      var a = gainLo(last[0], bmi), b = gainHi(last[0], bmi);
+      info.push(el("div", { class: "small", text: tr("c_w_norm", { a: num(a, 1), b: num(b, 1), m: num(bmi, 1) }) }));
+      if (last[0] >= 14 && last[1] > b + 0.5) info.push(el("div", { class: "note", text: tr("c_w_high") }));
+      else if (last[0] >= 14 && last[1] < a - 0.5) info.push(el("div", { class: "note", text: tr("c_w_low") }));
+      info.push(el("div", { class: "mute small", text: tr("c_w_src") }));
+    } else info.push(el("div", { class: "mute small", text: tr("c_w_noh") }));
+    return el("div", { class: "card", id: "c_w" }, el("h2", { text: tr("c_w") }), c,
+      el("div", { class: "legend" }, el("span", null, el("i", { style: "background:var(--accent)" }), tr("c_w_me")), bmi ? el("span", null, el("i", { style: "background:var(--band);height:10px" }), tr("c_w_band")) : null), info);
+  }
+  function pillsChart() {
+    var days = []; for (var i = 13; i >= 0; i--) { var t = new Date(today() + "T12:00:00"); t.setDate(t.getDate() - i); days.push(t.toISOString().slice(0, 10)); }
+    var kinds = ["folic", "iodine", "iron"].filter(function (k) { return pillKinds().indexOf(k) >= 0 || (DATA.pills || []).some(function (p) { return p.kind === k; }); });
+    if (!kinds.length) return null;
+    var n = days.filter(function (dd) { return kinds.some(function (k) { return pillOn(k, dd); }); }).length;
+    var cells = [];
+    kinds.forEach(function (k) { cells.push(el("span", { text: tr("p_" + k + "_s") })); days.forEach(function (dd) { cells.push(el("span", { class: "c" + (pillOn(k, dd) ? " on" : ""), title: dd })); }); });
+    return el("div", { class: "card", id: "c_pills" }, el("h2", { text: tr("c_pills") }), el("div", { class: "grid14" }, cells),
+      el("div", { class: "dotlbl", style: "padding-left:75px" }, el("span", { text: dm(days[0] + "T12:00:00") }), el("span", { text: dm(days[13] + "T12:00:00") })),
+      el("div", { class: "small", text: tr("pills_14", { n: n }) }));
+  }
+  function drawCharts(main) { main.appendChild(bpChart()); main.appendChild(weightChart()); var p = pillsChart(); if (p) main.appendChild(p); }
+
+  // ------------------------------------------------------------ дневник
+  function drawDiary(main) {
+    if (pillKinds().length) main.appendChild(pillsCard());
     var sys = el("input", { type: "number", id: "bp_sys", inputmode: "numeric", min: "60", max: "260", placeholder: "120" });
     var dia = el("input", { type: "number", id: "bp_dia", inputmode: "numeric", min: "30", max: "180", placeholder: "80" });
     var out = el("div", { id: "bp_out" });
@@ -192,7 +427,7 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
       var lv = r.data && r.data.level, er = r.data && r.data.error;
       if (!r.ok || er) { out.appendChild(el("div", { class: "alert", text: er === "too_many" ? tr("bp_many") : er === "bad_bp" ? tr("bp_bad") : tr("err") })); return; }
       out.appendChild(el("div", { class: lv === "ok" ? "okmsg" : "alert", text: tr(lv === "severe" ? "bp_severe" : lv === "high" ? "bp_high" : "bp_ok") }));
-      if (lv !== "ok") out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+      if (lv !== "ok") { out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") })); haptic("warn"); }
       DATA.bp = [{ sys: a, dia: b, at: new Date().toISOString() }].concat(DATA.bp || []);
       listBox.textContent = ""; listBox.appendChild(bpList());
       sys.value = ""; dia.value = "";
@@ -200,7 +435,7 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
     function bpList() {
       var l = DATA.bp || [];
       if (!l.length) return el("span");
-      return el("div", null, el("b", { class: "small", text: tr("bp_list") }), l.slice(0, 14).map(function (x) {
+      return el("div", null, el("b", { class: "small", text: tr("bp_list") }), l.slice(0, 7).map(function (x) {
         var c = x.sys >= 160 || x.dia >= 110 ? "bad" : x.sys >= 140 || x.dia >= 90 ? "warn" : "ok", t = new Date(x.at);
         return el("div", { class: "vis" }, el("span", { class: "mute small", text: (isNaN(t) ? "" : t.toLocaleString(L === "ru" ? "ru-RU" : "uz", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })) }),
           el("span", { class: "chip " + c, text: x.sys + "/" + x.dia }));
@@ -208,51 +443,83 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
     }
     var listBox = el("div", { id: "bp_list" }, bpList());
     main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("bp_title") }), DATA.pe === "high" ? el("div", { class: "alert", text: tr("bp_pe") }) : null,
-      el("p", { class: "small mute", text: tr("bp_hint") }), el("div", { class: "bprow" }, el("label", null, tr("bp_sys"), sys), el("label", null, tr("bp_dia"), dia)), save, out));
-    main.appendChild(el("div", { class: "card" }, listBox));
+      el("p", { class: "small mute", text: tr("bp_hint") }), el("div", { class: "row2" }, el("label", null, tr("bp_sys"), sys), el("label", null, tr("bp_dia"), dia)), save, out, listBox));
+    // вес
+    var kg = el("input", { type: "text", id: "w_kg", inputmode: "decimal", autocomplete: "off", maxlength: "6", placeholder: "60,5" });
+    var wout = el("div", { id: "w_out" });
+    var wsave = el("button", { class: "btn call", type: "button", id: "w_save", text: tr("w_save"), onclick: async function () {
+      wout.textContent = "";
+      var v = parseFloat(String(kg.value).replace(",", "."));
+      if (!(v >= 30 && v <= 200)) { wout.appendChild(el("div", { class: "alert", text: tr("w_bad") })); return; }
+      wsave.disabled = true;
+      var r = await api({ op: "weight", kg: v });
+      wsave.disabled = false;
+      var er = r.data && r.data.error;
+      if (!r.ok || er) { wout.appendChild(el("div", { class: "alert", text: er === "too_many" ? tr("w_many") : er === "bad_weight" ? tr("w_bad") : tr("err") })); return; }
+      DATA.weights = (DATA.weights || []).concat([{ d: today(), kg: Math.round(v * 10) / 10, src: "self", ga: (DATA.state || {}).ga_days }]);
+      wout.appendChild(el("div", { class: "okmsg", text: tr("w_ok") })); kg.value = ""; haptic();
+    } });
+    var lastW = (DATA.weights || []).slice(-1)[0];
+    main.appendChild(el("div", { class: "card", id: "w_card" }, el("h2", { text: tr("w_title") }), el("p", { class: "small mute", text: tr("w_hint") }),
+      lastW ? el("div", { class: "small", text: d(lastW.d) + " · " + num(Number(lastW.kg), 1) + " kg" }) : null,
+      el("div", { class: "row2" }, el("label", null, tr("w_kg"), kg)), wsave, wout));
+  }
+
+  // ------------------------------------------------------------ советы, ещё, тревога
+  function drawTips(main) {
+    ((DATA.ui && DATA.ui.topics) || []).forEach(function (t, i) {
+      main.appendChild(el("details", { class: "tip", open: i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
+    });
+    main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+  }
+  function drawMore(main, s) {
+    var w = gaW();
+    if (w >= 24) drawCt(main, s);
+    if (w >= 28) drawKick(main);
+    if (w < 24) main.appendChild(el("div", { class: "card" }, el("p", { class: "mute", text: tr("more_none") })));
+    var n = Object.keys(BAGS).filter(function (k) { return BAGS[k]; }).length;
+    main.appendChild(el("div", { class: "card bag", id: "bag" }, el("h2", { text: tr("bag_title") }), el("div", { class: "chip", id: "bag_n", text: tr("bag_n", { n: n, t: BAG.length }) }),
+      BAG.map(function (x, i) { return el("label", null, el("input", { type: "checkbox", checked: BAGS[i] ? "" : null, onchange: function (e) { BAGS[i] = e.target.checked; store("ovabmq_bag", BAGS); draw(); } }), pair(x)); })));
   }
   function drawCt(main, s) {
     var now = Date.now(), open = CT.length && !CT[CT.length - 1].e;
     var hour = CT.filter(function (c) { return c.s > now - 3600000; });
     var b = el("button", { class: "ctbtn" + (open ? " on" : ""), type: "button", id: "ct_btn", text: open ? tr("ct_stop") : tr("ct_start"), onclick: function () {
       if (open) CT[CT.length - 1].e = Date.now(); else CT.push({ s: Date.now() });
-      saveCt(); draw();
+      saveCt(); haptic(); draw();
     } });
-    var warn = null, wk = Math.floor((s.ga_days || 0) / 7);
+    var warn = null, wk = gaW();
     if (hour.length >= 4 && wk < 37) warn = el("div", { class: "alert", id: "ct_warn" }, tr("ct_pre"));
     else if (hour.length >= 6 && wk >= 37) warn = el("div", { class: "okmsg", id: "ct_warn" }, tr("ct_term"));
-    var alertBtn = warn ? el("button", { class: "btn danger", type: "button", text: tr("ct_alert"), onclick: async function () {
+    var alertBtn = warn ? el("button", { class: "btn danger", type: "button", id: "ct_alert", text: tr("ct_alert"), onclick: async function () {
       alertBtn.disabled = true; var r = await api({ op: "alert", signs: ["contractions"] });
       alertBtn.textContent = r.ok ? tr("sent", { n: (r.data && r.data.sent) || 0 }) : tr("err");
     } }) : null;
-    var rows = CT.slice(-12).reverse().map(function (c, i, arr) {
+    var rows = CT.slice(-8).reverse().map(function (c, i, arr) {
       var prev = arr[i + 1], t = new Date(c.s);
       return el("div", { class: "vis" }, el("b", { text: t.toLocaleTimeString(L === "ru" ? "ru-RU" : "uz", { hour: "2-digit", minute: "2-digit" }) }),
         el("span", { class: "mute small", text: [c.e ? tr("ct_dur", { s: Math.round((c.e - c.s) / 1000) }) : "…", prev ? tr("ct_int", { m: Math.round((c.s - prev.s) / 60000) }) : ""].filter(Boolean).join(" · ") }));
     });
-    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("ct_title") }), el("p", { class: "small mute", text: tr("ct_hint") }), b,
-      el("div", { class: "chip", id: "ct_hour", text: tr("ct_hour", { n: hour.length }) }), warn, alertBtn, warn ? el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }) : null));
-    if (rows.length) main.appendChild(el("div", { class: "card" }, rows, el("button", { class: "btn call", type: "button", text: tr("ct_clear"), onclick: function () { CT = []; saveCt(); draw(); } })));
+    main.appendChild(el("div", { class: "card", id: "ct" }, el("h2", { text: tr("ct_title") }), el("p", { class: "small mute", text: tr("ct_hint") }), b,
+      el("div", { class: "chip", id: "ct_hour", text: tr("ct_hour", { n: hour.length }) }), warn, alertBtn, warn ? el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }) : null,
+      rows, rows.length ? el("button", { class: "btn call", type: "button", text: tr("ct_clear"), onclick: function () { CT = []; saveCt(); draw(); } }) : null));
   }
-  function drawMain(main, s) {
-    if (DATA.status === "postpartum") main.appendChild(el("div", { class: "card" }, el("div", { class: "big", text: tr("pp", { d: s.pp_day == null ? "—" : s.pp_day }) })));
-    else main.appendChild(el("div", { class: "card" }, el("div", { class: "mute small", text: tr("ga") }), el("div", { class: "big", id: "ga", text: tr("wk", { w: Math.floor(s.ga_days / 7), d: s.ga_days % 7 }) }),
-      el("div", { class: "mute", text: tr("edd", { d: d(s.edd) }) })));
-    var missed = (s.anc || []).filter(function (a) { return a.state === "missed"; });
-    if (missed.length) main.appendChild(el("div", { class: "alert", text: tr("missed", { v: missed.map(function (a) { return vName(a.no); }).join(", ") }) }));
-    if (s.next_anc) {
-      var t = vTests(s.next_anc.no);
-      main.appendChild(el("div", { class: "card", id: "next" }, el("h2", { text: tr("next") }), el("div", null, el("b", { text: vName(s.next_anc.no) }), " ",
-        s.next_anc.state === "due" ? el("span", { class: "chip warn", text: tr("now") }) : null),
-        el("div", { class: "mute", text: tr("from", { a: d(s.next_anc.from), b: d(s.next_anc.to) }) }),
-        el("b", { class: "small", text: tr("need") }), t.length ? el("ul", null, t.map(function (x) { return el("li", { text: x }); })) : el("p", { class: "small mute", text: tr("none") })));
-    }
-    var home = (s.home || []).filter(function (h) { return h.state === "due" || h.state === "next"; });
-    if (home.length) main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("home") }), home.map(function (h) {
-      return el("div", { class: "vis" }, el("div", null, el("b", { text: hName(h.kind) }), el("div", { class: "mute small", text: tr("from", { a: d(h.from), b: d(h.to) }) })),
-        el("span", { class: "chip " + (h.state === "due" ? "warn" : ""), text: tr(h.state === "due" ? "due" : "next_s") }));
-    })));
-    // опасные признаки
+  function drawKick(main) {
+    var now = Date.now(), k = KICK && now - KICK.s < 12 * 3600000 ? KICK : null, n = k ? k.n : 0, mins = k ? Math.round(((k.done || now) - k.s) / 60000) : 0;
+    var state = null;
+    if (k && n >= 10) state = el("div", { class: "okmsg", id: "k_state", text: tr("k_done", { m: mins }) });
+    else if (k && now - k.s > 2 * 3600000) state = el("div", { class: "alert", id: "k_state", text: tr("k_slow") });
+    var alertBtn = state && n < 10 ? el("button", { class: "btn danger", type: "button", text: tr("ct_alert"), onclick: async function () {
+      alertBtn.disabled = true; var r = await api({ op: "alert", signs: ["moves"] }); alertBtn.textContent = r.ok ? tr("sent", { n: (r.data && r.data.sent) || 0 }) : tr("err");
+    } }) : null;
+    main.appendChild(el("div", { class: "card", id: "kick" }, el("h2", { text: tr("k_title") }), el("p", { class: "small mute", text: tr("k_hint") }),
+      n < 10 ? el("button", { class: "kick", type: "button", id: "k_btn", text: tr("k_btn"), onclick: function () {
+        if (!k) k = { s: Date.now(), n: 0 }; k.n += 1; if (k.n >= 10) k.done = Date.now(); KICK = k; store("ovabmq_kick", KICK); haptic(); draw();
+      } }) : null,
+      el("div", { class: "chip", id: "k_count", text: tr("k_count", { n: n, m: mins }) }), state, alertBtn,
+      k ? el("button", { class: "btn call", type: "button", text: tr("k_reset"), onclick: function () { KICK = null; store("ovabmq_kick", null); draw(); } }) : null));
+  }
+  function drawSos(main) {
     var list = (DATA.ui && DATA.ui.signs) ? DATA.ui.signs.map(function (x) { return x.k; }) : (DATA.status === "postpartum" ? PP : PREG);
     var box = el("div", { class: "signs" }, list.map(function (k) { return el("label", null, el("input", { type: "checkbox", value: k }), sg2(k)); }));
     var out = el("div");
@@ -265,29 +532,22 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
       send.disabled = false;
       out.appendChild(el("div", { class: r.ok && r.data.sent ? "okmsg" : "alert", text: r.ok ? (r.data.sent ? tr("sent", { n: r.data.sent }) : tr("sent0")) : tr("err") }));
       out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
-      if (TG && TG.HapticFeedback) try { TG.HapticFeedback.notificationOccurred("warning"); } catch (e) {}
+      haptic("warn");
     } });
-    main.appendChild(el("div", { class: "card", id: "danger" }, el("h2", { text: tr("danger") }), el("p", { class: "small", text: tr("danger_hint") }), box, send, out,
-      el("a", { class: "btn e103", href: "tel:103", text: tr("e103") })));
-    // план
-    if (DATA.status === "pregnant" && (s.anc || []).length) main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("plan") }), s.anc.filter(function (a) { return a.state !== "skip"; }).map(function (a) {
-      var c = a.state === "done" ? "ok" : a.state === "missed" ? "bad" : a.state === "due" ? "warn" : "";
-      return el("div", { class: "vis" }, el("div", null, el("b", { text: vName(a.no) }), el("div", { class: "mute small", text: a.date ? d(a.date) : tr("from", { a: d(a.from), b: d(a.to) }) })),
-        el("span", { class: "chip " + c, text: tr(a.state === "done" ? "done" : a.state === "missed" ? "missed_s" : a.state === "due" ? "due" : "next_s") }));
-    })));
-    // контакт
-    var dy = DATA.doya || {};
-    main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("contact") }), el("div", null, el("b", { text: u(dy.name || "") })),
-      DATA.institution ? el("div", { class: "mute small", text: tr("inst") + ": " + DATA.institution }) : null,
-      dy.phone ? el("a", { class: "btn call", href: "tel:" + dy.phone, text: tr("call") + " · " + fmtPhone(dy.phone) }) : null));
+    main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+    main.appendChild(el("div", { class: "card", id: "danger" }, el("h2", { text: tr("danger") }), el("p", { class: "small", text: tr("danger_hint") }), box, send, out));
   }
   async function start() {
-    if (TG) { try { TG.ready(); TG.expand(); if (TG.colorScheme) document.documentElement.setAttribute("data-theme", TG.colorScheme); } catch (e) {} }
+    if (TG) {
+      try { TG.ready(); TG.expand(); if (TG.colorScheme) document.documentElement.setAttribute("data-theme", TG.colorScheme); if (TG.setHeaderColor) TG.setHeaderColor("#1E40AF"); } catch (e) {}
+      try { if (TG.BackButton) TG.BackButton.onClick(function () { go("home"); }); } catch (e) {}
+    }
     langBar();
     if (!TG || !TG.initData) { document.getElementById("boot").textContent = tr("open_tg"); return; }
     var r = await api({ op: "view", lang: q ? L : null });
     if (!r.ok) { document.getElementById("boot").textContent = r.status === 404 ? tr("notlinked") : tr("err"); return; }
     DATA = r.data; if (!q && (DATA.lang === "ru" || DATA.lang === "uz" || DATA.lang === "uzl")) L = DATA.lang;
+    if (/[?&]t=sos/.test(location.search)) TAB = "sos";
     draw();
   }
   start();

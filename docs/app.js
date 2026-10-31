@@ -337,7 +337,7 @@
   // модуль «Беременные» (docs/mothers.js) получает нужные помощники
   var MV = null;
   function mv() {
-    return MV || (MV = window.MothersModule({ h: h, t: t, sb: sb, S: S, CFG: CFG, shell: shell, toast: toast, errMsg: errMsg, fmtPhone: fmtPhone, fmtDT: fmtDT,
+    return MV || (MV = window.MothersModule({ h: h, t: t, sb: sb, S: S, CFG: CFG, shell: shell, toast: toast, errMsg: errMsg, fmtPhone: fmtPhone, fmtDT: fmtDT, fmtD: fmtD,
       loadingBox: loadingBox, failBox: failBox, token: function () { return renderToken; }, armed: armed, isAdmin: isAdmin, isManager: isManager, isHead: isHead,
       myPosCodes: myPosCodes, instName: instName, mahName: mahName, mahInsts: mahInsts, uzT: uzT, ancRow: ancRow, ancLabel: ancLabel, ancTestLabel: ancTestLabel,
       loadInstitutions: loadInstitutions, todayS: todayS, addDays: addDays, dayDiff: dayDiff }));

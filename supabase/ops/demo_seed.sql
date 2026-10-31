@@ -71,6 +71,15 @@ begin
   select m.id, x.s, x.d, now() - (x.h || ' hours')::interval from public.mothers m,
     (values (124, 80, 120), (128, 82, 96), (131, 84, 72), (126, 81, 48), (138, 88, 24), (142, 92, 2)) x(s, d, h)
   where m.institution_id = i and m.full_name = 'Абдуллаева Барно Рустамовна';
+  -- дневник веса (раз в 2 недели с постановки) и витамины за 2 недели — у беременных, подключённых к боту (для графиков на «Моей странице» и в карточке)
+  insert into public.mother_weight (mother_id, kg, at)
+  select m.id, round(m.weight_kg + (w.n * 14) / 7.0 * (case when m.full_name like 'Абдуллаева%' then 0.62 else 0.42 end), 1),
+         (m.consent_at::date + w.n * 14)::timestamptz + interval '8 hours'
+  from public.mothers m join public.mother_tg g on g.mother_id = m.id, generate_series(1, 20) w(n)
+  where m.institution_id = i and m.status = 'pregnant' and m.consent_at::date + w.n * 14 <= private.today();
+  insert into public.mother_pills (mother_id, day, kind)
+  select m.id, private.today() - dd, k from public.mothers m join public.mother_tg g on g.mother_id = m.id, generate_series(0, 13) dd, unnest(array['iodine', 'iron']) k
+  where m.institution_id = i and m.status = 'pregnant' and (dd + length(m.full_name)) % 4 <> 0;
   -- одни роды сегодня (для «родили в этом месяце»)
   update public.mothers set outcome_date = private.today(), discharge_date = private.today() where institution_id = i and full_name = 'Ғафурова Нафиса Баҳодировна';
 end $$;

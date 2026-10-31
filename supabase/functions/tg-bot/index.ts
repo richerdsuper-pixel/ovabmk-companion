@@ -265,6 +265,17 @@ Deno.serve(async (req: Request) => {
       const r = Number.isInteger(sys) && Number.isInteger(dia) ? await recordBp(who.id, sys, dia) : { error: "bad_bp" };
       return reply(r, r.error === "failed" ? 500 : 200, origin);
     }
+    if (body.op === "weight") {   // дневник веса
+      const kg = Number(body.kg);
+      if (!Number.isFinite(kg)) return reply({ error: "bad_weight" }, 200, origin);
+      const { data, error } = await admin().rpc("bot_mother_weight", { _tg: who.id, _kg: kg });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
+    }
+    if (body.op === "pill") {   // витамины: отметка «выпила сегодня»
+      if (typeof body.kind !== "string") return reply({ error: "bad_kind" }, 200, origin);
+      const { data, error } = await admin().rpc("bot_mother_pill", { _tg: who.id, _kind: body.kind, _on: body.on !== false });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
+    }
     const mo = await motherOf(who.id);
     if (!mo) return reply({ error: "not_linked" }, 404, origin);
     const lang: Lang = isLang(body.lang) ? body.lang : isLang(mo.lang) ? mo.lang : "uz";   // подписи для мини-приложения — из тех же текстов, что и в боте

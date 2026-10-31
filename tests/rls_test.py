@@ -792,6 +792,22 @@ expect_ok("давление: не подключена — ошибка", "selec
 expect_ok("давление: видно в карточке доя", f"select jsonb_array_length(public.mother_get('{M3}')->'bp')", "authenticated", MD, out="3")
 expect_ok("давление: и на «Моей странице» с риском ПЭ", "select (v->>'pe') || '/' || jsonb_array_length(v->'bp') from (select public.bot_mother_view(779) v) x", "service_role", out="high/3")
 expect_err("давление: функция бота закрыта для пользователей", "select public.bot_mother_bp(779, 120, 80)", "authenticated", MD, "permission denied")
+# дневник веса и витамины (0023)
+expect_ok("вес: запись", "select public.bot_mother_weight(779, 61.25)->>'ok'", "service_role", out="true")
+expect_ok("вес: вне диапазона — ошибка", "select public.bot_mother_weight(779, 12)->>'error'", "service_role", out="bad_weight")
+sql("select public.bot_mother_weight(779, 61.5)", "service_role"); sql("select public.bot_mother_weight(779, 61.6)", "service_role")
+expect_ok("вес: не больше 3 записей в сутки", "select public.bot_mother_weight(779, 62)->>'error'", "service_role", out="too_many")
+expect_ok("вес: не подключена — ошибка", "select public.bot_mother_weight(1, 60)->>'error'", "service_role", out="not_linked")
+expect_ok("витамины: отметка и повтор без дубля", "select (public.bot_mother_pill(779, 'folic', true)->>'ok') || (public.bot_mother_pill(779, 'folic', true)->>'ok') || (public.bot_mother_pill(779, 'iron', true)->>'ok')", "service_role", out="truetruetrue")
+expect_ok("витамины: снять отметку", "select public.bot_mother_pill(779, 'iron', false)->>'ok'", "service_role", out="true")
+expect_ok("витамины: чужой вид — ошибка", "select public.bot_mother_pill(779, 'aspirin', true)->>'error'", "service_role", out="bad_kind")
+expect_ok("моя страница: вес (округлён) и витамины для графиков",
+          "select (v->'weights'->-1->>'kg') || '/' || (v->'weights'->-1->>'src') || '/' || jsonb_array_length(v->'pills') || '/' || (v->'pills'->0->>'kind') from (select public.bot_mother_view(779) v) x",
+          "service_role", out="61.6/self/1/folic")
+expect_ok("вес и витамины: видно в карточке доя (вес при постановке + 3 своих)", f"select jsonb_array_length(public.mother_get('{M3}')->'weights') || '/' || (public.mother_get('{M3}')->'weights'->0->>'src') || '/' || jsonb_array_length(public.mother_get('{M3}')->'pills')", "authenticated", MD, out="4/reg/1")
+expect_err("вес и витамины: функции бота закрыты для пользователей", "select public.bot_mother_weight(779, 60)", "authenticated", MD, "permission denied")
+expect_err("вес и витамины: функции бота закрыты для пользователей (витамины)", "select public.bot_mother_pill(779, 'folic', true)", "authenticated", MD, "permission denied")
+
 # советы по сроку
 expect_ok("советы: 8 недель — тема w08, высокий риск ПЭ передан", f"select topic || '/' || pe from public.cron_mother_weekly('{SEC}') where telegram_id = 779", "service_role", out="w08/high")
 expect_ok("советы: второй раз не повторяются", f"select count(*) from public.cron_mother_weekly('{SEC}') where telegram_id = 779", "service_role", out="0")

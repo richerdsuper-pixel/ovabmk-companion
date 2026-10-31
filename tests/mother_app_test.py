@@ -16,7 +16,8 @@ VIEW = {"lang": "uz", "full_name": "Каримова Дилноза Анваро
         "home_schedule": [{"kind": "ant32", "label": "Патронаж беременной, 32 недели", "label_uz": "Ҳомиладор патронажи, 32 ҳафта"}], "visits": [],
         "pe": "high", "bp": [{"sys": 128, "dia": 82, "at": "2026-10-31T08:00:00Z"}, {"sys": 122, "dia": 78, "at": "2026-10-25T08:00:00Z"}], "today": "2026-11-01", "bmi": 22.5, "height_cm": 160,
         "weights": [{"d": "2026-08-01", "kg": 58, "src": "reg", "ga": 36}, {"d": "2026-10-01", "kg": 61.5, "src": "visit", "ga": 97}, {"d": "2026-10-30", "kg": 66, "src": "self", "ga": 126}],
-        "pills": [{"day": "2026-10-30", "kind": "iron"}, {"day": "2026-11-01", "kind": "iodine"}],
+        "pills": [{"day": "2026-10-30", "kind": "iron"}, {"day": "2026-11-01", "kind": "iodine"}], "pill_hour": 9,
+        "questions": [{"id": 3, "q": "Можно ли кофе?", "a": "Не больше 2 чашек", "a_by": "Холова Жамила", "at": "2026-10-30T05:00:00Z"}], "baby": [],
         "ui": {"signs": [{"k": "bleeding", "label": "Қонли ажралма, қон кетиши"}, {"k": "contractions", "label": "Бир соатда 4–5 тадан кўп тўлғоқ"}, {"k": "vomit", "label": "5 мартадан кўп қусиш"}],
                "topics": [{"k": "food", "title": "🍎 Овқатланиш ва витаминлар", "text": "• Фолий кислотаси 400 мкг"}, {"k": "signs", "title": "⚠️ Қачон дарҳол шифокорга", "text": "• 5 мартадан кўп қусиш"}]}}
 def run(p, view, tg=True, status=200, search="?l=uz"):
@@ -25,7 +26,8 @@ def run(p, view, tg=True, status=200, search="?l=uz"):
     def fn(route):
         body = json.loads(route.request.post_data or "{}"); calls.append(body)
         if body.get("op") == "alert": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
-        elif body.get("op") in ("weight", "pill"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
+        elif body.get("op") == "ask": route.fulfill(status=200, content_type="application/json", body=json.dumps({"qid": 9, "sent": 3}))
+        elif body.get("op") in ("weight", "pill", "pill_hour", "baby"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
         elif body.get("op") == "bp":
             a, b = body["sys"], body["dia"]; lv = "severe" if a >= 160 or b >= 110 else "high" if a >= 140 or b >= 90 else "ok"
             route.fulfill(status=200, content_type="application/json", body=json.dumps({"level": lv}))
@@ -69,6 +71,9 @@ with sync_playwright() as p:
     ok("графики: витамины за 14 дней", pg.locator("#c_pills .c.on").count() == 3 and "2 кун" in pg.inner_text("#c_pills"), pg.inner_text("#c_pills"))
     pg.screenshot(path=str(ROOT / "tests/shots/m_mother_charts.png"), full_page=True)
     pg.click("#tabs button[data-t=tips]"); pg.wait_for_timeout(200)
+    ok("вопрос доя: прошлый вопрос с ответом", "Не больше 2 чашек — Холова Жамила" in pg.inner_text("#ask"))
+    pg.fill("#q_text", "Когда делать УЗИ?"); pg.click("#q_send"); pg.wait_for_timeout(300)
+    ok("вопрос доя: отправлен, ждёт ответа", calls[-1].get("op") == "ask" and calls[-1].get("text") == "Когда делать УЗИ?" and "доянгизга юборилди" in pg.inner_text("#ask") and "жавоб кутилмоқда" in pg.inner_text("#ask"), pg.inner_text("#ask"))
     ok("советы: разделы справки", "Овқатланиш ва витаминлар" in pg.inner_text("main") and "400 мкг" in pg.inner_text("main"))
     pg.click("#tabs button[data-t=diary]"); pg.wait_for_timeout(200)
     ok("дневник: подсказка про риск ПЭ и прошлая запись", "преэклампсия хавфи юқори" in pg.inner_text("main") and "128/82" in pg.inner_text("#bp_list"))
@@ -77,6 +82,9 @@ with sync_playwright() as p:
     pg.fill("#bp_sys", "150"); pg.fill("#bp_dia", "95"); pg.click("#bp_save"); pg.wait_for_timeout(400)
     ok("давление: 150/95 — высокое, совет и 103", calls[-1].get("op") == "bp" and calls[-1].get("sys") == 150 and "юқори" in pg.inner_text("#bp_out") and pg.locator("#bp_out a[href='tel:103']").count() == 1)
     ok("давление: запись появилась в списке", "150/95" in pg.inner_text("#bp_list"))
+    ok("витамины: выбран час напоминания", pg.input_value("#pill_hour") == "9")
+    pg.select_option("#pill_hour", "21"); pg.wait_for_timeout(300)
+    ok("витамины: новый час уходит на сервер", calls[-1].get("op") == "pill_hour" and calls[-1].get("hour") == 21 and "21:00" in pg.inner_text("#ph_out"), calls[-1])
     pg.fill("#w_kg", "15"); pg.click("#w_save"); pg.wait_for_timeout(200)
     ok("вес: проверка диапазона", "30 дан 200" in pg.inner_text("#w_out") and not any(c.get("op") == "weight" for c in calls))
     pg.fill("#w_kg", "66,4"); pg.click("#w_save"); pg.wait_for_timeout(300)
@@ -106,10 +114,24 @@ with sync_playwright() as p:
     ok("сумка в роддом: отметки считаются", "10 тадан 2 таси" in pg.inner_text("#bag_n"), pg.inner_text("#bag_n"))
     pg.screenshot(path=str(ROOT / "tests/shots/m_mother_more.png"), full_page=True)
     ok("ошибок JS нет (схватки)", not errs, errs); b.close()
-    pp = dict(VIEW); pp["status"] = "postpartum"; pp.pop("ui"); pp["state"] = {"pp_day": 5, "anc": [], "home": [{"kind": "pp15", "from": "2026-12-01", "to": "2026-12-04", "state": "next"}]}
+    pp = dict(VIEW); pp["status"] = "postpartum"; pp["outcome"] = "delivered"; pp["outcome_date"] = "2026-10-27"; pp["baby"] = []; pp.pop("ui"); pp["state"] = {"pp_day": 5, "anc": [], "home": [{"kind": "pp15", "from": "2026-12-01", "to": "2026-12-04", "state": "next"}]}
     b, pg, errs, calls = run(p, pp)
     ok("после родов: день и признаки ребёнка", "Туғруқдан кейин 5-кун" in pg.inner_text("body") and pg.locator("#tabs button[data-t=more]").count() == 0)
-    pg.click("#sosbtn"); pg.wait_for_timeout(200)
+    ok("после родов: вкладка «Малыш»", pg.locator("#tabs button[data-t=baby]").count() == 1)
+    pg.click("#tabs button[data-t=baby]"); pg.wait_for_timeout(200)
+    ok("малыш: день жизни", "6-куни" in pg.inner_text("#b_day"), pg.inner_text("main")[:200])
+    pg.fill("#b_w", "99"); pg.click("#b_w_save"); pg.wait_for_timeout(150)
+    ok("малыш: проверка веса", "500 дан 15000" in pg.inner_text("main") and not any(c.get("op") == "baby" for c in calls))
+    pg.fill("#b_w", "3400"); pg.click("#b_w_save"); pg.wait_for_timeout(300)
+    ok("малыш: вес записан", calls[-1].get("op") == "baby" and calls[-1].get("kind") == "weight" and calls[-1].get("val") == "3400", calls[-1])
+    pg.fill("#b_w", "3650"); pg.click("#b_w_save"); pg.wait_for_timeout(300)
+    ok("малыш: график веса появился", pg.locator("#b_chart svg.chart polyline").count() == 1)
+    pg.click("#b_feed .pill[data-k=breast]"); pg.wait_for_timeout(300)
+    ok("малыш: кормление грудью отмечено", calls[-1].get("val") == "breast" and pg.locator("#b_feed .pill.on[data-k=breast]").count() == 1)
+    pg.fill("#b_vac", "БЦЖ"); pg.click("#b_v_save"); pg.wait_for_timeout(300)
+    ok("малыш: прививка записана с датой", calls[-1].get("kind") == "vaccine" and calls[-1].get("val") == "БЦЖ" and calls[-1].get("d") and "БЦЖ" in pg.inner_text("#b_vacs"))
+    pg.screenshot(path=str(ROOT / "tests/shots/m_mother_baby.png"), full_page=True)
+    pg.click("#sosbtn") if pg.locator("#sosbtn").count() else pg.click("#sosmini"); pg.wait_for_timeout(200)
     ok("после родов: признаки ребёнка", pg.locator("input[value=baby_feed]").count() == 1 and pg.locator("input[value=waters]").count() == 0)
     ok("ошибок JS нет (после родов)", not errs, errs); b.close()
     b, pg, errs, calls = run(p, VIEW, status=404)

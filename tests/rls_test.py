@@ -813,6 +813,51 @@ expect_ok("советы: 8 недель — тема w08, высокий рис�
 expect_ok("советы: второй раз не повторяются", f"select count(*) from public.cron_mother_weekly('{SEC}') where telegram_id = 779", "service_role", out="0")
 expect_err("советы: без секрета нельзя", "select * from public.cron_mother_weekly('x')", "service_role", "forbidden")
 
+# 0024: список дня доя в боте
+expect_ok("список дня: доя видит своих беременных", f"select count(*) > 0 from public.bot_staff_day(4101)", "service_role", out="t")
+expect_ok("список дня: доя другого учреждения — не видит чужих", f"select count(*) from public.bot_staff_day(4103) where mother_id in ('{M1}', '{M3}')", "service_role", out="0")
+expect_ok("список дня: не сотрудник — пусто", "select count(*) from public.bot_staff_day(999999)", "service_role", out="0")
+expect_err("список дня: закрыт для пользователей", "select * from public.bot_staff_day(4101)", "authenticated", MD, "permission denied")
+expect_ok("отметка из бота: визит 2 сделан сегодня", f"select (r->>'ok') || '/' || (r->>'new') from (select public.bot_staff_mark(4101, '{M3}', 'anc', '2') r) x", "service_role", out="true/true")
+expect_ok("отметка из бота: повтор не дублирует", f"select (r->>'new') from (select public.bot_staff_mark(4101, '{M3}', 'anc', '2') r) x", "service_role", out="false")
+expect_ok("отметка из бота: записано от имени доя", f"select (by_user = '{MD}')::text || '/' || (visit_date = private.today())::text from public.anc_visits where mother_id = '{M3}' and visit_no = 2", out="true/true")
+expect_ok("отметка из бота: патронаж", f"select public.bot_staff_mark(4102, '{M3}', 'home', 'ant12')->>'ok'", "service_role", out="true")
+expect_ok("отметка из бота: чужое учреждение — нельзя", f"select public.bot_staff_mark(4103, '{M3}', 'anc', '3')->>'error'", "service_role", out="forbidden")
+expect_ok("отметка из бота: кадровик — нельзя", f"select public.bot_staff_mark(4104, '{M3}', 'anc', '3')->>'error'", "service_role", out="forbidden")
+expect_ok("отметка из бота: неверный вид", f"select public.bot_staff_mark(4101, '{M3}', 'anc', '9')->>'error'", "service_role", out="bad_kind")
+# графики по месяцам
+expect_ok("графики: 12 месяцев, постановка в этом месяце видна", "select count(*) || '/' || (max(registered) filter (where month = date_trunc('month', private.today())::date) > 0)::text from public.mothers_trend()", "authenticated", MD, out="12/true")
+expect_ok("графики: другое учреждение — своих нет", "select coalesce(sum(registered), 0) from public.mothers_trend()", "authenticated", MO, out="0")
+expect_err("графики: посторонним нельзя", "select * from public.mothers_trend()", "authenticated", N, "forbidden")
+# вопрос доя
+QA = sql("select public.bot_mother_ask(779, 'Можно ли пить кофе?')", "service_role")[1][0]
+ok("вопрос: уходит доя, патронажу и руководителю", json.loads(QA).get("recipients") and sorted(json.loads(QA)["recipients"]) == [3101, 4101, 4102], QA)
+QID = json.loads(QA)["qid"]
+expect_ok("вопрос: пустой — ошибка", "select public.bot_mother_ask(779, '  ')->>'error'", "service_role", out="empty")
+expect_ok("вопрос: ответ доя уходит беременной", f"select (r->>'telegram_id') || '/' || (r->>'a') from (select public.bot_staff_answer(4101, {QID}, 'Не больше 2 чашек') r) x", "service_role", out="779/Не больше 2 чашек")
+expect_ok("вопрос: чужое учреждение ответить не может", f"select public.bot_staff_answer(4103, {QID}, 'x')->>'error'", "service_role", out="forbidden")
+expect_ok("вопрос: виден на «Моей странице»", "select public.bot_mother_view(779)->'questions'->0->>'a'", "service_role", out="Не больше 2 чашек")
+expect_ok("вопрос: виден в карточке доя", f"select public.mother_get('{M3}')->'questions'->0->>'q'", "authenticated", MD, out="Можно ли пить кофе?")
+expect_err("вопрос: функции бота закрыты для пользователей", "select public.bot_mother_ask(779, 'x?')", "authenticated", MD, "permission denied")
+# напоминание о витаминах
+expect_ok("витамины: неверный час", "select public.bot_mother_pill_hour(779, 3)->>'error'", "service_role", out="bad_hour")
+HR = int(sql("select extract(hour from now() at time zone 'Asia/Tashkent')::int")[1][0])
+if 5 <= HR <= 23:
+    expect_ok("витамины: час напоминания сохранён", f"select (public.bot_mother_pill_hour(779, {HR})->>'ok') || '/' || (public.bot_mother_view(779)->>'pill_hour')", "service_role", out=f"true/{HR}")
+    expect_ok("витамины: напоминание — только то, что не отмечено сегодня", f"select array_to_string(kinds, ',') from public.cron_mother_pills('{SEC}') where telegram_id = 779", "service_role", out="iodine,iron")
+    expect_ok("витамины: второй раз за день не напоминаем", f"select count(*) from public.cron_mother_pills('{SEC}') where telegram_id = 779", "service_role", out="0")
+expect_err("витамины: без секрета нельзя", "select * from public.cron_mother_pills('x')", "service_role", "forbidden")
+# карточка малыша
+expect_ok("малыш: до родов — нельзя", "select public.bot_mother_baby(779, 'weight', '3200', null)->>'error'", "service_role", out="not_pp")
+sql(f"update public.mothers set status = 'postpartum', outcome = 'delivered', outcome_date = private.today() - 5, discharge_date = private.today() - 3, babies = 1 where id = '{M3}'")
+expect_ok("малыш: вес", "select public.bot_mother_baby(779, 'weight', '3250', null)->>'ok'", "service_role", out="true")
+expect_ok("малыш: вес вне диапазона", "select public.bot_mother_baby(779, 'weight', '99', null)->>'error'", "service_role", out="bad_value")
+expect_ok("малыш: кормление и прививка", "select (public.bot_mother_baby(779, 'feed', 'breast', null)->>'ok') || (public.bot_mother_baby(779, 'vaccine', 'БЦЖ', private.today() - 4)->>'ok')", "service_role", out="truetrue")
+expect_ok("малыш: дата до родов — ошибка", "select public.bot_mother_baby(779, 'vaccine', 'БЦЖ', private.today() - 30)->>'error'", "service_role", out="bad_date")
+expect_ok("малыш: неизвестное кормление", "select public.bot_mother_baby(779, 'feed', 'juice', null)->>'error'", "service_role", out="bad_value")
+expect_ok("малыш: на «Моей странице» и в карточке доя", f"select jsonb_array_length(public.mother_get('{M3}')->'baby')", "authenticated", MD, out="3")
+expect_err("малыш: функция бота закрыта", "select public.bot_mother_baby(779, 'weight', '3200', null)", "authenticated", MD, "permission denied")
+
 # PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
 expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",
           r"""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

@@ -11,6 +11,8 @@ import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.t
 import { consentButtons, doyaText, isLang, langButtons, type Lang, menuButtons, motherCode, parseBp, parseCb, reminderText, SIGNS, SIGNS_PP, SIGNS_PREG,
   signButtons, signLabel, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
 import { tipText, type Topic, topicText, topicTitle, TOPICS } from "./info.ts";
+import { answerText, dayButtons, type DayRow, dayText, markText, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
+  questionText, STAFF_HELLO, staffMenu } from "./extra.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -171,9 +173,59 @@ async function onMotherCb(q: Record<string, any>): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------- сотрудник в боте
+const SITE_SLASH = SITE.replace(/\/?$/, "/");
+async function staffHello(chat: number) {
+  try { await tg("setChatMenuButton", { chat_id: chat, menu_button: { type: "web_app", text: "OvaBMҚ", web_app: { url: SITE_SLASH } } }); } catch { /* */ }
+  await sayKb(chat, STAFF_HELLO, staffMenu(SITE_SLASH));
+}
+async function sendDay(chat: number, tgId: number) {
+  const { data, error } = await admin().rpc("bot_staff_day", { _tg: tgId });
+  if (error) { await say(chat, "Не получилось загрузить список. Попробуйте позже."); return; }
+  const rows = (data ?? []) as DayRow[];
+  await sayKb(chat, dayText(rows, SITE_SLASH), dayButtons(rows));
+}
+async function onStaffCb(q: Record<string, any>, cb: NonNullable<ReturnType<typeof parseStaffCb>>): Promise<void> {
+  const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id);
+  if (cb.k === "sd") { try { await tg("answerCallbackQuery", { callback_query_id: q.id }); } catch { /* */ } await sendDay(chat, tgId); return; }
+  const { data } = await admin().rpc("bot_staff_mark", { _tg: tgId, _mother: cb.mother, _kind: cb.k === "sa" ? "anc" : "home", _code: cb.code });
+  const text = markText((data ?? {}) as Record<string, any>, cb.k, cb.code);
+  try { await tg("answerCallbackQuery", { callback_query_id: q.id, text: text.slice(0, 190), show_alert: false }); } catch { /* */ }
+  await say(chat, text);
+}
+async function onPillCb(q: Record<string, any>, kinds: string[]): Promise<void> {
+  const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id);
+  for (const k of kinds) await admin().rpc("bot_mother_pill", { _tg: tgId, _kind: k, _on: true });
+  const mo = await motherOf(tgId), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
+  try { await tg("answerCallbackQuery", { callback_query_id: q.id, text: pillDone(lang) }); } catch { /* */ }
+  await say(chat, pillDone(lang));
+}
+// ответ сотрудника на вопрос беременной (Reply на сообщение бота с #q…)
+async function onStaffReply(chat: number, tgId: number, qid: number, text: string): Promise<boolean> {
+  const { data, error } = await admin().rpc("bot_staff_answer", { _tg: tgId, _qid: qid, _text: text });
+  if (error) return false;
+  const r = (data ?? {}) as { ok?: boolean; error?: string; q?: string; a?: string; staff_name?: string; telegram_id?: number; lang?: string };
+  if (r.error === "not_staff") return false;
+  if (!r.ok) { await say(chat, r.error === "forbidden" ? "Нет доступа к этой беременной." : "Не получилось сохранить ответ."); return true; }
+  let sent = false;
+  if (r.telegram_id) {
+    const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+    const x = await tg("sendMessage", { chat_id: r.telegram_id, text: answerText(lang, r.q ?? "", r.a ?? "", r.staff_name ?? ""), disable_web_page_preview: true }).catch(() => null);
+    sent = !!(x && x.ok);
+  }
+  await say(chat, sent ? "✅ Ответ отправлен беременной." : "Ответ сохранён, но беременная не подключена к боту — позвоните ей.");
+  return true;
+}
+
 // ---------------------------------------------------------------- Telegram webhook
 async function onUpdate(u: Record<string, any>): Promise<void> {
-  if (u.callback_query) { await onMotherCb(u.callback_query); return; }
+  if (u.callback_query) {
+    const sc = parseStaffCb(u.callback_query.data);
+    if (sc) { await onStaffCb(u.callback_query, sc); return; }
+    const pk = parsePillCb(u.callback_query.data);
+    if (pk) { await onPillCb(u.callback_query, pk); return; }
+    await onMotherCb(u.callback_query); return;
+  }
   const m = u.message;
   if (!m || !m.from || m.chat?.type !== "private") return;
   const from = m.from, chat = Number(m.chat.id);
@@ -184,6 +236,8 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
     await sayKb(chat, tx("choose_lang", "uz") + " / " + tx("choose_lang", "uzl") + " / " + tx("choose_lang", "ru"), langButtons(mc)); return;
   }
   const text = typeof m.text === "string" ? m.text.trim() : "";
+  const qid = parseQid(m.reply_to_message?.text);
+  if (qid && text && await onStaffReply(chat, Number(from.id), qid, text)) return;
   if (/^\/stop(@\w+)?$/.test(text)) {
     const mo = await motherOf(Number(from.id)), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
     const { data: was } = await admin().rpc("bot_mother_stop", { _tg: Number(from.id) });
@@ -199,7 +253,11 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
       await sayKb(chat, tx("help", lang), menuButtons(lang, APP_URL)); return;
     }
   }
-  if (!c) { await say(chat, helloText(SITE), { text: "Открыть сайт / Saytni ochish", url: SITE }); return; }
+  if (!c) {
+    const { data: staff } = await admin().rpc("user_by_telegram", { _tg_id: Number(from.id) });
+    if (staff) { if (/^\/(day|list)\b/.test(text)) await sendDay(chat, Number(from.id)); else await staffHello(chat); return; }
+    await say(chat, helloText(SITE), { text: "Открыть сайт / Saytni ochish", url: SITE }); return;
+  }
   const name = [from.first_name, from.last_name].filter((x: unknown) => typeof x === "string" && x).join(" ").slice(0, 200);
   const { data, error } = await admin().rpc("ticket_bind", { _start: c, _tg_id: Number(from.id), _tg_username: typeof from.username === "string" ? from.username : null, _tg_name: name });
   const r = error ? (FORM_ERRORS.find((x) => (error.message ?? "").includes(x)) === "too_many_requests" ? "too_many_requests" : "expired") : String(data);
@@ -249,6 +307,17 @@ Deno.serve(async (req: Request) => {
       reply_markup: { inline_keyboard: [[{ text: "Войти / Kirish", url }]] } }).catch(() => null);
     return reply({ sent: !!(r && r.ok) }, 200, origin);
   }
+  if (body.action === "staff_app") {   // сайт открыт внутри Telegram: вход сотрудника по подписи Telegram
+    const who = await verifyInitData(typeof body.init === "string" ? body.init : "", BOT_TOKEN);
+    if (!who) return reply({ error: "unauthorized" }, 401, origin);
+    const db = admin();
+    const { data: uid } = await db.rpc("user_by_telegram", { _tg_id: who.id });
+    if (!uid) return reply({ error: "not_member" }, 404, origin);
+    await db.rpc("touch_telegram", { _uid: uid, _tg_username: who.username });
+    const th = await tokenFor(db, uid as string);
+    if (!th) return reply({ error: "link_failed" }, 500, origin);
+    return reply({ token_hash: th }, 200, origin);
+  }
   if (body.action === "mother_app") {   // мини-приложение «Моя страница»: подпись Telegram вместо входа
     const who = await verifyInitData(typeof body.init === "string" ? body.init : "", BOT_TOKEN);
     if (!who) return reply({ error: "unauthorized" }, 401, origin);
@@ -269,6 +338,28 @@ Deno.serve(async (req: Request) => {
       const kg = Number(body.kg);
       if (!Number.isFinite(kg)) return reply({ error: "bad_weight" }, 200, origin);
       const { data, error } = await admin().rpc("bot_mother_weight", { _tg: who.id, _kg: kg });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
+    }
+    if (body.op === "ask") {   // вопрос доя
+      const { data, error } = await admin().rpc("bot_mother_ask", { _tg: who.id, _text: typeof body.text === "string" ? body.text.slice(0, 1000) : "" });
+      if (error) return reply({ error: "failed" }, 500, origin);
+      const r = (data ?? {}) as { error?: string; qid?: number; q?: string; mother_id?: string; mother_name?: string; mother_phone?: string | null; recipients?: number[] };
+      if (r.error) return reply({ error: r.error }, 200, origin);
+      let sent = 0;
+      for (const id of r.recipients ?? []) {
+        const x = await tg("sendMessage", { chat_id: id, text: questionText(r.qid!, r.q ?? "", r.mother_name ?? "", r.mother_phone ?? null, r.mother_id ?? "", SITE), disable_web_page_preview: true }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ qid: r.qid, sent }, 200, origin);
+    }
+    if (body.op === "pill_hour") {
+      const h = body.hour === null ? null : Number(body.hour);
+      const { data, error } = await admin().rpc("bot_mother_pill_hour", { _tg: who.id, _hour: h !== null && Number.isInteger(h) ? h : null });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
+    }
+    if (body.op === "baby") {
+      const d = typeof body.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.d) ? body.d : null;
+      const { data, error } = await admin().rpc("bot_mother_baby", { _tg: who.id, _kind: String(body.kind ?? ""), _val: String(body.val ?? "").slice(0, 80), _d: d });
       return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
     }
     if (body.op === "pill") {   // витамины: отметка «выпила сегодня»
@@ -298,12 +389,24 @@ Deno.serve(async (req: Request) => {
       }
       return reply({ total: (data ?? []).length, sent }, 200, origin);
     }
+    if (body.mode === "pills") {   // напоминание о витаминах в выбранный час
+      const { data, error } = await db.rpc("cron_mother_pills", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; lang: string; first_name: string; kinds: string[] }[]) {
+        const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: pillText(lang, r.first_name, r.kinds), reply_markup: { inline_keyboard: pillButtons(lang, r.kinds) } }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
     if (body.mode === "staff") {
       const { data, error } = await db.rpc("cron_staff_digest", { _secret: sec });
       if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
       let sent = 0;
       for (const r of (data ?? []) as { telegram_id: number; full_name: string; due: number; missed: number; home_due: number; home_missed: number; alerts: number }[]) {
-        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: staffDigestText(r, SITE.replace(/\/?$/, "/")), disable_web_page_preview: true }).catch(() => null);
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: staffDigestText(r, SITE_SLASH), disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: staffMenu(SITE_SLASH) } }).catch(() => null);
         if (x && x.ok) sent++;
       }
       return reply({ total: (data ?? []).length, sent }, 200, origin);

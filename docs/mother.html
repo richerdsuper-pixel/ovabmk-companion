@@ -51,10 +51,12 @@ details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
 .row2{display:flex;gap:8px;align-items:end}
 .row2 label{flex:1;display:flex;flex-direction:column;font-size:13px;font-weight:700;color:var(--mute)}
 .row2 input{font-size:22px;font-weight:700;font-family:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
+.ta,.sel,.row2 input[type=date]{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
+.row2 input[type=date]{font-size:16px;font-weight:600}
 .ctbtn{display:block;width:100%;border:0;border-radius:18px;padding:26px 10px;font-family:inherit;font-weight:900;font-size:22px;color:#fff;background:var(--accent)}
 .ctbtn.on{background:#B42318}
 /* главная */
-.hero{display:flex;gap:14px;align-items:center}
+.hero{display:flex;flex-direction:row;gap:14px;align-items:center}
 .ring{flex:none;width:118px;height:118px}
 .ring .bg{stroke:var(--soft)} .ring .fg{stroke:var(--accent)} .ring text{fill:var(--head);font-family:inherit}
 .baby{display:flex;gap:12px;align-items:center;background:var(--soft);border-radius:14px;padding:10px 12px}
@@ -134,7 +136,15 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       ct_alert: "Сообщить доя",
       k_title: "Шевеления малыша", k_hint: "Лягте на бок и нажимайте при каждом шевелении. Обычно 10 шевелений набирается меньше чем за 2 часа.",
       k_btn: "👣 Малыш шевельнулся", k_count: "{n} из 10 · {m} мин", k_done: "✅ 10 шевелений за {m} мин — хорошо.", k_slow: "Прошло больше 2 часов, а шевелений меньше 10 — сообщите доя или поезжайте в роддом.",
-      k_reset: "Начать заново", bag_title: "Сумка в роддом", bag_n: "Собрано {n} из {t}", more_none: "Счётчики схваток и шевелений появятся с 24 и 28 недель." },
+      k_reset: "Начать заново", bag_title: "Сумка в роддом", bag_n: "Собрано {n} из {t}", more_none: "Счётчики схваток и шевелений появятся с 24 и 28 недель.",
+      q_title: "❓ Вопрос доя", q_hint: "Напишите вопрос — доя ответит сюда и в Telegram. Если состояние тяжёлое — не пишите, звоните 103.", q_ph: "Ваш вопрос…", q_send: "Отправить вопрос",
+      q_sent: "✅ Вопрос отправлен доя. Ответ придёт в Telegram.", q_many: "Сегодня вопросов уже много — позвоните доя.", q_wait: "ждём ответа", q_mine: "Мои вопросы",
+      ph_title: "Напоминать о витаминах", ph_off: "не напоминать", ph_ok: "✅ Напомню в {h}:00.", ph_none: "✅ Напоминания выключены.",
+      n_baby: "Малыш", b_title: "Мой малыш", b_day: "{d}-й день жизни", b_w: "Вес малыша, г", b_w_save: "Записать вес", b_w_bad: "Вес — от 500 до 15000 г, например 3400.",
+      b_ok: "✅ Записано.", b_chart: "Вес малыша", b_chart_empty: "Записывайте вес после взвешивания у доя или в поликлинике — здесь появится график.",
+      b_feed: "Как кормите", feed_breast: "Только грудью", feed_mixed: "Грудь и смесь", feed_formula: "Только смесь", b_feed_hint: "ВОЗ советует до 6 месяцев кормить только грудью. Если трудно — скажите доя.",
+      b_vac: "Прививки", b_vac_ph: "Какая прививка (например, БЦЖ)", b_vac_date: "Дата", b_vac_save: "Записать прививку", b_vac_hint: "График прививок — у патронажной доя и в поликлинике.",
+      b_bad: "Проверьте данные." },
     uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", sub_pp: "Туғруқдан кейинги саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
       next: "Доянгизга кейинги кўрик", now: "ҳозир", from: "{a} дан {b} гача", need: "Нимани топшириш / ўтиш керак:", none: "Таҳлил керак эмас — доя кўриги.",
       missed: "Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, доянгизга иложи борича тезроқ келинг.", plan: "Барча кўриклар", done: "бажарилди", due: "ҳозир", next_s: "олдинда", missed_s: "ўтказиб юборилди",
@@ -166,7 +176,15 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       ct_alert: "Доянгизга хабар бериш",
       k_title: "Чақалоқ қимирлаши", k_hint: "Ёнбошлаб ётинг ва ҳар қимирлашда босинг. Одатда 10 та қимирлаш 2 соатдан камроқ вақтда бўлади.",
       k_btn: "👣 Чақалоқ қимирлади", k_count: "10 тадан {n} · {m} дақиқа", k_done: "✅ {m} дақиқада 10 та қимирлаш — яхши.", k_slow: "2 соатдан кўп ўтди, қимирлаш 10 тадан кам — доянгизга хабар беринг ёки туғруқхонага боринг.",
-      k_reset: "Қайтадан бошлаш", bag_title: "Туғруқхона сумкаси", bag_n: "{t} тадан {n} таси йиғилди", more_none: "Тўлғоқ ва қимирлаш ҳисоблагичлари 24 ва 28 ҳафтадан пайдо бўлади." }
+      k_reset: "Қайтадан бошлаш", bag_title: "Туғруқхона сумкаси", bag_n: "{t} тадан {n} таси йиғилди", more_none: "Тўлғоқ ва қимирлаш ҳисоблагичлари 24 ва 28 ҳафтадан пайдо бўлади.",
+      q_title: "❓ Доянгизга савол", q_hint: "Саволингизни ёзинг — доя шу ерга ва Telegramга жавоб беради. Аҳвол оғир бўлса — ёзманг, 103 га қўнғироқ қилинг.", q_ph: "Саволингиз…", q_send: "Саволни юбориш",
+      q_sent: "✅ Савол доянгизга юборилди. Жавоб Telegramга келади.", q_many: "Бугун саволлар кўп — доянгизга қўнғироқ қилинг.", q_wait: "жавоб кутилмоқда", q_mine: "Менинг саволларим",
+      ph_title: "Витаминлар ҳақида эслатиш", ph_off: "эслатмаслик", ph_ok: "✅ Соат {h}:00 да эслатаман.", ph_none: "✅ Эслатмалар ўчирилди.",
+      n_baby: "Чақалоқ", b_title: "Чақалоғим", b_day: "Ҳаётининг {d}-куни", b_w: "Чақалоқ вазни, г", b_w_save: "Вазнни ёзиш", b_w_bad: "Вазн — 500 дан 15000 г гача, масалан 3400.",
+      b_ok: "✅ Ёзилди.", b_chart: "Чақалоқ вазни", b_chart_empty: "Доя ёки поликлиникада тортилгандан кейин вазнни ёзинг — бу ерда график пайдо бўлади.",
+      b_feed: "Қандай овқатлантиряпсиз", feed_breast: "Фақат кўкрак сути", feed_mixed: "Кўкрак сути ва аралашма", feed_formula: "Фақат аралашма", b_feed_hint: "ЖССТ 6 ойгача фақат кўкрак сути билан боқишни тавсия қилади. Қийин бўлса — доянгизга айтинг.",
+      b_vac: "Эмлашлар", b_vac_ph: "Қайси эмлаш (масалан, БЦЖ)", b_vac_date: "Сана", b_vac_save: "Эмлашни ёзиш", b_vac_hint: "Эмлаш жадвали — патронаж доя ва поликлиникада.",
+      b_bad: "Маълумотларни текширинг." }
   };
   var SG = { bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
     convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
@@ -253,12 +271,12 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
     document.getElementById("hello").textContent = tr("hello", { n: u(first) });
     document.getElementById("sub").textContent = tr(preg() ? "sub" : "sub_pp");
     var sos = document.getElementById("sosmini"); sos.classList.remove("hidden"); sos.onclick = function () { go("sos"); };
-    var tabs = [["home", "🏠"], ["charts", "📈"], ["diary", "✍️"], ["tips", "💡"]]; if (preg()) tabs.push(["more", "🧰"]);
+    var tabs = [["home", "🏠"], ["charts", "📈"], ["diary", "✍️"], ["tips", "💡"]]; if (preg()) tabs.push(["more", "🧰"]); else if (DATA.outcome === "delivered") tabs.push(["baby", "👶"]);
     if (TAB !== "sos" && !tabs.some(function (x) { return x[0] === TAB; })) TAB = "home";
     var bar = document.getElementById("tabs"); bar.textContent = ""; document.getElementById("bar").classList.remove("hidden");
     tabs.forEach(function (x) { bar.appendChild(el("button", { type: "button", "data-t": x[0], class: x[0] === TAB ? "on" : "", onclick: function () { go(x[0]); } }, el("span", { class: "i", text: x[1] }), el("span", { text: tr("n_" + x[0]) }))); });
     if (TG && TG.BackButton) try { if (TAB === "home") TG.BackButton.hide(); else { TG.BackButton.show(); } } catch (e) {}
-    ({ home: drawHome, charts: drawCharts, diary: drawDiary, tips: drawTips, more: drawMore, sos: drawSos })[TAB](main, s);
+    ({ home: drawHome, charts: drawCharts, diary: drawDiary, tips: drawTips, more: drawMore, sos: drawSos, baby: drawBaby })[TAB](main, s);
   }
   function go(t) { TAB = t; haptic(); draw(); window.scrollTo(0, 0); }
 
@@ -326,7 +344,17 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
           var r = await api({ op: "pill", kind: k, on: want });
           if (!r.ok || (r.data && r.data.error)) { var b = document.querySelector("#pills"); if (b) b.appendChild(el("div", { class: "alert", text: tr("err") })); }
         } }, el("span", { class: "box", text: on ? "✓" : "" }), tr("p_" + k));
-      })));
+      })), pillHour());
+  }
+  function pillHour() {
+    var out = el("div", { id: "ph_out" }), hrs = [null]; for (var x = 6; x <= 22; x++) hrs.push(x);
+    var sel = el("select", { id: "pill_hour", class: "sel", onchange: async function () {
+      var v = sel.value === "" ? null : parseInt(sel.value, 10); out.textContent = "";
+      var r = await api({ op: "pill_hour", hour: v });
+      if (!r.ok || (r.data && r.data.error)) { out.appendChild(el("div", { class: "alert", text: tr("err") })); return; }
+      DATA.pill_hour = v; out.appendChild(el("div", { class: "okmsg", text: v == null ? tr("ph_none") : tr("ph_ok", { h: ("0" + v).slice(-2) }) }));
+    } }, hrs.map(function (hh) { return el("option", { value: hh == null ? "" : String(hh), selected: (DATA.pill_hour == null ? null : DATA.pill_hour) === hh ? "" : null, text: hh == null ? tr("ph_off") : ("0" + hh).slice(-2) + ":00" }); }));
+    return el("label", { class: "small mute", style: "display:flex;flex-direction:column;gap:4px;font-weight:700" }, "⏰ " + tr("ph_title"), sel, out);
   }
 
   // ------------------------------------------------------------ графики
@@ -348,7 +376,7 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
     });
     return el("svg", { class: "chart", viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": o.label }, g);
   }
-  function ticks(a, b, n) { var raw = (b - a) / n, st = [1, 2, 5, 10, 20, 50].filter(function (x) { return x >= raw; })[0] || 50, out = []; for (var v = Math.ceil(a / st) * st; v <= b; v += st) out.push(v); return out; }
+  function ticks(a, b, n) { var raw = (b - a) / n, st = [1, 2, 5, 10, 20, 50, 100, 200, 250, 500, 1000, 2000].filter(function (x) { return x >= raw; })[0] || 5000, out = []; for (var v = Math.ceil(a / st) * st; v <= b; v += st) out.push(v); return out; }
   function bpPoints() {
     var a = (DATA.bp || []).map(function (x) { return { t: new Date(x.at).getTime(), s: x.sys, d: x.dia }; });
     (DATA.visits || []).forEach(function (v) { if (v.bp_sys && v.bp_dia) a.push({ t: new Date(v.date + "T09:00:00").getTime(), s: v.bp_sys, d: v.bp_dia }); });
@@ -467,10 +495,71 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
 
   // ------------------------------------------------------------ советы, ещё, тревога
   function drawTips(main) {
+    main.appendChild(askCard());
     ((DATA.ui && DATA.ui.topics) || []).forEach(function (t, i) {
       main.appendChild(el("details", { class: "tip", open: i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
     });
     main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
+  }
+  function askCard() {
+    var ta = el("textarea", { id: "q_text", rows: "3", maxlength: "1000", placeholder: tr("q_ph"), class: "ta" });
+    var out = el("div", { id: "q_out" });
+    var btn = el("button", { class: "btn call", type: "button", id: "q_send", text: tr("q_send"), onclick: async function () {
+      out.textContent = ""; var v = ta.value.trim();
+      if (v.length < 2) return;
+      btn.disabled = true; var r = await api({ op: "ask", text: v }); btn.disabled = false;
+      var er = r.data && r.data.error;
+      if (!r.ok || er) { out.appendChild(el("div", { class: "alert", text: er === "too_many" ? tr("q_many") : tr("err") })); return; }
+      DATA.questions = [{ id: r.data.qid, q: v, a: null, at: new Date().toISOString() }].concat(DATA.questions || []);
+      ta.value = ""; haptic(); draw(); var o = document.getElementById("q_out"); if (o) o.appendChild(el("div", { class: "okmsg", text: tr("q_sent") }));
+    } });
+    var qs = (DATA.questions || []).slice(0, 5);
+    return el("div", { class: "card", id: "ask" }, el("h2", { text: tr("q_title") }), el("p", { class: "small mute", text: tr("q_hint") }), ta, btn, out,
+      qs.length ? el("b", { class: "small", text: tr("q_mine") }) : null,
+      qs.map(function (x) { return el("div", { class: "vis", style: "flex-direction:column;align-items:stretch" }, el("div", { style: "font-weight:700", text: "❓ " + x.q }),
+        x.a ? el("div", { text: "💬 " + x.a + (x.a_by ? " — " + u(x.a_by) : "") }) : el("span", { class: "chip warn", style: "align-self:start", text: tr("q_wait") })); }));
+  }
+  function drawBaby(main) {
+    var birth = DATA.outcome_date, b = DATA.baby || [], dayN = birth ? Math.round((new Date(today()) - new Date(birth)) / 86400000) + 1 : null;
+    function of(k) { return b.filter(function (x) { return x.kind === k; }); }
+    async function save(kind, val, dd, out) {
+      out.textContent = "";
+      var r = await api({ op: "baby", kind: kind, val: val, d: dd || null });
+      var er = r.data && r.data.error;
+      if (!r.ok || er) { out.appendChild(el("div", { class: "alert", text: er === "bad_value" && kind === "weight" ? tr("b_w_bad") : er ? tr("b_bad") : tr("err") })); return false; }
+      DATA.baby = b.concat([{ kind: kind, val: val, d: dd || today() }]); haptic(); draw();
+      var o = document.getElementById(out.id); if (o) o.appendChild(el("div", { class: "okmsg", text: tr("b_ok") })); return true;
+    }
+    main.appendChild(el("div", { class: "card hero" }, el("span", { style: "font-size:44px", text: "👶" }),
+      el("div", null, el("h2", { text: tr("b_title") }), dayN ? el("div", { class: "big", id: "b_day", text: tr("b_day", { d: dayN }) }) : null)));
+    // вес
+    var ws = of("weight").map(function (x) { return [birth ? Math.round((new Date(x.d) - new Date(birth)) / 86400000) : 0, parseInt(x.val, 10)]; });
+    if (ws.length >= 2) {
+      var lo = Math.min.apply(null, ws.map(function (p) { return p[1]; })), hi = Math.max.apply(null, ws.map(function (p) { return p[1]; })), xm = Math.max(14, ws[ws.length - 1][0] + 2);
+      lo = Math.floor((lo - 200) / 500) * 500; hi = Math.ceil((hi + 200) / 500) * 500;
+      main.appendChild(el("div", { class: "card", id: "b_chart" }, el("h2", { text: tr("b_chart") }),
+        chart({ label: tr("b_chart"), xs: [0, xm], ys: [lo, hi], yt: ticks(lo, hi, 4), xt: [[0, "0"], [Math.round(xm / 2), String(Math.round(xm / 2))], [xm, String(xm)]], series: [{ cls: "s1", dot: "p1", pts: ws }] })));
+    } else main.appendChild(el("div", { class: "card", id: "b_chart" }, el("h2", { text: tr("b_chart") }), el("p", { class: "small mute", text: tr("b_chart_empty") }),
+      ws.length ? el("div", { text: ws[0][1] + " g" }) : null));
+    var wi = el("input", { type: "text", inputmode: "numeric", id: "b_w", maxlength: "5", placeholder: "3400" }), wo = el("div", { id: "b_w_out" });
+    main.appendChild(el("div", { class: "card" }, el("div", { class: "row2" }, el("label", null, tr("b_w"), wi)),
+      el("button", { class: "btn call", type: "button", id: "b_w_save", text: tr("b_w_save"), onclick: function () {
+        var v = String(wi.value).replace(/\D/g, ""); if (!(+v >= 500 && +v <= 15000)) { wo.textContent = ""; wo.appendChild(el("div", { class: "alert", text: tr("b_w_bad") })); return; }
+        save("weight", v, null, wo);
+      } }), wo));
+    // кормление
+    var lastF = of("feed").slice(-1)[0], fo = el("div", { id: "b_f_out" });
+    main.appendChild(el("div", { class: "card", id: "b_feed" }, el("h2", { text: tr("b_feed") }), el("div", { class: "pills" }, ["breast", "mixed", "formula"].map(function (k) {
+      var on = lastF && lastF.val === k;
+      return el("button", { type: "button", class: "pill" + (on ? " on" : ""), "data-k": k, onclick: function () { if (!on) save("feed", k, null, fo); } }, el("span", { class: "box", text: on ? "✓" : "" }), tr("feed_" + k));
+    })), el("p", { class: "small mute", text: tr("b_feed_hint") }), fo));
+    // прививки
+    var vi = el("input", { type: "text", id: "b_vac", maxlength: "60", placeholder: tr("b_vac_ph") }), vd = el("input", { type: "date", id: "b_vac_d", value: today(), min: birth || null, max: today() }), vo = el("div", { id: "b_v_out" });
+    main.appendChild(el("div", { class: "card", id: "b_vacs" }, el("h2", { text: tr("b_vac") }),
+      of("vaccine").map(function (x) { return el("div", { class: "vis" }, el("b", { text: x.val }), el("span", { class: "mute small", text: d(x.d) })); }),
+      el("div", { class: "row2" }, el("label", null, tr("b_vac"), vi), el("label", { style: "flex:0 0 150px" }, tr("b_vac_date"), vd)),
+      el("button", { class: "btn call", type: "button", id: "b_v_save", text: tr("b_vac_save"), onclick: function () { var v = vi.value.trim(); if (v.length < 2) return; save("vaccine", v, vd.value, vo); } }),
+      vo, el("p", { class: "small mute", text: tr("b_vac_hint") })));
   }
   function drawMore(main, s) {
     var w = gaW();

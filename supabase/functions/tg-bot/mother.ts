@@ -199,7 +199,7 @@ export function fmtPhone(p: string): string {
 }
 
 // Проверка данных мини-приложения Telegram (initData): HMAC-SHA256, ключ — HMAC("WebAppData", токен бота).
-export async function verifyInitData(initData: string, botToken: string, maxAgeSec = 86400, now = Date.now()): Promise<{ id: number } | null> {
+export async function verifyInitData(initData: string, botToken: string, maxAgeSec = 86400, now = Date.now()): Promise<{ id: number; username: string | null } | null> {
   if (typeof initData !== "string" || initData.length > 4096) return null;
   const p = new URLSearchParams(initData), hash = p.get("hash");
   if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null;
@@ -215,5 +215,5 @@ export async function verifyInitData(initData: string, botToken: string, maxAgeS
   if (diff !== 0) return null;
   const at = Number(p.get("auth_date"));
   if (!at || now / 1000 - at > maxAgeSec) return null;
-  try { const u = JSON.parse(p.get("user") || "null"); return u && typeof u.id === "number" ? { id: u.id } : null; } catch { return null; }
+  try { const u = JSON.parse(p.get("user") || "null"); return u && typeof u.id === "number" ? { id: u.id, username: typeof u.username === "string" ? u.username : null } : null; } catch { return null; }
 }

@@ -1135,9 +1135,14 @@ with sync_playwright() as p:
         "risk_eval": {"level": "high", "reasons": ["cs_scar", "chronic_htn", "pe_risk", "pph_risk"], "bmi": 27.3, "pe": "high", "pe_high": ["chronic_htn"], "pe_mod": [], "gdm": False, "gdm_f": [],
                       "fgr": "high", "fgr_major": ["chronic_htn"], "fgr_minor": [], "vte_score": 3, "vte": "high", "pph": True, "pph_f": ["cs_scar"], "ptb": False, "ptb_f": [], "rh_neg": False, "anemia": False, "teen": False},
         "bp": [{"sys": 146, "dia": 94, "at": "2026-11-20T03:00:00Z"}, {"sys": 122, "dia": 80, "at": "2026-11-19T03:00:00Z"}],
+        "questions": [{"id": 5, "q": "Можно ли пить кофе?", "a": "Не больше 2 чашек", "at": "2026-11-19T05:00:00Z", "answered_at": "2026-11-19T06:00:00Z", "a_by": "Холова Жамила"},
+                      {"id": 6, "q": "Когда УЗИ?", "a": None, "at": "2026-11-20T04:00:00Z", "answered_at": None, "a_by": None}],
+        "baby": [{"kind": "weight", "val": "3250", "d": "2026-11-15"}, {"kind": "feed", "val": "breast", "d": "2026-11-16"}, {"kind": "vaccine", "val": "БЦЖ", "d": "2026-11-15"}],
         "weights": [{"d": "2026-09-01", "kg": 58, "src": "reg", "ga": 60}, {"d": "2026-11-18", "kg": 62.5, "src": "self", "ga": 138}], "pills": [{"day": "2026-11-18", "kind": "iron"}, {"day": "2026-11-19", "kind": "iron"}, {"day": "2026-11-19", "kind": "iodine"}],
         "visits": [{"id": 5, "no": 0, "date": "2026-10-01", "bp_sys": 118, "bp_dia": 76, "weight": 64, "tests": [], "note": "жалоб нет", "by": "Сотрудник Тест"}], "home": [],
         "alerts": [{"id": 77, "signs": ["bleeding", "abd_pain"], "at": "2026-11-20T03:00:00Z", "seen_at": None, "seen_by": None}]})
+    MTREND = [{"month": f"{2025 + (10 + k) // 12}-{(10 + k) % 12 + 1:02d}-01", "registered": 2 + k % 3, "early": 1 + k % 2, "high_risk": k % 2, "delivered": 1 + k % 2,
+           "anc_visits": 10 + k, "home_visits": 3 + k % 4, "alerts": k % 3} for k in range(12)]
     MSUM = [{"institution_id": 1, "mahalla_id": 1, "active": 1, "pregnant": 1, "postpartum": 0, "high_risk": 0, "mid_risk": 0, "early": 0, "anc_due": 1, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 1, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 0, "age35": 0},
             {"institution_id": 1, "mahalla_id": 2, "active": 2, "pregnant": 1, "postpartum": 1, "high_risk": 1, "mid_risk": 0, "early": 1, "anc_due": 1, "anc_missed_women": 1, "home_due": 1, "home_missed": 1, "tg": 1, "alerts": 1, "delivered_month": 1, "registered_month": 2, "teen": 0, "age35": 1},
             {"institution_id": 2, "mahalla_id": None, "active": 4, "pregnant": 4, "postpartum": 0, "high_risk": 2, "mid_risk": 1, "early": 0, "anc_due": 0, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 0, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 1, "age35": 0}]
@@ -1156,6 +1161,7 @@ with sync_playwright() as p:
         extra = ("window.__MOCK.rpc.mothers_list = function(a){ return a._archive ? [] : " + json.dumps(MLIST, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mother_get = function(a){ return " + json.dumps(MGET, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mothers_summary = function(){ return " + json.dumps(MSUM) + "; };"
+                 "window.__MOCK.rpc.mothers_trend = function(){ return " + json.dumps(MTREND) + "; };"
                  "window.__MOCK.rpc.home_schedule_list = function(){ return " + json.dumps(HSCH, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mother_save = function(a){ return window.__moErr ? {error:{message:window.__moErr}} : '" + M1 + "'; };"
                  "window.__MOCK.rpc.mother_invite = function(){ return 'm0123456789abcdef01234567'; };"
@@ -1217,6 +1223,8 @@ with sync_playwright() as p:
     ok("карточка: имя, телефон, рост/вес", "Каримова Дилноза Анваровна" in t_ and "+998 90 123 45 67" in t_ and "160 см / 70 кг" in t_)
     ok("карточка: группа риска по протоколу — причины и что делать", all(x in pg.inner_text("#mc_riskbox") for x in ("Высокий риск", "Рубец на матке", "Высокий риск преэклампсии", "гематолога", "2–3 уровне")), pg.inner_text("#mc_riskbox"))
     ok("карточка: дневник давления беременной", "146/94" in pg.inner_text("#mc_bp") and pg.locator("#mc_bp .chip.warn").count() == 1)
+    ok("карточка: вопросы беременной — ответ и «ждёт ответа»", "Не больше 2 чашек — Холова Жамила" in pg.inner_text("#mc_q") and "ждёт ответа" in pg.inner_text("#mc_q"))
+    ok("карточка: малыш — вес, кормление, прививки", all(x in pg.inner_text("#mc_baby") for x in ("3250 g", "грудное", "БЦЖ")), pg.inner_text("#mc_baby") if pg.locator("#mc_baby").count() else "нет")
     ok("карточка: вес и витамины от беременной", "62.5 kg" in pg.inner_text("#mc_w") and "+4.5" in pg.inner_text("#mc_w") and "2 дн" in pg.inner_text("#mc_w"), pg.inner_text("#mc_w") if pg.locator("#mc_w").count() else "нет блока")
     ok("карточка: сигнал с признаками", "Кровянистые выделения" in pg.inner_text("#mc_alerts") or "Кровотечение" in pg.inner_text("#mc_alerts") and "Сильная боль в животе" in pg.inner_text("#mc_alerts"))
     pg.click("#mc_alerts button"); pg.wait_for_timeout(250)
@@ -1272,6 +1280,7 @@ with sync_playwright() as p:
     b, pg, errs = mo_page(A, ("admin",), "#/mothers/summary")
     st_ = pg.inner_text("#ms_tbl")
     ok("сводка: учреждения, махалли и итог", "ОШП №3" in st_.upper() and "— НАВБАҲОР" in st_.upper() and "ИТОГО ПО РАЙОНУ" in st_.upper(), st_[-500:])
+    ok("сводка: графики по месяцам (5 графиков, 12 точек)", pg.locator("#ms_trend .trend").count() == 5 and pg.locator("#tr_reg svg").count() >= 1 and "за год: 36" in pg.inner_text("#tr_reg"), pg.inner_text("#ms_trend")[:300] if pg.locator("#ms_trend").count() else "нет")
     ok("сводка: итог «На учёте» = 7", pg.locator("#ms_tbl tr.tot td").first.inner_text() == "7")
     ok("сводка: ссылка на пропуски ведёт в список", pg.locator("#ms_tbl a[href='#/mothers?i=1&f=missed']").count() == 1)
     with pg.expect_download() as dl: pg.click("button:has-text('Скачать Excel')")

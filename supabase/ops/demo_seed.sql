@@ -80,6 +80,17 @@ begin
   insert into public.mother_pills (mother_id, day, kind)
   select m.id, private.today() - dd, k from public.mothers m join public.mother_tg g on g.mother_id = m.id, generate_series(0, 13) dd, unnest(array['iodine', 'iron']) k
   where m.institution_id = i and m.status = 'pregnant' and (dd + length(m.full_name)) % 4 <> 0;
+  -- вопросы доя (один с ответом, один ждёт), час напоминания о витаминах, карточка малыша у родившей
+  insert into public.mother_questions (mother_id, q, a, a_by, created_at, answered_at)
+  select m.id, 'Можно ли мне пить кофе?', 'Можно, но не больше 2 чашек в день. Лучше чай без сахара и вода.', a, now() - interval '1 day', now() - interval '20 hours'
+  from public.mothers m where m.institution_id = i and m.full_name like 'Абдуллаева%';
+  insert into public.mother_questions (mother_id, q, created_at)
+  select m.id, 'Когда мне делать УЗИ второго триместра?', now() - interval '3 hours' from public.mothers m where m.institution_id = i and m.full_name like 'Ҳамроева%';
+  update public.mother_tg g set pill_hour = 9 from public.mothers m where m.id = g.mother_id and m.institution_id = i and m.status = 'pregnant';
+  insert into public.mother_baby (mother_id, kind, val, d)
+  select m.id, x.k, x.v, m.outcome_date + x.dd from public.mothers m,
+    (values ('weight', '3350', 0), ('vaccine', 'БЦЖ', 1), ('vaccine', 'Гепатит B', 0), ('feed', 'breast', 2), ('weight', '3290', 4), ('weight', '3420', 10), ('weight', '3610', 15)) x(k, v, dd)
+  where m.institution_id = i and m.full_name like 'Олимова%' and m.outcome_date + x.dd <= private.today();
   -- одни роды сегодня (для «родили в этом месяце»)
   update public.mothers set outcome_date = private.today(), discharge_date = private.today() where institution_id = i and full_name = 'Ғафурова Нафиса Баҳодировна';
 end $$;

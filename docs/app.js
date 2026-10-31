@@ -2,6 +2,18 @@
 (function () {
   "use strict";
   var CFG = window.OVABMK_CONFIG;
+  // Сайт открыт кнопкой в боте (Telegram Mini App): Telegram передаёт подпись в адресе после «#tgWebAppData=…».
+  // Забираем её до запуска маршрутов, вход — без пароля, по подписи (tg-bot, action=staff_app).
+  var TG_INIT = (function () {
+    var hs = location.hash || "";
+    if (hs.indexOf("tgWebAppData=") < 0) return null;
+    var p = new URLSearchParams(hs.replace(/^#/, "")), v = p.get("tgWebAppData");
+    history.replaceState(null, "", location.pathname + location.search + "#/");
+    var sc = document.createElement("script"); sc.src = "https://telegram.org/js/telegram-web-app.js?57";
+    sc.onload = function () { try { var W = window.Telegram.WebApp; W.ready(); W.expand(); } catch (e) {} };
+    document.head.appendChild(sc);
+    return v || null;
+  })();
   var sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
   });
@@ -2725,8 +2737,17 @@
   TK = tkLoad();
   var loginCode = readLoginParam();
   if (loginCode) tkSave({ poll: loginCode, start: "", at: Date.now(), state: "wait" });
+  async function tgAppLogin() {
+    var r = await botCall({ action: "staff_app", init: TG_INIT });
+    if (r.error || !r.data.token_hash) return false;
+    var v = await sb.auth.verifyOtp({ token_hash: r.data.token_hash, type: "email" });
+    if (v.error) v = await sb.auth.verifyOtp({ token_hash: r.data.token_hash, type: "magiclink" });
+    if (v.error) return false;
+    onSession(v.data.session); return true;
+  }
   sb.auth.getSession().then(async function (r) {
     if (r.data && r.data.session) { if (loginCode) tkSave(null); onSession(r.data.session); return; }
+    if (TG_INIT && await tgAppLogin()) return;
     await loadInstitutions();
     render();
     if (TK && (TK.state === "wait" || TK.state === "pending")) pollTicket(false);

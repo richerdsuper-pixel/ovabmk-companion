@@ -22,3 +22,9 @@ select cron.schedule('mother-weekly-0935', '35 4 * * *', $$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
     body := '{"action":"mother_remind","mode":"weekly"}'::jsonb)
 $$);
+-- 5) (после 0024) каждый час в :05 — напоминание о витаминах тем, кто выбрал этот час в «Моей странице».
+select cron.schedule('mother-pills-hourly', '5 * * * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"pills"}'::jsonb)
+$$);

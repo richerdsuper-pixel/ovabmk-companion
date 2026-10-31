@@ -3,6 +3,7 @@ import { motherCode, parseCb, uzLat, tx, signLabel, reminderText, staffAlertText
 import { startCode } from "../supabase/functions/tg-bot/texts.ts";
 import { parseBp, visitText, doyaText, SIGNS_PREG } from "../supabase/functions/tg-bot/mother.ts";
 import { TOPICS, topicText, tipText, TIP_TOPICS } from "../supabase/functions/tg-bot/info.ts";
+import { parseStaffCb, dayText, dayButtons, markText, questionText, parseQid, answerText, pillText, pillButtons, parsePillCb, staffMenu } from "../supabase/functions/tg-bot/extra.ts";
 let pass = 0, fail = 0;
 function t(name: string, cond: boolean, info: unknown = "") { console.log((cond ? "PASS " : "FAIL ") + name + (cond ? "" : "  <- " + JSON.stringify(info))); cond ? pass++ : fail++; }
 const C = "m0123456789abcdef01234567";
@@ -69,4 +70,25 @@ t("чужой токен — отказ", (await verifyInitData(good, "999:other
 t("подменённый пользователь — отказ", (await verifyInitData(good.replace("777", "778"), BOT, 86400, now)) === null);
 t("старая подпись — отказ", (await verifyInitData(await sign({ ...f, auth_date: String(Math.floor(now / 1000) - 90000) }), BOT, 86400, now)) === null);
 t("мусор — отказ", (await verifyInitData("hash=zz", BOT)) === null && (await verifyInitData("", BOT)) === null);
+
+// сотрудник в боте
+const U = "0b5e2a6c-1d2f-4a3b-9c8d-7e6f5a4b3c2d";
+t("кнопки сотрудника: список, визит, патронаж", parseStaffCb("sd")?.k === "sd" && JSON.stringify(parseStaffCb(`sa:${U}:2`)) === JSON.stringify({ k: "sa", mother: U, code: "2" }) && parseStaffCb(`sh:${U}:pp15`)?.k === "sh");
+t("кнопки сотрудника: мусор и визит 9 — нет", parseStaffCb(`sa:${U}:9`) === null && parseStaffCb("sa:x:1") === null && parseStaffCb(`zz:${U}:1`) === null);
+const rows = [{ mother_id: U, full_name: "Каримова Дилноза Анваровна", phone: "+998901234567", mahalla: "Навбаҳор", kind: "anc", code: "2", state: "missed", date_to: "2026-10-20" },
+  { mother_id: U, full_name: "Холова Шаҳло", phone: null, mahalla: null, kind: "home", code: "pp15", state: "due", date_to: "2026-11-04" }];
+const dt = dayText(rows, "https://s/");
+t("список дня: пропущенные, телефон, патронаж, ссылка", dt.includes("🔴 Каримова Дилноза Анваровна — визит 2 (пропущен)") && dt.includes("+998 90 123 45 67") && dt.includes("патронаж 15 дн (до 04.11)") && dt.includes("https://s/#/mothers"), dt);
+const db = dayButtons(rows).flat() as { callback_data: string; text: string }[];
+t("список дня: кнопки отметки ≤ 64 байт", db.every((b) => b.callback_data.length <= 64) && db[0].text.startsWith("✅ Каримова Д.") && db[0].callback_data === `sa:${U}:2`);
+t("список дня: пусто — понятно", dayText([], "https://s/").includes("нет"));
+t("отметка: новая и повтор", markText({ ok: true, new: true, name: "К" }, "sa", "2").includes("Отмечено сегодня") && markText({ ok: true, new: false, name: "К" }, "sh", "pp3").includes("Уже было"));
+t("меню сотрудника: сайт внутри Telegram", (staffMenu("https://s/")[0][0] as { web_app: { url: string } }).web_app.url === "https://s/");
+// вопрос и ответ
+const qt = questionText(123, "Можно кофе?", "Каримова Д.", "+998901234567", U, "https://s/");
+t("вопрос: номер, текст, как ответить", qt.includes("#q123") && qt.includes("«Можно кофе?»") && qt.includes("Ответить") && parseQid(qt) === 123 && parseQid("без номера") === null);
+t("ответ беременной: язык", answerText("ru", "Можно кофе?", "Не больше 2 чашек", "Холова Жамила").includes("Не больше 2 чашек") && answerText("uzl", "Q", "A", "Холова").includes("Xolova"));
+// витамины
+t("напоминание о витаминах: список и кнопки", pillText("ru", "Дилноза", ["iodine", "iron"]).includes("Калия йодид, Железо") && pillButtons("uz", ["iodine", "iron"])[1][0].callback_data === "mp:all:iodine,iron");
+t("кнопки витаминов разбираются", JSON.stringify(parsePillCb("mp:iron")) === '["iron"]' && JSON.stringify(parsePillCb("mp:all:iodine,iron")) === '["iodine","iron"]' && parsePillCb("mp:aspirin") === null);
 console.log(`\n${pass}/${pass + fail} passed`); if (fail) process.exit(1);

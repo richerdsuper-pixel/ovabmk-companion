@@ -322,6 +322,26 @@ window.MothersModule = function (A) {
       pills.length ? h("div", { class: "small", text: t("mo_pills14", { n: Object.keys(days).length }) }) : null);
   }
 
+  function questionsPanel(m) {
+    var qs = m.questions || [];
+    if (!qs.length) return null;
+    return h("section", { class: "panel stack", id: "mc_q" }, h("h3", { text: t("mo_questions") }), h("p", { class: "mute small", text: t("mo_q_hint") }),
+      qs.slice(0, 10).map(function (x) {
+        return h("div", { class: "qa" }, h("div", null, h("b", { text: "❓ " + x.q }), " ", h("span", { class: "mute small", text: A.fmtDT(x.at) })),
+          x.a ? h("div", { text: "💬 " + x.a + (x.a_by ? " — " + x.a_by : "") }) : h("span", { class: "chip warn", text: t("mo_q_wait") }));
+      }));
+  }
+  function babyPanel(m) {
+    var b = m.baby || [];
+    if (!b.length) return null;
+    function of(k) { return b.filter(function (x) { return x.kind === k; }); }
+    var w = of("weight"), v = of("vaccine"), f = of("feed");
+    return h("section", { class: "panel stack", id: "mc_baby" }, h("h3", { text: t("mo_baby") }),
+      w.length ? h("div", null, h("b", { class: "small", text: t("mo_b_weight") + ": " }), w.slice(-8).map(function (x) { return h("span", { class: "chip", text: A.fmtD(x.d).slice(0, 5) + " · " + x.val + " g" }); })) : null,
+      f.length ? h("div", { class: "small" }, h("b", { text: t("mo_b_feed") + ": " }), t("mo_feed_" + f[f.length - 1].val) + " (" + A.fmtD(f[f.length - 1].d) + ")") : null,
+      v.length ? h("div", { class: "small" }, h("b", { text: t("mo_b_vaccine") + ": " }), v.map(function (x) { return x.val + " (" + A.fmtD(x.d).slice(0, 5) + ")"; }).join(", ")) : null);
+  }
+
   // ------------------------------------------------------------------ карточка
   async function cardView(id) {
     var my = A.token();
@@ -362,6 +382,8 @@ window.MothersModule = function (A) {
     parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk180_title") }), riskPanel(m.risk_eval, false)));
     var bpp = bpPanel(m); if (bpp) parts.push(bpp);
     var wp = weightPanel(m); if (wp) parts.push(wp);
+    var qp = questionsPanel(m); if (qp) parts.push(qp);
+    var bb = babyPanel(m); if (bb) parts.push(bb);
     // план визитов
     if (m.status === "pregnant") parts.push(ancPanel(m, s, reload));
     parts.push(homePanel(m, s, reload));
@@ -615,7 +637,7 @@ window.MothersModule = function (A) {
     var my = A.token();
     A.shell("mosum", A.loadingBox());
     await ensureRefs();
-    var r = await sb.rpc("mothers_summary");
+    var res = await Promise.all([sb.rpc("mothers_summary"), sb.rpc("mothers_trend")]), r = res[0], tr = res[1];
     if (my !== A.token()) return;
     if (r.error) { A.shell("mosum", A.failBox(r.error)); return; }
     var rows = r.data || [];
@@ -652,12 +674,31 @@ window.MothersModule = function (A) {
         kpi(t("ms_active"), total.active), kpi(t("ms_high_risk"), total.high_risk, total.high_risk ? "warn" : ""), kpi(t("ms_anc_missed_women"), total.anc_missed_women, total.anc_missed_women ? "bad" : "ok"),
         kpi(t("ms_home_missed"), total.home_missed, total.home_missed ? "bad" : "ok"), kpi(t("ms_early_pct"), total.registered_month ? Math.round(total.early * 100 / total.registered_month) + "%" : "—"),
         kpi(t("ms_tg_pct"), total.active ? Math.round(total.tg * 100 / total.active) + "%" : "—")),
+      trendPanel(tr && !tr.error ? tr.data || [] : []),
       h("section", { class: "panel stack" },
         h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center" }, h("h2", { text: t("ms_title") }), exp),
         h("p", { class: "mute small", text: t("ms_hint") }),
         rows.length ? h("div", { class: "tbl" }, h("table", { class: "sumtbl", id: "ms_tbl" },
           h("thead", null, h("tr", null, h("th", { text: t("inst_label") }), COLS.map(function (c) { return h("th", { class: "num", text: t("ms_" + c) }); }))),
           h("tbody", null, body))) : h("p", { class: "mute", text: t("mo_empty") }))));
+  }
+  // графики по месяцам (12 месяцев): постановка и ранняя постановка, высокий риск, роды, визиты и патронаж, сигналы
+  function trendPanel(rows) {
+    if (!rows.length || !window.CH) return null;
+    var MO = t("ms_months").split(",");
+    function lbl(m) { return MO[+m.slice(5, 7) - 1] + " " + m.slice(2, 4); }
+    function chart(id, title, key, tipFn) {
+      var total = rows.reduce(function (a, x) { return a + (x[key] || 0); }, 0);
+      return h("div", { class: "trend", id: id }, h("div", { class: "row", style: "justify-content:space-between;gap:6px" }, h("b", { text: title }), h("span", { class: "mute small", text: t("ms_t_year") + ": " + total })),
+        window.CH.line(rows.map(function (x) { return { x: lbl(x.month), y: x[key] || 0, tip: tipFn ? tipFn(x) : String(x[key] || 0) }; }), { aria: title, caption: title }));
+    }
+    return h("section", { class: "panel stack", id: "ms_trend" }, h("h2", { text: t("ms_trend") }), h("p", { class: "mute small", text: t("ms_trend_hint") }),
+      h("div", { class: "trends" },
+        chart("tr_reg", t("ms_t_reg"), "registered", function (x) { return x.registered + " · " + t("ms_t_early") + ": " + x.early + (x.registered ? " (" + Math.round(x.early * 100 / x.registered) + "%)" : ""); }),
+        chart("tr_high", t("ms_t_high"), "high_risk"),
+        chart("tr_birth", t("ms_t_birth"), "delivered"),
+        chart("tr_anc", t("ms_t_anc"), "anc_visits", function (x) { return x.anc_visits + " · " + t("ms_t_home") + ": " + x.home_visits; }),
+        chart("tr_alerts", t("ms_t_alerts"), "alerts")));
   }
   function kpi(label, val, tone) { return h("div", { class: "kpi " + (tone || "") }, h("div", { class: "kv-v", text: String(val) }), h("div", { class: "small mute", text: label })); }
 

@@ -63,6 +63,52 @@ window.MothersModule = function (A) {
     return out;
   }
 
+  // ------------------------------------------------------------------ без интернета: список, сохранённый на телефоне
+  // Сохраняется при каждой загрузке списка; удаляется при выходе из сайта. Только чтение.
+  var OFF_KEY = "ovabmk-offline";
+  function netDown(msg) { return !navigator.onLine || /fetch|network|load failed|timed? ?out|ERR_INTERNET/i.test(String(msg || "")); }
+  function offSave(all) {
+    try {
+      var rows = all.slice(0, 600).map(function (m) {
+        return { id: m.id, full_name: m.full_name, phone: m.phone, address: m.address, card_no: m.card_no, birth_date: m.birth_date, lmp: m.lmp, edd_us: m.edd_us,
+          risk: m.risk, status: m.status, state: m.state, alerts: m.alerts, tg: m.tg, ref_open: m.ref_open, ref_overdue: m.ref_overdue,
+          _mah: m.mahalla_id != null ? A.mahName(m.mahalla_id) : "", _inst: A.instName(m.institution_id) };
+      });
+      localStorage.setItem(OFF_KEY, JSON.stringify({ uid: S.session && S.session.user.id, at: new Date().toISOString(), rows: rows }));
+    } catch (e) { /* хранилище недоступно — без офлайна */ }
+  }
+  function offlineCache(uid) {
+    try { var c = JSON.parse(localStorage.getItem(OFF_KEY) || "null"); return c && c.rows && (!uid || c.uid === uid) ? c : null; } catch (e) { return null; }
+  }
+  function offlineView(uid) {
+    var c = offlineCache(uid);
+    var at = c ? new Date(c.at) : null, atTxt = at ? fmtD(at.toISOString().slice(0, 10)) + " " + String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0") : "";
+    var all = (c ? c.rows : []).map(function (m) {
+      var x = Object.assign({}, m, { state: Object.assign({}, m.state || {}) });
+      if (x.status === "pregnant") { var l0 = x.edd_us ? A.addDays(x.edd_us, -280) : x.lmp; if (l0) x.state.ga_days = A.dayDiff(today(), l0); }
+      return x;
+    }).sort(function (a, b) { return urgency(b) - urgency(a) || a.full_name.localeCompare(b.full_name); });
+    var search = h("input", { type: "search", id: "ol_q", placeholder: t("mo_search"), "aria-label": t("mo_search") });
+    var box = h("div", { class: "stack", id: "ol_list" });
+    function draw() {
+      var q = search.value.trim().toLowerCase(); box.textContent = "";
+      all.filter(function (m) { return !q || (m.full_name + " " + (m.phone || "") + " " + m.address + " " + m._mah).toLowerCase().indexOf(q) >= 0; }).forEach(function (m) {
+        var edd = m.edd_us || (m.lmp ? A.addDays(m.lmp, 280) : null);
+        box.appendChild(h("div", { class: "mcard" + (m.alerts ? " alert" : "") },
+          h("b", { class: "mname", text: m.full_name }),
+          h("div", { class: "chips" }, stateChips(m)),
+          h("div", { class: "mute small" }, [m._mah, m.address, m._inst].filter(Boolean).join(" · "), m.status === "pregnant" && edd ? " · " + t("ol_edd") + " " + fmtD(edd) : ""),
+          m.phone ? h("div", null, "📞 ", telLink(m.phone)) : null));
+      });
+    }
+    search.addEventListener("input", draw);
+    A.mount(h("div", null, A.hero(null), h("div", { class: "stack" },
+      h("div", { class: "notice warn", id: "ol_notice" }, h("b", { text: "📴 " + t("ol_title") }), h("p", { text: t("ol_hint", { at: atTxt }) }),
+        h("p", null, h("button", { class: "btn", type: "button", text: t("ol_retry"), onclick: function () { location.reload(); } }))),
+      h("section", { class: "panel stack" }, h("h2", { text: t("mo_title") }), search), box)));
+    draw();
+  }
+
   // ------------------------------------------------------------------ список доя
   var FILTERS = ["all", "due", "missed", "home", "risk", "alerts", "ref", "fp", "notg", "pp"];
   function passes(m, f) {
@@ -80,10 +126,11 @@ window.MothersModule = function (A) {
     var archive = qParam(route, "arch") === "1";
     var rr = await Promise.all([sb.rpc("mothers_list", { _archive: archive }), archive ? Promise.resolve({ data: [] }) : sb.rpc("mothers_flags")]), r = rr[0];
     if (my !== A.token()) return;
-    if (r.error) { A.shell("mothers", A.failBox(r.error)); return; }
+    if (r.error) { if (netDown(A.errMsg(r.error)) && offlineCache(S.session && S.session.user.id)) return offlineView(S.session.user.id); A.shell("mothers", A.failBox(r.error)); return; }
     var flags = {}; ((rr[1] && rr[1].data) || []).forEach(function (x) { flags[x.mother_id] = x; });
     (r.data || []).forEach(function (m) { var x = flags[m.id] || {}; m.ref_open = x.ref_open || 0; m.ref_overdue = x.ref_overdue || 0; m.fp_method = x.fp_method || null; });
     var all = r.data || [], f = qParam(route, "f") || "all", inst = qParam(route, "i"), q = "";
+    if (!archive) offSave(all);
     var insts = Array.from(new Set(all.map(function (m) { return m.institution_id; })));
     var cnt = {}; FILTERS.forEach(function (k) { cnt[k] = all.filter(function (m) { return passes(m, k); }).length; });
     var listBox = h("div", { class: "stack", id: "mo_list" });
@@ -728,6 +775,7 @@ window.MothersModule = function (A) {
       mapPanel(rows),
       trendPanel(tr && !tr.error ? tr.data || [] : []),
       monthPanel(),
+      comparePanel(),
       h("section", { class: "panel stack" },
         h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center" }, h("h2", { text: t("ms_title") }), exp),
         h("p", { class: "mute small", text: t("ms_hint") }),
@@ -796,7 +844,65 @@ window.MothersModule = function (A) {
     return h("section", { class: "panel stack", id: "ms_month" }, h("h2", { text: t("mr_title") }), h("p", { class: "mute small", text: t("mr_hint") }),
       h("div", { class: "row", style: "gap:8px;align-items:end;flex-wrap:wrap" }, h("label", null, t("mr_month"), mi), btn), out);
   }
+  // до и после: два месяца рядом по району (для оценки пилота)
+  function comparePanel() {
+    var cur = today().slice(0, 7), d = new Date(cur + "-15T12:00:00"); d.setMonth(d.getMonth() - 3);
+    var ma = h("input", { type: "month", id: "cmp_a", value: d.toISOString().slice(0, 7), max: cur }), mb = h("input", { type: "month", id: "cmp_b", value: cur, max: cur });
+    var out = h("div", { id: "cmp_out" });
+    function sum(rows) { var o = {}; MR_COLS.forEach(function (c) { o[c] = (rows || []).reduce(function (a, x) { return a + (x[c] || 0); }, 0); }); return o; }
+    function pct(a, b) { return b ? Math.round(a * 100 / b) : null; }
+    // [ключ, значение, «больше — лучше» (null — без оценки), проценты]
+    function ind(o) {
+      return [["cmp_early_pct", pct(o.early, o.registered), true, true], ["cmp_registered", o.registered, null], ["cmp_hr", o.high_risk, null],
+        ["cmp_anc", o.anc_visits, true], ["cmp_home", o.home_visits, true], ["cmp_ref_pct", pct(o.referred_arrived, o.referred), true, true],
+        ["cmp_fp", o.fp_counseled, true], ["cmp_tg_pct", pct(o.tg, o.on_register), true, true], ["cmp_alerts", o.alerts, null]];
+    }
+    var btn = h("button", { class: "btn primary", type: "button", id: "cmp_go", text: t("cmp_go"), onclick: async function () {
+      btn.disabled = true; out.textContent = "";
+      var r = await Promise.all([sb.rpc("mothers_month_report", { _month: (ma.value || cur) + "-01" }), sb.rpc("mothers_month_report", { _month: (mb.value || cur) + "-01" })]);
+      btn.disabled = false;
+      if (r[0].error || r[1].error) { A.toast(errText(r[0].error || r[1].error)); return; }
+      var A_ = ind(sum(r[0].data)), B_ = ind(sum(r[1].data));
+      function fmt(v, p) { return v == null ? "—" : v + (p ? "%" : ""); }
+      out.appendChild(h("div", { class: "tbl" }, h("table", { class: "sumtbl", id: "cmp_tbl" },
+        h("thead", null, h("tr", null, h("th", { text: t("cmp_ind") }), h("th", { class: "num", text: t("cmp_a") + " · " + ma.value }), h("th", { class: "num", text: t("cmp_b") + " · " + mb.value }), h("th", { class: "num", text: t("cmp_diff") }))),
+        h("tbody", null, A_.map(function (a, i) {
+          var b = B_[i], dv = a[1] == null || b[1] == null ? null : b[1] - a[1];
+          var tone = dv == null || dv === 0 || a[2] == null ? "" : (dv > 0) === a[2] ? "ok" : "bad";
+          var dTxt = dv == null ? "—" : (dv > 0 ? "+" : "") + dv + (a[3] ? " " + t("cmp_pp") : "") + (tone ? " · " + t(tone === "ok" ? "cmp_better" : "cmp_worse") : "");
+          return h("tr", null, h("th", { text: t(a[0]) }), h("td", { class: "num", text: fmt(a[1], a[3]) }), h("td", { class: "num", text: fmt(b[1], b[3]) }),
+            h("td", { class: "num" }, h("span", { class: tone ? "chip " + tone : "", text: dTxt })));
+        })))));
+    } });
+    return h("section", { class: "panel stack", id: "ms_cmp" }, h("h2", { text: t("cmp_title") }), h("p", { class: "mute small", text: t("cmp_hint") }),
+      h("div", { class: "row", style: "gap:8px;align-items:end;flex-wrap:wrap" }, h("label", null, t("cmp_a"), ma), h("label", null, t("cmp_b"), mb), btn), out);
+  }
   function kpi(label, val, tone) { return h("div", { class: "kpi " + (tone || "") }, h("div", { class: "kv-v", text: String(val) }), h("div", { class: "small mute", text: label })); }
+
+  // ------------------------------------------------------------------ советы: питание беременной и кормящей, памятка доя
+  function adviceCards(list, conv) {
+    return h("div", { class: "adv" }, list.map(function (x) {
+      return h("section", { class: "panel adv-card t-" + x.tone + (x.doya ? " noprint" : ""), id: "adv_" + x.id },
+        h("h3", null, h("span", { "aria-hidden": "true", text: x.icon + " " }), conv(x.title)),
+        h("ul", null, x.items.map(function (it) { return h("li", { text: conv(it) }); })));
+    }));
+  }
+  function adviceView(route) {
+    var tab = qParam(route, "t") === "memo" ? "memo" : "food";
+    var L = S.lang === "ru" ? "ru" : "uz", conv = S.lang === "uzl" ? window.uzLat : function (x) { return x; };
+    var data = (window.ADVICE && window.ADVICE[tab] && window.ADVICE[tab][L]) || [];
+    var tabs = h("div", { class: "fchips noprint", role: "tablist" }, ["food", "memo"].map(function (k) {
+      return h("a", { class: "fchip" + (k === tab ? " on" : ""), href: "#/advice?t=" + k, role: "tab", "aria-selected": k === tab ? "true" : "false", text: t("adv_" + k) });
+    }));
+    A.shell("advice", h("div", { class: "stack" },
+      h("section", { class: "panel stack" },
+        h("div", { class: "row", style: "justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" },
+          h("h2", { text: t(tab === "food" ? "adv_food_title" : "adv_memo_title") }),
+          h("button", { class: "btn pri", type: "button", id: "adv_print", text: "🖨 " + t("pt_print"), onclick: function () { window.print(); } })),
+        h("p", { class: "mute small", text: t(tab === "food" ? "adv_food_hint" : "adv_memo_hint") }), tabs),
+      adviceCards(data, conv),
+      h("p", { class: "mute small", text: t("adv_src") })));
+  }
 
   // ------------------------------------------------------------------ бланк согласия (печать)
   function consentView() {
@@ -819,5 +925,5 @@ window.MothersModule = function (A) {
       h("section", { class: "panel" }, block(S.lang === "uzl" ? "uzl" : "uz")), h("section", { class: "panel pbreak" }, block("ru"))));
   }
 
-  return { canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView };
+  return { canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView, adviceView: adviceView, offlineView: offlineView, offlineCache: offlineCache, netDown: netDown };
 };

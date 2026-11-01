@@ -28,3 +28,9 @@ select cron.schedule('mother-pills-hourly', '5 * * * *', $$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
     body := '{"action":"mother_remind","mode":"pills"}'::jsonb)
 $$);
+-- 6) (после 0026) каждый день в 08:25 по Ташкенту (03:25 UTC) — дежурному роддома: женщины высокого риска, которым исполнилось 36 недель.
+select cron.schedule('duty-hr36-0825', '25 3 * * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"duty36"}'::jsonb)
+$$);

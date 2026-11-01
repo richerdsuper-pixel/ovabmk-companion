@@ -3,7 +3,7 @@ import { motherCode, parseCb, uzLat, tx, signLabel, reminderText, staffAlertText
 import { startCode } from "../supabase/functions/tg-bot/texts.ts";
 import { parseBp, visitText, doyaText, SIGNS_PREG } from "../supabase/functions/tg-bot/mother.ts";
 import { TOPICS, topicText, tipText, TIP_TOPICS } from "../supabase/functions/tg-bot/info.ts";
-import { parseStaffCb, dayText, dayButtons, markText, questionText, parseQid, answerText, pillText, pillButtons, parsePillCb, staffMenu } from "../supabase/functions/tg-bot/extra.ts";
+import { parseStaffCb, dayText, dayButtons, markText, questionText, parseQid, answerText, pillText, pillButtons, parsePillCb, staffMenu, hr36Texts } from "../supabase/functions/tg-bot/extra.ts";
 let pass = 0, fail = 0;
 function t(name: string, cond: boolean, info: unknown = "") { console.log((cond ? "PASS " : "FAIL ") + name + (cond ? "" : "  <- " + JSON.stringify(info))); cond ? pass++ : fail++; }
 const C = "m0123456789abcdef01234567";
@@ -91,4 +91,8 @@ t("ответ беременной: язык", answerText("ru", "Можно ко
 // витамины
 t("напоминание о витаминах: список и кнопки", pillText("ru", "Дилноза", ["iodine", "iron"]).includes("Калия йодид, Железо") && pillButtons("uz", ["iodine", "iron"])[1][0].callback_data === "mp:all:iodine,iron");
 t("кнопки витаминов разбираются", JSON.stringify(parsePillCb("mp:iron")) === '["iron"]' && JSON.stringify(parsePillCb("mp:all:iodine,iron")) === '["iodine","iron"]' && parsePillCb("mp:aspirin") === null);
+// дежурный роддома: 36 недель
+const hr = Array.from({ length: 17 }, (_, i) => ({ telegram_id: 1, mother_id: U, mother_name: "Каримова Нигора " + i, mother_phone: "+998901234567", institution: "ОШП №3", mahalla: "Боботог", address: null, ga_days: 255, edd: "2026-12-12" }));
+const ht = hr36Texts(hr, "https://s/");
+t("36 недель: две части по 15, срок, ПДР, телефон, ссылка", ht.length === 2 && ht[0].includes("(17)") && ht[0].includes("36 нед 3 дн, ПДР 12.12.2026, +998 90 123 45 67") && ht[0].includes("https://s/#/mother/" + U) && ht[1].startsWith("16.") && ht.every((x) => x.length < 4096), ht[0].slice(0, 400));
 console.log(`\n${pass}/${pass + fail} passed`); if (fail) process.exit(1);

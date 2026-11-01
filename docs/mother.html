@@ -7,6 +7,7 @@
 <meta name="description" content="Ҳомиладорнинг саҳифаси: муддат, кўриклар, графиклар, кундалик, хавфли белгилар">
 <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
 <script src="config.js"></script>
+<script src="advice.js"></script>
 <style>
 :root{--bg:#EEF3FA;--panel:#fff;--ink:#111827;--mute:#4B5563;--line:#D9E1EE;--head:#1E3A8A;--accent:#1E40AF;--soft:#E3EAFB;--c2:#0F8A7E;
   --ok:#1B6E3A;--ok-soft:#DFF3E6;--warn:#8A5200;--warn-soft:#FFF1CC;--bad:#B42318;--bad-soft:#FDE8E6;--gold:#F5B843;--band:#DFF3E6}
@@ -48,6 +49,9 @@ ul{padding-left:20px} li{margin:2px 0}
 details.tip{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--panel)}
 details.tip summary{font-weight:800;cursor:pointer}
 details.tip p{white-space:pre-line;margin-top:8px;font-size:15px}
+details.tip ul{margin:8px 0 0;padding-left:20px;font-size:15px} details.tip li{margin:4px 0}
+details.food{border-left:5px solid #1E40AF} details.food.t-ok{border-left-color:#1B7F46} details.food.t-warn{border-left-color:#C77700} details.food.t-bad{border-left-color:#C23A2B}
+h2.tiphead{margin:6px 2px 0}
 .row2{display:flex;gap:8px;align-items:end}
 .row2 label{flex:1;display:flex;flex-direction:column;font-size:13px;font-weight:700;color:var(--mute)}
 .row2 input{font-size:22px;font-weight:700;font-family:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);width:100%}
@@ -508,8 +512,17 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
   // ------------------------------------------------------------ советы, ещё, тревога
   function drawTips(main) {
     main.appendChild(askCard());
-    ((DATA.ui && DATA.ui.topics) || []).forEach(function (t, i) {
-      main.appendChild(el("details", { class: "tip", open: i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
+    // питание — подробные советы (docs/advice.js; разделы «для доя» не показываем); остальные темы — из бота
+    var food = window.ADVICE && window.ADVICE.food[L === "ru" ? "ru" : "uz"], cv = function (x) { return L === "uzl" ? lat(x) : x; };
+    if (food) {
+      main.appendChild(el("h2", { class: "tiphead", text: cv(L === "ru" ? "🍎 Питание" : "🍎 Овқатланиш") }));
+      food.filter(function (x) { return !x.doya && (preg() || x.id !== "much"); }).forEach(function (x, i) {
+        main.appendChild(el("details", { class: "tip food t-" + x.tone, id: "food_" + x.id, open: i === 0 ? "" : null }, el("summary", { text: x.icon + " " + cv(x.title) }),
+          el("ul", null, x.items.map(function (it) { return el("li", { text: cv(it) }); }))));
+      });
+    }
+    ((DATA.ui && DATA.ui.topics) || []).filter(function (t) { return !food || t.k !== "food"; }).forEach(function (t, i) {
+      main.appendChild(el("details", { class: "tip", open: !food && i === 0 ? "" : null }, el("summary", { text: t.title }), el("p", { text: t.text })));
     });
     main.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
   }

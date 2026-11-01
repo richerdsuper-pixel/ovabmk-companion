@@ -888,6 +888,25 @@ expect_ok("малыш: пол (заменяется)", "select (public.bot_mothe
 expect_ok("малыш: пол хранится один", "select string_agg(val, ',') from public.mother_baby b where b.kind = 'sex'", out="m")
 expect_ok("малыш: неверный пол", "select public.bot_mother_baby(779, 'sex', 'x', null)->>'error'", "service_role", out="bad_value")
 
+# 0026: дежурный роддома
+MH = expect_ok("дежурный: беременная высокого риска на 36 неделе", f"insert into public.mothers (institution_id, full_name, lmp, consent_at, risk, risk_factors) values ({I1}, 'Каримова Нигора Ахмедовна', private.today() - 255, private.today(), 'high', array['chronic_htn']) returning id")
+expect_ok("дежурный: пока не назначен — список 36 недель пуст", f"select count(*) from public.cron_duty_hr36('{SEC}')", "service_role", out="0")
+expect_ok("дежурный: без назначения ничего не отмечено", f"select count(*) from public.duty_notices where mother_id = '{MH}'", out="0")
+expect_err("дежурный: назначает только администратор", f"select public.admin_set_duty('{MO}', true)", "authenticated", MD, "forbidden")
+expect_ok("дежурный: администратор назначает", f"select public.admin_set_duty('{MO}', true)", "authenticated", A)
+expect_ok("дежурный: виден в списке администратора", f"select count(*) from public.admin_duty_list() x where x = '{MO}'", "authenticated", A, out="1")
+expect_err("дежурный: список закрыт для остальных", "select * from public.admin_duty_list()", "authenticated", MD, "forbidden")
+expect_ok("дежурный: тревожный сигнал из другого учреждения приходит и дежурному", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_alert(779, array['pp_bleeding'])", "service_role", out="3101,4101,4102,4103")
+expect_ok("дежурный: только давление 140/90 — дежурному не приходит", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_alert(779, array['bp_high'])", "service_role", out="3101,4101,4102")
+expect_ok("дежурный: высокий риск 36 недель — в списке", f"select telegram_id || '/' || (ga_days / 7) || '/' || array_to_string(risk_factors, ',') from public.cron_duty_hr36('{SEC}') where mother_id = '{MH}'", "service_role", out="4103/36/chronic_htn")
+expect_ok("дежурный: второй раз та же женщина не приходит", f"select count(*) from public.cron_duty_hr36('{SEC}') where mother_id = '{MH}'", "service_role", out="0")
+expect_err("дежурный: без секрета нельзя", "select * from public.cron_duty_hr36('x')", "service_role", "forbidden")
+expect_err("дежурный: функция планировщика закрыта для пользователей", f"select * from public.cron_duty_hr36('{SEC}')", "authenticated", A, "permission denied")
+expect_err("дежурный: таблицы закрыты напрямую", "select * from public.duty_staff", "authenticated", A, "permission denied")
+expect_ok("дежурный: снятие", f"select public.admin_set_duty('{MO}', false)", "authenticated", A)
+expect_ok("дежурный: после снятия сигнал не приходит", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_alert(779, array['fever'])", "service_role", out="3101,4101,4102")
+expect_ok("дежурный: назначение записано в журнал", f"select count(*) from public.audit_log where action = 'duty_set' and object = '{MO}'", out="2")
+
 # PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
 expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",
           r"""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

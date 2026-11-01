@@ -74,8 +74,9 @@ window.__MOCK.rpc = {
   request_leave: function(a){ return window.__lvErr ? {error:{message:window.__lvErr}} : 'lv-new'; }, request_rate: function(){ return null; },
   substitution_consent: function(){ return null; }, decide_leave: function(a){ return window.__decErr ? {error:{message:window.__decErr}} : null; },
   admin_demand_review: function(){ return null; }, cancel_leave: function(){ return null; }, admin_confirm_rate: function(){ return null; }, set_my_offline_pub: function(){ return null; },
+  admin_duty_list: function(){ return ['%s']; }, admin_set_duty: function(a){ window.__duty = a; return null; },
   admin_remove_user: function(a){ return a._uid === '%s' ? {error:{message:'cannot_remove_self'}} : (window.__rm || 'deleted'); }
-};""" % (A, S_, S_, A)
+};""" % (A, S_, S_, S_, A)
 
 FN = """window.__MOCK.fn = { 'bc-file': function(){ return window.__fnErr ? {error:{message:'forbidden'}} : {url:'https://example.test/dl'}; },
   'tg-notify': function(){ return {total:3, sent:2, blocked:1, failed:0}; },
@@ -267,6 +268,9 @@ with sync_playwright() as p:
     cb0 = pg.locator("tbody tr").first.locator("input[type=checkbox]").first; cb0.click(); pg.wait_for_timeout(250)
     ok("галочка admin вернулась обратно", cb0.is_checked())
     ok("нельзя снять последнего admin (сообщение)", "последнего администратора" in pg.inner_text("#toast"))
+    ok("дежурный роддома: отметка у сотрудника", pg.locator("tbody tr").nth(1).locator(".duty-cb").is_checked() and not pg.locator("tbody tr").first.locator(".duty-cb").is_checked())
+    pg.locator("tbody tr").first.locator(".duty-cb").click(); pg.wait_for_timeout(250)
+    ok("дежурный роддома: назначение уходит на сервер", pg.evaluate("window.__duty && window.__duty._on === true && window.__duty._uid") == A)
     # --- сотрудники: папки по должности и удаление
     pg.evaluate("window.__MOCK.log.length = 0")
     row_s = pg.locator("tbody tr").nth(1)
@@ -1165,7 +1169,7 @@ with sync_playwright() as p:
                  "window.__MOCK.rpc.mothers_summary = function(){ return " + json.dumps(MSUM) + "; };"
                  "window.__MOCK.rpc.mothers_trend = function(){ return " + json.dumps(MTREND) + "; };"
                  "window.__MOCK.rpc.mothers_flags = function(){ return [{mother_id:'" + M1 + "', ref_open:1, ref_overdue:1, fp_method:null, fp_date:null}]; };"
-                 "window.__MOCK.rpc.mothers_month_report = function(a){ window.__mr = a; return [{institution_id:1,on_register:7,registered:2,early:1,high_risk:1,delivered:1,anc_visits:9,home_visits:3,referred:2,referred_arrived:1,fp_counseled:1,alerts:1,tg:5}]; };"
+                 "window.__MOCK.rpc.mothers_month_report = function(a){ window.__mr = a; if (a._month < '2026-11-01') return [{institution_id:1,on_register:6,registered:4,early:1,high_risk:1,delivered:1,anc_visits:5,home_visits:1,referred:2,referred_arrived:0,fp_counseled:0,alerts:0,tg:1}]; return [{institution_id:1,on_register:7,registered:2,early:1,high_risk:1,delivered:1,anc_visits:9,home_visits:3,referred:2,referred_arrived:1,fp_counseled:1,alerts:1,tg:5}]; };"
                  "window.__MOCK.rpc.referral_save = function(a){ window.__rf = a; return 7; };"
                  "window.__MOCK.rpc.referral_arrived = function(a){ window.__ra = a; return null; };"
                  "window.__MOCK.rpc.mother_fp_save = function(a){ window.__fp = a; return null; };"
@@ -1310,12 +1314,42 @@ with sync_playwright() as p:
     ok("сводка: ссылка на пропуски ведёт в список", pg.locator("#ms_tbl a[href='#/mothers?i=1&f=missed']").count() == 1)
     with pg.expect_download() as dl: pg.click("#ms_xlsx")
     ok("сводка: выгрузка в Excel", dl.value.suggested_filename.startswith("Homiladorlar_svodka"))
+    pg.click("#cmp_go"); pg.wait_for_timeout(400)
+    ct_ = pg.inner_text("#cmp_tbl")
+    ok("сводка: до и после — ранняя постановка 25% → 50%, лучше", "25%" in ct_ and "50%" in ct_ and "+25" in ct_ and "лучше" in ct_, ct_[:600])
+    ok("сводка: до и после — визиты 5 → 9", "+4" in ct_)
     pg.goto(SITE + "#/mothers?i=1&f=missed"); pg.wait_for_timeout(500)
     ok("сводка → список: фильтр по учреждению и пропускам", pg.locator(".mcard").count() == 1, pg.locator(".mcard").count())
     pg.goto(SITE + "#/mothers?i=2"); pg.wait_for_timeout(500)
     ok("список: фильтр по другому учреждению — пусто", pg.locator(".mcard").count() == 0)
     pg.screenshot(path=str(SHOTS / "c_mothers_summary.png"), full_page=True)
     ok("ошибок JS нет (сводка)", not errs, errs); b.close()
+    # советы: питание и памятка доя
+    b, pg, errs = mo_page(S_, ("staff",), "#/advice")
+    at_ = pg.inner_text("#app")
+    ok("советы: в меню у доя", pg.locator("nav.nav a[href='#/advice']").count() == 1)
+    ok("советы: питание — 10 разделов, что есть / понемногу / нельзя", pg.locator(".adv-card").count() == 10 and "Что следует есть каждый день" in at_ and "Можно, но понемногу" in at_ and "Нельзя" in at_ and "насвай" in at_, at_[:400])
+    ok("советы: раздел «для доя» не печатается", "noprint" in (pg.get_attribute("#adv_how", "class") or "") and "noprint" not in (pg.get_attribute("#adv_no", "class") or ""))
+    pg.click("a.fchip[href='#/advice?t=memo']"); pg.wait_for_timeout(300)
+    ok("советы: памятка доя — 6 разделов", pg.locator(".adv-card").count() == 6 and "Каждое утро" in pg.inner_text("#app"))
+    pg.screenshot(path=str(SHOTS / "c_advice_memo.png"), full_page=True)
+    ok("ошибок JS нет (советы)", not errs, errs); b.close()
+    b, pg, errs = mo_page(S_, ("staff",), "#/advice", lang="uzl", w=375, h_=800)
+    lt_ = pg.inner_text("#app")
+    ok("советы: латиница и телефон без прокрутки вбок", "Har kuni nima yeyish kerak" in lt_ and "Mumkin emas" in lt_ and not hscroll(pg), lt_[:300])
+    pg.screenshot(path=str(SHOTS / "m_advice_food.png"), full_page=True)
+    ok("ошибок JS нет (советы, латиница)", not errs, errs); b.close()
+    # без интернета: сохранённый список
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers")
+    ok("без интернета: список сохранён на телефоне", pg.evaluate("JSON.parse(localStorage.getItem('ovabmk-offline')).rows.length") == len(MLIST))
+    pg.evaluate("window.__MOCK.rpc.mothers_list = function(){ return {error:{message:'TypeError: Failed to fetch'}}; }")
+    pg.goto(SITE + "#/patronage"); pg.wait_for_timeout(200); pg.goto(SITE + "#/mothers"); pg.wait_for_timeout(500)
+    ot_ = pg.inner_text("#app")
+    ok("без интернета: показан сохранённый список, только чтение", pg.locator("#ol_notice").count() == 1 and pg.locator("#ol_list .mcard").count() == len(MLIST) and pg.locator("#mo_add").count() == 0, ot_[:300])
+    pg.fill("#ol_q", MLIST[0]["full_name"].split()[0]); pg.wait_for_timeout(150)
+    ok("без интернета: поиск работает", pg.locator("#ol_list .mcard").count() >= 1 and pg.locator("#ol_list .mcard").count() <= len(MLIST))
+    ok("ошибок JS нет (без интернета)", not errs, errs)
+    pg.evaluate("localStorage.removeItem('ovabmk-offline')"); b.close()
     b, pg, errs = mo_page(S_, ("staff",), "#/mothers", lang="uzl")
     lt = pg.inner_text("#app")
     ok("беременные: узбекская латиница", "Homiladorlar va tuqqan ayollar" in lt and "Yuqori xavf" in lt, lt[:400])

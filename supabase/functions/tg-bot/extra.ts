@@ -84,3 +84,23 @@ export function parsePillCb(data: unknown): string[] | null {
   return m ? m[1].split(",") : null;
 }
 export function pillDone(lang: Lang): string { return P(DONE, lang); }
+
+// ---------------------------------------------------------------- дежурный роддома: высокий риск, 36 недель (раз в день)
+export type Hr36Row = { telegram_id: number; mother_id: string; mother_name: string; mother_phone: string | null; institution: string | null;
+  mahalla: string | null; address: string | null; ga_days: number; edd: string };
+// по 15 женщин в сообщении (лимит Telegram — 4096 знаков)
+export function hr36Texts(rows: Hr36Row[], site: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < rows.length; i += 15) {
+    const part = rows.slice(i, i + 15).map((r, k) => {
+      const ga = `${Math.floor(r.ga_days / 7)} нед ${r.ga_days % 7} дн`;
+      const where = [r.institution, r.mahalla, r.address].filter(Boolean).join(", ");
+      return `${i + k + 1}. ${r.mother_name} — ${ga}, ПДР ${r.edd ? r.edd.slice(8, 10) + "." + r.edd.slice(5, 7) + "." + r.edd.slice(0, 4) : "—"}` +
+        (r.mother_phone ? `, ${fmtPhone(r.mother_phone)}` : "") + (where ? `\n   ${where}` : "") + `\n   ${site}#/mother/${r.mother_id}`;
+    });
+    out.push((i === 0 ? `🏥 Высокий риск — 36 недель (${rows.length})\nЮқори хавф — 36 ҳафта\n\n` +
+      "Женщины высокого риска, которым исполнилось 36 недель: заранее решите место родов, предупредите врача, уточните, как она доберётся.\n\n" : "") +
+      part.join("\n\n"));
+  }
+  return out;
+}

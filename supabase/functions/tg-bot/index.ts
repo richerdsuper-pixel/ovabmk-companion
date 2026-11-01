@@ -11,7 +11,7 @@ import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.t
 import { consentButtons, doyaText, isLang, langButtons, type Lang, menuButtons, motherCode, parseBp, parseCb, reminderText, SIGNS, SIGNS_PP, SIGNS_PREG,
   signButtons, signLabel, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
 import { tipText, type Topic, topicText, topicTitle, TOPICS } from "./info.ts";
-import { answerText, dayButtons, type DayRow, dayText, markText, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
+import { answerText, dayButtons, type DayRow, dayText, type Hr36Row, hr36Texts, markText, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
   questionText, STAFF_HELLO, staffMenu } from "./extra.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
@@ -397,6 +397,20 @@ Deno.serve(async (req: Request) => {
         const lang: Lang = isLang(r.lang) ? r.lang : "uz";
         const x = await tg("sendMessage", { chat_id: r.telegram_id, text: pillText(lang, r.first_name, r.kinds), reply_markup: { inline_keyboard: pillButtons(lang, r.kinds) } }).catch(() => null);
         if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
+    if (body.mode === "duty36") {   // дежурному роддома: женщины высокого риска на 36 неделе
+      const { data, error } = await db.rpc("cron_duty_hr36", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      const by = new Map<number, Hr36Row[]>();
+      for (const r of (data ?? []) as Hr36Row[]) { if (!by.has(r.telegram_id)) by.set(r.telegram_id, []); by.get(r.telegram_id)!.push(r); }
+      let sent = 0;
+      for (const [chat, rows] of by) {
+        for (const text of hr36Texts(rows, SITE_SLASH)) {
+          const x = await tg("sendMessage", { chat_id: chat, text, disable_web_page_preview: true }).catch(() => null);
+          if (x && x.ok) sent++;
+        }
       }
       return reply({ total: (data ?? []).length, sent }, 200, origin);
     }

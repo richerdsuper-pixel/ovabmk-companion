@@ -211,6 +211,7 @@
   }
 
   async function logout() {
+    try { localStorage.removeItem("ovabmk-offline"); } catch (e) {}
     try { await sb.auth.signOut(); } catch (e) {}
     resetUser(); render();
   }
@@ -299,7 +300,8 @@
   function nav(cur) {
     var items = [["#/overview", "nav_overview", "overview"], ["#/folders", "nav_folders", "folders"], ["#/due", "nav_due", "due"], ["#/indicators", "nav_ind", "ind"],
       ["#/pregnant", "nav_preg", "pregnant"], ["#/broadcasts", "nav_bc", "broadcasts", "bc"], ["#/tasks", "nav_tasks", "tasks", "tk"], ["#/leaves", "nav_leaves", "leaves", "lv"]];
-    if (mv().canMothers()) items.splice(1, 0, ["#/mothers", "nav_mothers", "mothers", "mo"], ["#/patronage", "nav_patronage", "patronage"]);
+    if (mv().canMothers()) items.splice(1, 0, ["#/mothers", "nav_mothers", "mothers", "mo"], ["#/patronage", "nav_patronage", "patronage"], ["#/advice", "nav_advice", "advice"]);
+    else if (canSummary()) items.splice(1, 0, ["#/advice", "nav_advice", "advice"]);
     if (canSummary()) items.push(["#/mothers/summary", "nav_mosum", "mosum"], ["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
     if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
@@ -313,8 +315,9 @@
   function render() {
     renderToken++;
     var route = (location.hash || "#/overview").slice(1);
-    if (!S.session) return mount(h("div", null, hero(null), loginView()));
+    if (!S.session) return !navigator.onLine && mv().offlineCache(null) ? mv().offlineView(null) : mount(h("div", null, hero(null), loginView()));
     if (S.roleState === "loading" || S.roleState === "idle") return mount(h("div", null, hero(null), h("p", { class: "boot", text: t("loading") })));
+    if (S.roleState === "error" && mv().netDown(S.roleError) && mv().offlineCache(S.session.user.id)) return mv().offlineView(S.session.user.id);
     if (S.roleState === "error") return mount(h("div", null, hero(null), h("div", { class: "notice bad" }, t("roles_error"),
       h("p", { text: t("roles_error_long") }), h("p", { class: "mono small", text: S.roleError }),
       h("p", null, h("button", { class: "btn", type: "button", onclick: loadAccess, text: t("retry") })))));
@@ -329,6 +332,7 @@
     if (route === "/pregnant") return pregnantView();
     if (route === "/mothers/summary") return canSummary() ? mv().summaryView() : forbidden("mosum");
     if (route === "/consent") return mv().consentView();
+    if (route === "/advice" || route.indexOf("/advice?") === 0) return mv().canMothers() || canSummary() ? mv().adviceView(route) : forbidden("advice");
     if (route === "/mothers" || route.indexOf("/mothers?") === 0) return mv().canMothers() ? mv().listView(route) : forbidden("mothers");
     if (route === "/mother/new") return mv().canMothers() ? mv().formView(null) : forbidden("mothers");
     if ((m = /^\/mother\/([0-9a-f-]{36})(\/edit)?$/.exec(route))) return m[2] ? mv().formView(m[1]) : mv().cardView(m[1]);
@@ -352,7 +356,7 @@
     return MV || (MV = window.MothersModule({ h: h, t: t, sb: sb, S: S, CFG: CFG, shell: shell, toast: toast, errMsg: errMsg, fmtPhone: fmtPhone, fmtDT: fmtDT, fmtD: fmtD,
       loadingBox: loadingBox, failBox: failBox, token: function () { return renderToken; }, armed: armed, isAdmin: isAdmin, isManager: isManager, isHead: isHead,
       myPosCodes: myPosCodes, instName: instName, mahName: mahName, mahInsts: mahInsts, uzT: uzT, ancRow: ancRow, ancLabel: ancLabel, ancTestLabel: ancTestLabel,
-      loadInstitutions: loadInstitutions, todayS: todayS, addDays: addDays, dayDiff: dayDiff }));
+      loadInstitutions: loadInstitutions, todayS: todayS, addDays: addDays, dayDiff: dayDiff, mount: mount, hero: hero }));
   }
   function forbidden(cur) { shell(cur, h("div", { class: "notice warn", text: t("forbidden") })); }
   function loadingBox() { return h("p", { class: "boot", text: t("loading") }); }
@@ -1867,7 +1871,9 @@
     var r = await sb.rpc("admin_list_users");
     await loadInstitutions(true);
     var orl = await sb.rpc("admin_offline_roles");
+    var dl = await sb.rpc("admin_duty_list");
     if (my !== renderToken) return;
+    var duty = {}; (dl.data || []).forEach(function (x) { duty[typeof x === "string" ? x : x.admin_duty_list] = true; });
     if (r.error) return shell("users", failBox(r.error));
     var offRole = {}; (orl.data || []).forEach(function (x) { offRole[x.user_id] = x.offline_role; });
     var rows = r.data.map(function (u) {
@@ -1886,6 +1892,12 @@
         });
         return h("label", { class: "check small" }, cb, h("span", { text: t("role_" + role) }));
       });
+      var dutyCb = h("input", { type: "checkbox", checked: !!duty[u.user_id], class: "duty-cb" });
+      dutyCb.addEventListener("change", async function () {
+        var x = await sb.rpc("admin_set_duty", { _uid: u.user_id, _on: dutyCb.checked });
+        if (x.error) { dutyCb.checked = !dutyCb.checked; toast(t("err_action", { msg: errMsg(x.error) })); } else toast(t("u_saved"));
+      });
+      roleBoxes.push(h("label", { class: "check small", title: t("u_duty_hint") }, dutyCb, h("span", { text: "🏥 " + t("u_duty") })));
       var picks = h("div", { class: "fold-picks" });
       for (var i = 1; i <= 20; i++) (function (n) {
         var off = n === 15;
@@ -2725,6 +2737,9 @@
 
   // ------------------------------------------------------------------ start
   document.documentElement.lang = LANGTAG[S.lang] || "ru";
+  // без интернета сайт открывается из кэша телефона (docs/sw.js), список беременных — из сохранённого (docs/mothers.js)
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
+  window.addEventListener("online", function () { if (S.session && S.roleState === "error") loadAccess(); });
   window.addEventListener("hashchange", function () { if (S.session && S.roleState === "ok") render(); });
   sb.auth.onAuthStateChange(function (event, session) {
     // без await внутри обработчика: работа откладывается, чтобы не блокировать клиент Supabase

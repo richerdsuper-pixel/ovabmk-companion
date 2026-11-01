@@ -144,7 +144,9 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       b_ok: "✅ Записано.", b_chart: "Вес малыша", b_chart_empty: "Записывайте вес после взвешивания у доя или в поликлинике — здесь появится график.",
       b_feed: "Как кормите", feed_breast: "Только грудью", feed_mixed: "Грудь и смесь", feed_formula: "Только смесь", b_feed_hint: "ВОЗ советует до 6 месяцев кормить только грудью. Если трудно — скажите доя.",
       b_vac: "Прививки", b_vac_ph: "Какая прививка (например, БЦЖ)", b_vac_date: "Дата", b_vac_save: "Записать прививку", b_vac_hint: "График прививок — у патронажной доя и в поликлинике.",
-      b_bad: "Проверьте данные." },
+      b_bad: "Проверьте данные.", ref_t: "➡️ Вас направили", ref_until: "Сходите до {d}.", ref_why: "Причина: {r}",
+      b_sex: "Малыш —", sex_m: "мальчик", sex_f: "девочка", b_who: "Зелёная полоса — норма веса по ВОЗ для {s} (от −2 до +2 SD).", b_who_need: "Укажите, мальчик или девочка, — покажу норму ВОЗ.",
+      b_low: "Вес ниже нормы ВОЗ — покажите малыша доя.", b_high: "Вес выше нормы ВОЗ — обсудите с доя кормление." },
     uz: { hello: "Ассалому алайкум, {n}!", sub: "Ҳомиладор саҳифангиз", sub_pp: "Туғруқдан кейинги саҳифангиз", ga: "Ҳомиладорлик муддати", edd: "Тахминий туғиш санаси: {d}", pp: "Туғруқдан кейин {d}-кун",
       next: "Доянгизга кейинги кўрик", now: "ҳозир", from: "{a} дан {b} гача", need: "Нимани топшириш / ўтиш керак:", none: "Таҳлил керак эмас — доя кўриги.",
       missed: "Сиз кўрикни ўтказиб юбордингиз: {v}. Илтимос, доянгизга иложи борича тезроқ келинг.", plan: "Барча кўриклар", done: "бажарилди", due: "ҳозир", next_s: "олдинда", missed_s: "ўтказиб юборилди",
@@ -184,7 +186,9 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       b_ok: "✅ Ёзилди.", b_chart: "Чақалоқ вазни", b_chart_empty: "Доя ёки поликлиникада тортилгандан кейин вазнни ёзинг — бу ерда график пайдо бўлади.",
       b_feed: "Қандай овқатлантиряпсиз", feed_breast: "Фақат кўкрак сути", feed_mixed: "Кўкрак сути ва аралашма", feed_formula: "Фақат аралашма", b_feed_hint: "ЖССТ 6 ойгача фақат кўкрак сути билан боқишни тавсия қилади. Қийин бўлса — доянгизга айтинг.",
       b_vac: "Эмлашлар", b_vac_ph: "Қайси эмлаш (масалан, БЦЖ)", b_vac_date: "Сана", b_vac_save: "Эмлашни ёзиш", b_vac_hint: "Эмлаш жадвали — патронаж доя ва поликлиникада.",
-      b_bad: "Маълумотларни текширинг." }
+      b_bad: "Маълумотларни текширинг.", ref_t: "➡️ Сизга йўлланма берилди", ref_until: "{d} гача боринг.", ref_why: "Сабаби: {r}",
+      b_sex: "Чақалоқ —", sex_m: "ўғил", sex_f: "қиз", b_who: "Яшил йўлак — {s} учун ЖССТ вазн меъёри (−2 дан +2 SD гача).", b_who_need: "Ўғил ёки қизлигини белгиланг — ЖССТ меъёрини кўрсатаман.",
+      b_low: "Вазн ЖССТ меъёридан паст — чақалоқни доянгизга кўрсатинг.", b_high: "Вазн ЖССТ меъёридан юқори — овқатлантиришни доянгиз билан муҳокама қилинг." }
   };
   var SG = { bleeding: ["Кровотечение", "Қон кетиши"], headache: ["Сильная головная боль, мелькание перед глазами", "Кучли бош оғриғи, кўз олди қоронғилашиши"],
     convulsions: ["Судороги", "Тутқаноқ"], abd_pain: ["Сильная боль в животе", "Қоринда кучли оғриқ"], fever: ["Высокая температура", "Юқори ҳарорат"],
@@ -202,6 +206,10 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
     [26, 35.6, 760, "🥬", "кочан капусты", "карам"], [28, 37.6, 1000, "🍆", "баклажан", "бақлажон"], [30, 39.9, 1300, "🥥", "кокос", "кокос"],
     [32, 42.4, 1700, "🍍", "ананас", "ананас"], [34, 45, 2100, "🍈", "дыня", "қовун"], [36, 47.4, 2600, "🎃", "тыква", "ошқовоқ"],
     [38, 49.8, 3100, "🍉", "небольшой арбуз", "кичик тарвуз"], [40, 51.2, 3400, "🍉", "арбуз", "тарвуз"]];
+  // ВОЗ: вес к возрасту, 0–12 мес, кг: [−2 SD, медиана, +2 SD] (WHO Child Growth Standards)
+  var WHO = { f: [[2.4, 3.2, 4.2], [3.2, 4.2, 5.5], [3.9, 5.1, 6.6], [4.5, 5.8, 7.5], [5.0, 6.4, 8.2], [5.4, 6.9, 8.8], [5.7, 7.3, 9.3], [6.0, 7.6, 9.8], [6.3, 7.9, 10.2], [6.5, 8.2, 10.5], [6.7, 8.5, 10.9], [6.9, 8.7, 11.2], [7.0, 8.9, 11.5]],
+              m: [[2.5, 3.3, 4.4], [3.4, 4.5, 5.8], [4.3, 5.6, 7.1], [5.0, 6.4, 8.0], [5.6, 7.0, 8.7], [6.0, 7.5, 9.3], [6.4, 7.9, 9.8], [6.7, 8.3, 10.3], [6.9, 8.6, 10.7], [7.1, 8.9, 11.0], [7.4, 9.2, 11.4], [7.6, 9.4, 11.7], [7.7, 9.6, 12.0]] };
+  function whoAt(sex, day, k) { var t = WHO[sex], mo = Math.min(12, Math.max(0, day / 30.4375)), i = Math.min(11, Math.floor(mo)), f = mo - i; return (t[i][k] + (t[i + 1][k] - t[i][k]) * f) * 1000; }
   var BAG = [["Паспорт", "Паспорт"], ["Обменная карта", "Алмашинув картаси"], ["Телефон и зарядка", "Телефон ва қувватлагич"], ["Халат и тапочки", "Халат ва шиппак"],
     ["Рубашка для кормления", "Эмизиш учун кўйлак"], ["Послеродовые прокладки, бельё", "Туғруқдан кейинги прокладкалар, ички кийим"], ["Средства гигиены, полотенце", "Гигиена воситалари, сочиқ"],
     ["Вода", "Сув"], ["Малышу: подгузники, распашонки, шапочка, носочки, пелёнки", "Чақалоққа: таглик, кўйлакча, қалпоқча, пайпоқча, йўргак"], ["Одежда малышу на выписку", "Чақалоққа чиқиш учун кийим"]];
@@ -219,7 +227,7 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
     }
     return out;
   }
-  var q = /[?&]l=(uz|uzl|ru)/.exec(location.search), L = q ? q[1] : "uz", DATA = null;
+  var q = /[?&]l=(uzl|uz|ru)\b/.exec(location.search), L = q ? q[1] : "uz", DATA = null;
   function tr(k, v) { var s = (L === "ru" ? D.ru : D.uz)[k] || k; if (L === "uzl") s = lat(s); if (v) Object.keys(v).forEach(function (n) { s = s.split("{" + n + "}").join(v[n]); }); return s; }
   function u(s) { return L === "uzl" ? lat(s) : s; }
   function pair(x) { return L === "ru" ? x[0] : u(x[1]); }
@@ -320,6 +328,10 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       return el("div", { class: "vis" }, el("div", null, el("b", { text: hName(h.kind) }), el("div", { class: "mute small", text: tr("from", { a: d(h.from), b: d(h.to) }) })),
         el("span", { class: "chip " + (h.state === "due" ? "warn" : ""), text: tr(h.state === "due" ? "due" : "next_s") }));
     })));
+    (DATA.referrals || []).filter(function (r) { return !r.arrived_at; }).forEach(function (r) {
+      main.appendChild(el("div", { class: "card", id: "ref", style: "border-color:var(--gold)" }, el("h2", { text: tr("ref_t") + ": " + u(r.target) }),
+        el("div", { style: "font-weight:700", text: tr("ref_until", { d: d(r.due_date) }) }), r.reason ? el("div", { class: "small mute", text: tr("ref_why", { r: u(r.reason) }) }) : null));
+    });
     if (pillKinds().length) main.appendChild(pillsCard());
     var dy = DATA.doya || {};
     main.appendChild(el("div", { class: "card" }, el("h2", { text: tr("contact") }), el("div", null, el("b", { text: u(dy.name || "") })),
@@ -534,11 +546,21 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       el("div", null, el("h2", { text: tr("b_title") }), dayN ? el("div", { class: "big", id: "b_day", text: tr("b_day", { d: dayN }) }) : null)));
     // вес
     var ws = of("weight").map(function (x) { return [birth ? Math.round((new Date(x.d) - new Date(birth)) / 86400000) : 0, parseInt(x.val, 10)]; });
-    if (ws.length >= 2) {
-      var lo = Math.min.apply(null, ws.map(function (p) { return p[1]; })), hi = Math.max.apply(null, ws.map(function (p) { return p[1]; })), xm = Math.max(14, ws[ws.length - 1][0] + 2);
+    var sexR = of("sex").slice(-1)[0], sex = sexR ? sexR.val : null, so = el("div", { id: "b_s_out" });
+    main.appendChild(el("div", { class: "card", id: "b_sex" }, el("div", { class: "row2", style: "align-items:center" }, el("b", { text: tr("b_sex") }),
+      ["f", "m"].map(function (k) { return el("button", { type: "button", class: "pill" + (sex === k ? " on" : ""), "data-k": k, style: "width:auto;flex:1", onclick: function () { if (sex !== k) save("sex", k, null, so); } },
+        el("span", { class: "box", text: sex === k ? "✓" : "" }), tr("sex_" + k)); })), so));
+    if (ws.length >= 2 || (ws.length && sex)) {
+      var xm = Math.max(30, ws[ws.length - 1][0] + 7), band = null, lo = Math.min.apply(null, ws.map(function (p) { return p[1]; })), hi = Math.max.apply(null, ws.map(function (p) { return p[1]; }));
+      if (sex) { var bl = [], bh = []; for (var dd2 = 0; dd2 <= xm; dd2 += Math.max(1, Math.round(xm / 40))) { bl.push([dd2, whoAt(sex, dd2, 0)]); bh.push([dd2, whoAt(sex, dd2, 2)]); }
+        band = { lo: bl, hi: bh }; lo = Math.min(lo, whoAt(sex, 0, 0)); hi = Math.max(hi, whoAt(sex, xm, 2)); }
       lo = Math.floor((lo - 200) / 500) * 500; hi = Math.ceil((hi + 200) / 500) * 500;
+      var last = ws[ws.length - 1], note = null;
+      if (sex && last[1] < whoAt(sex, last[0], 0)) note = el("div", { class: "note", text: tr("b_low") });
+      else if (sex && last[1] > whoAt(sex, last[0], 2)) note = el("div", { class: "note", text: tr("b_high") });
       main.appendChild(el("div", { class: "card", id: "b_chart" }, el("h2", { text: tr("b_chart") }),
-        chart({ label: tr("b_chart"), xs: [0, xm], ys: [lo, hi], yt: ticks(lo, hi, 4), xt: [[0, "0"], [Math.round(xm / 2), String(Math.round(xm / 2))], [xm, String(xm)]], series: [{ cls: "s1", dot: "p1", pts: ws }] })));
+        chart({ label: tr("b_chart"), xs: [0, xm], ys: [lo, hi], yt: ticks(lo, hi, 4), band: band, xt: [[0, "0"], [Math.round(xm / 2), String(Math.round(xm / 2))], [xm, String(xm)]], series: [{ cls: "s1", dot: "p1", pts: ws }] }),
+        note, el("p", { class: "small mute", text: sex ? tr("b_who", { s: tr(sex === "m" ? "sex_m" : "sex_f") }) : tr("b_who_need") })));
     } else main.appendChild(el("div", { class: "card", id: "b_chart" }, el("h2", { text: tr("b_chart") }), el("p", { class: "small mute", text: tr("b_chart_empty") }),
       ws.length ? el("div", { text: ws[0][1] + " g" }) : null));
     var wi = el("input", { type: "text", inputmode: "numeric", id: "b_w", maxlength: "5", placeholder: "3400" }), wo = el("div", { id: "b_w_out" });

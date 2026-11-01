@@ -17,7 +17,7 @@ VIEW = {"lang": "uz", "full_name": "Каримова Дилноза Анваро
         "pe": "high", "bp": [{"sys": 128, "dia": 82, "at": "2026-10-31T08:00:00Z"}, {"sys": 122, "dia": 78, "at": "2026-10-25T08:00:00Z"}], "today": "2026-11-01", "bmi": 22.5, "height_cm": 160,
         "weights": [{"d": "2026-08-01", "kg": 58, "src": "reg", "ga": 36}, {"d": "2026-10-01", "kg": 61.5, "src": "visit", "ga": 97}, {"d": "2026-10-30", "kg": 66, "src": "self", "ga": 126}],
         "pills": [{"day": "2026-10-30", "kind": "iron"}, {"day": "2026-11-01", "kind": "iodine"}], "pill_hour": 9,
-        "questions": [{"id": 3, "q": "Можно ли кофе?", "a": "Не больше 2 чашек", "a_by": "Холова Жамила", "at": "2026-10-30T05:00:00Z"}], "baby": [],
+        "questions": [{"id": 3, "q": "Можно ли кофе?", "a": "Не больше 2 чашек", "a_by": "Холова Жамила", "at": "2026-10-30T05:00:00Z"}], "baby": [], "referrals": [{"id": 1, "target": "Акушер-гинеколог", "reason": "Анемия", "due_date": "2026-11-05", "arrived_at": None}],
         "ui": {"signs": [{"k": "bleeding", "label": "Қонли ажралма, қон кетиши"}, {"k": "contractions", "label": "Бир соатда 4–5 тадан кўп тўлғоқ"}, {"k": "vomit", "label": "5 мартадан кўп қусиш"}],
                "topics": [{"k": "food", "title": "🍎 Овқатланиш ва витаминлар", "text": "• Фолий кислотаси 400 мкг"}, {"k": "signs", "title": "⚠️ Қачон дарҳол шифокорга", "text": "• 5 мартадан кўп қусиш"}]}}
 def run(p, view, tg=True, status=200, search="?l=uz"):
@@ -50,6 +50,7 @@ with sync_playwright() as p:
     ok("главная: кольцо срока, триместр, до родов", pg.locator("#herocard svg.ring").count() == 1 and "2-триместр" in t and "Туғруққача ≈ 136 кун" in t, t[:400])
     ok("главная: размер малыша по неделям", "банан" not in pg.inner_text("#baby") and "булғор қалампири" in pg.inner_text("#baby"), pg.inner_text("#baby"))
     ok("главная: полоса визитов (пропущен — красный)", pg.locator("#dots .d.missed").count() == 1 and pg.locator("#dots .d.due").count() == 1)
+    ok("главная: направление — куда и до какого числа", "Акушер-гинеколог" in pg.inner_text("#ref") and "05.11.2026" in pg.inner_text("#ref"), pg.inner_text("#ref") if pg.locator("#ref").count() else "нет")
     ok("главная: витамины сегодня (после 12 нед без фолиевой)", [x.get_attribute("data-k") for x in pg.query_selector_all("#pills .pill")] == ["iodine", "iron"] and pg.locator("#pills .pill.on").count() == 1)
     pg.click("#pills .pill[data-k=iron]"); pg.wait_for_timeout(300)
     ok("витамины: отметка уходит на сервер", calls[-1].get("op") == "pill" and calls[-1].get("kind") == "iron" and calls[-1].get("on") is True and pg.locator("#pills .pill.on").count() == 2, calls[-1])
@@ -125,7 +126,9 @@ with sync_playwright() as p:
     pg.fill("#b_w", "3400"); pg.click("#b_w_save"); pg.wait_for_timeout(300)
     ok("малыш: вес записан", calls[-1].get("op") == "baby" and calls[-1].get("kind") == "weight" and calls[-1].get("val") == "3400", calls[-1])
     pg.fill("#b_w", "3650"); pg.click("#b_w_save"); pg.wait_for_timeout(300)
-    ok("малыш: график веса появился", pg.locator("#b_chart svg.chart polyline").count() == 1)
+    ok("малыш: график веса появился, без пола — просьба указать", pg.locator("#b_chart svg.chart polyline").count() == 1 and "ўғил ёки қиз" in pg.inner_text("#b_chart").lower(), pg.inner_text("#b_chart"))
+    pg.click("#b_sex .pill[data-k=f]"); pg.wait_for_timeout(300)
+    ok("малыш: пол — девочка, полоса нормы ВОЗ", calls[-1].get("kind") == "sex" and calls[-1].get("val") == "f" and pg.locator("#b_chart polygon.bandf").count() == 1 and "ЖССТ" in pg.inner_text("#b_chart"), pg.inner_text("#b_chart"))
     pg.click("#b_feed .pill[data-k=breast]"); pg.wait_for_timeout(300)
     ok("малыш: кормление грудью отмечено", calls[-1].get("val") == "breast" and pg.locator("#b_feed .pill.on[data-k=breast]").count() == 1)
     pg.fill("#b_vac", "БЦЖ"); pg.click("#b_v_save"); pg.wait_for_timeout(300)

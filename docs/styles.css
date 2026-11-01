@@ -415,3 +415,12 @@ input[type=search],input[type=tel]{background:var(--panel);border:1px solid var(
 .riskbox.hi{background:var(--bad-soft);border-color:transparent}
 .riskbox.lo{background:var(--ok-soft);border-color:transparent}
 .riskbox ul{color:var(--ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px}
+.grid2 label,#mc_ref>label{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.mapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.mtile{display:flex;flex-direction:column;gap:2px;border-radius:12px;padding:10px 12px;text-decoration:none;color:var(--ink);border:1px solid var(--line);
+  background:linear-gradient(to top,var(--tile) calc(var(--w,0.5)*100%),var(--panel) 0)}
+.mtile .big{font-size:26px;font-weight:800;line-height:1.1}
+.mtile.t-ok{--tile:color-mix(in srgb,var(--ok,#1B6E3A) 18%,transparent)}
+.mtile.t-warn{--tile:color-mix(in srgb,#F5B843 30%,transparent)}
+.mtile.t-bad{--tile:color-mix(in srgb,#B42318 22%,transparent);border-color:#B42318}

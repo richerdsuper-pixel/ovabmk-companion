@@ -1135,6 +1135,8 @@ with sync_playwright() as p:
         "risk_eval": {"level": "high", "reasons": ["cs_scar", "chronic_htn", "pe_risk", "pph_risk"], "bmi": 27.3, "pe": "high", "pe_high": ["chronic_htn"], "pe_mod": [], "gdm": False, "gdm_f": [],
                       "fgr": "high", "fgr_major": ["chronic_htn"], "fgr_minor": [], "vte_score": 3, "vte": "high", "pph": True, "pph_f": ["cs_scar"], "ptb": False, "ptb_f": [], "rh_neg": False, "anemia": False, "teen": False},
         "bp": [{"sys": 146, "dia": 94, "at": "2026-11-20T03:00:00Z"}, {"sys": 122, "dia": 80, "at": "2026-11-19T03:00:00Z"}],
+        "referrals": [{"id": 3, "target": "Роддом", "reason": "Давление", "due_date": "2026-11-18", "created_at": "2026-11-15T05:00:00Z", "arrived_at": None, "result": "", "by": "Холова Жамила"}],
+        "fp": {"method": None, "date": None},
         "questions": [{"id": 5, "q": "Можно ли пить кофе?", "a": "Не больше 2 чашек", "at": "2026-11-19T05:00:00Z", "answered_at": "2026-11-19T06:00:00Z", "a_by": "Холова Жамила"},
                       {"id": 6, "q": "Когда УЗИ?", "a": None, "at": "2026-11-20T04:00:00Z", "answered_at": None, "a_by": None}],
         "baby": [{"kind": "weight", "val": "3250", "d": "2026-11-15"}, {"kind": "feed", "val": "breast", "d": "2026-11-16"}, {"kind": "vaccine", "val": "БЦЖ", "d": "2026-11-15"}],
@@ -1162,6 +1164,11 @@ with sync_playwright() as p:
                  "window.__MOCK.rpc.mother_get = function(a){ return " + json.dumps(MGET, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mothers_summary = function(){ return " + json.dumps(MSUM) + "; };"
                  "window.__MOCK.rpc.mothers_trend = function(){ return " + json.dumps(MTREND) + "; };"
+                 "window.__MOCK.rpc.mothers_flags = function(){ return [{mother_id:'" + M1 + "', ref_open:1, ref_overdue:1, fp_method:null, fp_date:null}]; };"
+                 "window.__MOCK.rpc.mothers_month_report = function(a){ window.__mr = a; return [{institution_id:1,on_register:7,registered:2,early:1,high_risk:1,delivered:1,anc_visits:9,home_visits:3,referred:2,referred_arrived:1,fp_counseled:1,alerts:1,tg:5}]; };"
+                 "window.__MOCK.rpc.referral_save = function(a){ window.__rf = a; return 7; };"
+                 "window.__MOCK.rpc.referral_arrived = function(a){ window.__ra = a; return null; };"
+                 "window.__MOCK.rpc.mother_fp_save = function(a){ window.__fp = a; return null; };"
                  "window.__MOCK.rpc.home_schedule_list = function(){ return " + json.dumps(HSCH, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mother_save = function(a){ return window.__moErr ? {error:{message:window.__moErr}} : '" + M1 + "'; };"
                  "window.__MOCK.rpc.mother_invite = function(){ return 'm0123456789abcdef01234567'; };"
@@ -1223,6 +1230,19 @@ with sync_playwright() as p:
     ok("карточка: имя, телефон, рост/вес", "Каримова Дилноза Анваровна" in t_ and "+998 90 123 45 67" in t_ and "160 см / 70 кг" in t_)
     ok("карточка: группа риска по протоколу — причины и что делать", all(x in pg.inner_text("#mc_riskbox") for x in ("Высокий риск", "Рубец на матке", "Высокий риск преэклампсии", "гематолога", "2–3 уровне")), pg.inner_text("#mc_riskbox"))
     ok("карточка: дневник давления беременной", "146/94" in pg.inner_text("#mc_bp") and pg.locator("#mc_bp .chip.warn").count() == 1)
+    ok("карточка: направление просрочено — «не дошла»", "Роддом" in pg.inner_text("#mc_ref") and "не дошла" in pg.inner_text("#mc_ref"), pg.inner_text("#mc_ref") if pg.locator("#mc_ref").count() else "нет")
+    pg.locator("#mc_ref .rf_res").first.fill("Осмотрена"); pg.click("#mc_ref button:has-text('Дошла')"); pg.wait_for_timeout(300)
+    ok("карточка: отметка «дошла» с результатом", pg.evaluate("window.__ra && window.__ra._id === 3 && window.__ra._result === 'Осмотрена'"))
+    pg.select_option("#rf_target", "УЗИ"); pg.fill("#rf_reason", "Контроль роста"); pg.click("#rf_add"); pg.wait_for_timeout(300)
+    ok("карточка: новое направление", pg.evaluate("window.__rf && window.__rf._target === 'УЗИ' && window.__rf._reason === 'Контроль роста' && !!window.__rf._due"))
+    ok("карточка: беременной — без блока планирования семьи", pg.locator("#mc_fp").count() == 0)
+    pg.evaluate("(function(){ var g = window.__mgOrig = window.__MOCK.rpc.mother_get; window.__MOCK.rpc.mother_get = function(a){ var m = JSON.parse(JSON.stringify(g(a))); m.status = 'postpartum'; m.outcome = 'delivered'; m.outcome_date = '2026-11-10'; return m; }; location.hash = '#/mothers'; })()")
+    pg.wait_for_timeout(400); pg.evaluate("location.hash = '#/mother/" + M1 + "'"); pg.wait_for_timeout(600)
+    ok("карточка: планирование семьи после родов — консультации не было", pg.locator("#mc_fp").count() == 1 and "консультации ещё не было" in pg.inner_text("#mc_fp"))
+    pg.select_option("#fp_method", "iud"); pg.click("#fp_save"); pg.wait_for_timeout(300)
+    ok("карточка: метод ВМС сохранён", pg.evaluate("window.__fp && window.__fp._method === 'iud' && !!window.__fp._date"))
+    pg.evaluate("window.__MOCK.rpc.mother_get = window.__mgOrig; location.hash = '#/mothers'"); pg.wait_for_timeout(400)
+    pg.evaluate("location.hash = '#/mother/" + M1 + "'"); pg.wait_for_timeout(600)
     ok("карточка: вопросы беременной — ответ и «ждёт ответа»", "Не больше 2 чашек — Холова Жамила" in pg.inner_text("#mc_q") and "ждёт ответа" in pg.inner_text("#mc_q"))
     ok("карточка: малыш — вес, кормление, прививки", all(x in pg.inner_text("#mc_baby") for x in ("3250 g", "грудное", "БЦЖ")), pg.inner_text("#mc_baby") if pg.locator("#mc_baby").count() else "нет")
     ok("карточка: вес и витамины от беременной", "62.5 kg" in pg.inner_text("#mc_w") and "+4.5" in pg.inner_text("#mc_w") and "2 дн" in pg.inner_text("#mc_w"), pg.inner_text("#mc_w") if pg.locator("#mc_w").count() else "нет блока")
@@ -1281,9 +1301,14 @@ with sync_playwright() as p:
     st_ = pg.inner_text("#ms_tbl")
     ok("сводка: учреждения, махалли и итог", "ОШП №3" in st_.upper() and "— НАВБАҲОР" in st_.upper() and "ИТОГО ПО РАЙОНУ" in st_.upper(), st_[-500:])
     ok("сводка: графики по месяцам (5 графиков, 12 точек)", pg.locator("#ms_trend .trend").count() == 5 and pg.locator("#tr_reg svg").count() >= 1 and "за год: 36" in pg.inner_text("#tr_reg"), pg.inner_text("#ms_trend")[:300] if pg.locator("#ms_trend").count() else "нет")
+    ok("сводка: карта махаллей — плитки со ссылкой на список", pg.locator("#ms_map .mtile").count() >= 2 and pg.locator("#ms_map a[href*='&m=']").count() >= 2)
+    pg.click("#mr_go"); pg.wait_for_timeout(400)
+    ok("сводка: отчёт за месяц — таблица и выгрузка", "НАПРАВЛЕНЫ" in pg.inner_text("#mr_tbl").upper() and pg.locator("#mr_tbl tr.tot").count() == 1 and pg.locator("#mr_xlsx").count() == 1 and pg.evaluate("window.__mr._month.endsWith('-01')"))
+    with pg.expect_download() as dl2: pg.click("#mr_xlsx")
+    ok("сводка: отчёт за месяц в Excel", dl2.value.suggested_filename.startswith("Homiladorlar_oylik_"))
     ok("сводка: итог «На учёте» = 7", pg.locator("#ms_tbl tr.tot td").first.inner_text() == "7")
     ok("сводка: ссылка на пропуски ведёт в список", pg.locator("#ms_tbl a[href='#/mothers?i=1&f=missed']").count() == 1)
-    with pg.expect_download() as dl: pg.click("button:has-text('Скачать Excel')")
+    with pg.expect_download() as dl: pg.click("#ms_xlsx")
     ok("сводка: выгрузка в Excel", dl.value.suggested_filename.startswith("Homiladorlar_svodka"))
     pg.goto(SITE + "#/mothers?i=1&f=missed"); pg.wait_for_timeout(500)
     ok("сводка → список: фильтр по учреждению и пропускам", pg.locator(".mcard").count() == 1, pg.locator(".mcard").count())

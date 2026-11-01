@@ -91,6 +91,16 @@ begin
   select m.id, x.k, x.v, m.outcome_date + x.dd from public.mothers m,
     (values ('weight', '3350', 0), ('vaccine', 'БЦЖ', 1), ('vaccine', 'Гепатит B', 0), ('feed', 'breast', 2), ('weight', '3290', 4), ('weight', '3420', 10), ('weight', '3610', 15)) x(k, v, dd)
   where m.institution_id = i and m.full_name like 'Олимова%' and m.outcome_date + x.dd <= private.today();
+  -- направления (одно просрочено, одно открыто, одно — дошла), планирование семьи после родов, пол малыша
+  insert into public.referrals (mother_id, target, reason, due_date, created_by, created_at, arrived_at, result)
+  select m.id, x.t, x.r, private.today() + x.dd, a, now() - (x.ago || ' days')::interval, case when x.ok then private.today() - 1 end, case when x.ok then 'Осмотрена, назначено лечение' else '' end
+  from public.mothers m join (values ('Абдуллаева%', 'Роддом', 'Давление 142/92, риск преэклампсии', -1, 3, false),
+                                     ('Норова%', 'Акушер-гинеколог', 'Тяжёлая анемия, 17 лет', 2, 1, false),
+                                     ('Қодирова%', 'УЗИ', 'Многоплодная беременность — контроль роста', -2, 5, true)) x(n, t, r, dd, ago, ok)
+    on m.full_name like x.n where m.institution_id = i;
+  update public.mothers set fp_method = 'iud', fp_date = outcome_date + 5 where institution_id = i and full_name like 'Бердиева%' and outcome_date + 5 <= private.today();
+  update public.mothers set fp_method = 'lam', fp_date = outcome_date + 3 where institution_id = i and full_name like 'Олимова%' and outcome_date + 3 <= private.today();
+  insert into public.mother_baby (mother_id, kind, val, d) select m.id, 'sex', 'f', m.outcome_date from public.mothers m where m.institution_id = i and m.full_name like 'Олимова%';
   -- одни роды сегодня (для «родили в этом месяце»)
   update public.mothers set outcome_date = private.today(), discharge_date = private.today() where institution_id = i and full_name = 'Ғафурова Нафиса Баҳодировна';
 end $$;

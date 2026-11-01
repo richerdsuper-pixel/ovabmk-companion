@@ -64,11 +64,12 @@ window.MothersModule = function (A) {
   }
 
   // ------------------------------------------------------------------ список доя
-  var FILTERS = ["all", "due", "missed", "home", "risk", "alerts", "notg", "pp"];
+  var FILTERS = ["all", "due", "missed", "home", "risk", "alerts", "ref", "fp", "notg", "pp"];
   function passes(m, f) {
     var s = m.state || {};
     return f === "all" ? true : f === "due" ? !!s.due : f === "missed" ? s.missed > 0 : f === "home" ? (s.home_due + s.home_missed) > 0
-      : f === "risk" ? m.risk === "high" : f === "alerts" ? m.alerts > 0 : f === "notg" ? !m.tg : f === "pp" ? m.status === "postpartum" : true;
+      : f === "risk" ? m.risk === "high" : f === "alerts" ? m.alerts > 0 : f === "notg" ? !m.tg : f === "pp" ? m.status === "postpartum"
+      : f === "ref" ? m.ref_open > 0 : f === "fp" ? m.status === "postpartum" && !m.fp_method : true;
   }
   function qParam(route, k) { var r = new RegExp("[?&]" + k + "=([^&]*)").exec(route); return r ? decodeURIComponent(r[1]) : ""; }
 
@@ -77,9 +78,11 @@ window.MothersModule = function (A) {
     A.shell("mothers", A.loadingBox());
     await ensureRefs();
     var archive = qParam(route, "arch") === "1";
-    var r = await sb.rpc("mothers_list", { _archive: archive });
+    var rr = await Promise.all([sb.rpc("mothers_list", { _archive: archive }), archive ? Promise.resolve({ data: [] }) : sb.rpc("mothers_flags")]), r = rr[0];
     if (my !== A.token()) return;
     if (r.error) { A.shell("mothers", A.failBox(r.error)); return; }
+    var flags = {}; ((rr[1] && rr[1].data) || []).forEach(function (x) { flags[x.mother_id] = x; });
+    (r.data || []).forEach(function (m) { var x = flags[m.id] || {}; m.ref_open = x.ref_open || 0; m.ref_overdue = x.ref_overdue || 0; m.fp_method = x.fp_method || null; });
     var all = r.data || [], f = qParam(route, "f") || "all", inst = qParam(route, "i"), q = "";
     var insts = Array.from(new Set(all.map(function (m) { return m.institution_id; })));
     var cnt = {}; FILTERS.forEach(function (k) { cnt[k] = all.filter(function (m) { return passes(m, k); }).length; });
@@ -108,11 +111,12 @@ window.MothersModule = function (A) {
         listBox.appendChild(h("a", { class: "mcard" + (m.alerts ? " alert" : ""), href: "#/mother/" + m.id },
           h("div", { class: "row", style: "justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap" },
             h("b", { class: "mname", text: m.full_name }), h("span", { class: "mute small", text: [age != null ? ageTxt(age) : "", m.card_no ? "№ " + m.card_no : ""].filter(Boolean).join(" · ") })),
-          h("div", { class: "chips" }, stateChips(m)),
+          h("div", { class: "chips" }, stateChips(m), m.ref_overdue ? h("span", { class: "chip bad", text: t("mo_ref_overdue") }) : m.ref_open ? h("span", { class: "chip warn", text: t("mo_ref_open") }) : null),
           h("div", { class: "mute small", text: [A.mahName(m.mahalla_id), m.address, m.phone ? A.fmtPhone(m.phone) : "", insts.length > 1 ? A.instName(m.institution_id) : ""].filter(Boolean).join(" · ") })));
       });
       listBox.appendChild(h("p", { class: "mute small", text: t("mo_shown", { n: list.length, m: all.length }) }));
     }
+    var mq = qParam(route, "m"); if (mq) mahSel.value = mq;
     search.addEventListener("input", draw); mahSel.addEventListener("change", draw); if (instSel) instSel.addEventListener("change", draw);
     var seg = h("div", { class: "fchips", role: "tablist" }, FILTERS.map(function (k) {
       return h("button", { type: "button", class: "fchip" + (k === f ? " on" : "") + (k === "alerts" && cnt[k] ? " hot" : ""), "data-f": k, onclick: function () {
@@ -322,6 +326,51 @@ window.MothersModule = function (A) {
       pills.length ? h("div", { class: "small", text: t("mo_pills14", { n: Object.keys(days).length }) }) : null);
   }
 
+  var REF_TARGETS = ["ref_t_maternity", "ref_t_obgyn", "ref_t_therapist", "ref_t_endo", "ref_t_us", "ref_t_lab"];
+  function referralsPanel(m, reload) {
+    var refs = m.referrals || [], td = today();
+    var sel = h("select", { id: "rf_target" }, REF_TARGETS.map(function (k) { return h("option", { value: t(k), text: t(k) }); }), h("option", { value: "", text: t("ref_t_other") }));
+    var other = h("input", { id: "rf_other", placeholder: t("ref_other_ph"), maxlength: "200", style: "display:none" });
+    sel.addEventListener("change", function () { other.style.display = sel.value ? "none" : ""; });
+    var reason = h("input", { id: "rf_reason", placeholder: t("ref_reason"), maxlength: "500" });
+    var due = h("input", { id: "rf_due", type: "date", value: addDays(td, 3), min: td, max: addDays(td, 90) });
+    var add = h("button", { class: "btn primary", type: "button", id: "rf_add", text: t("ref_add"), onclick: async function () {
+      var target = sel.value || other.value.trim();
+      if (target.length < 2) { A.toast(t("ref_need_target")); return; }
+      add.disabled = true;
+      var x = await sb.rpc("referral_save", { _mother: m.id, _target: target, _reason: reason.value, _due: due.value });
+      add.disabled = false;
+      if (x.error) { A.toast(errText(x.error)); return; }
+      A.toast(t("ref_saved")); reload();
+    } });
+    return h("section", { class: "panel stack", id: "mc_ref" }, h("h3", { text: t("ref_title") }), h("p", { class: "mute small", text: t("ref_hint") }),
+      refs.map(function (r) {
+        var over = !r.arrived_at && r.due_date < td;
+        var res = h("input", { placeholder: t("ref_result"), maxlength: "500", class: "rf_res" });
+        return h("div", { class: "qa rf" }, h("div", null, h("b", { text: "➡️ " + r.target }), r.reason ? " — " + r.reason : "",
+            " ", h("span", { class: "chip " + (r.arrived_at ? "ok" : over ? "bad" : "warn"), text: r.arrived_at ? t("ref_arrived_on", { d: A.fmtD(r.arrived_at) }) + (r.result ? ": " + r.result : "") : over ? t("mo_ref_overdue") : t("ref_until", { d: A.fmtD(r.due_date) }) })),
+          h("div", { class: "mute small", text: A.fmtDT(r.created_at) + (r.by ? " · " + r.by : "") }),
+          r.arrived_at ? null : h("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, res, h("button", { class: "btn sm", type: "button", text: t("ref_mark_arrived"), onclick: async function () {
+            var x = await sb.rpc("referral_arrived", { _id: r.id, _date: td, _result: res.value });
+            if (x.error) { A.toast(errText(x.error)); return; } reload();
+          } })));
+      }),
+      h("div", { class: "grid2" }, h("label", null, t("ref_target"), sel, other), h("label", null, t("ref_due"), due)), h("label", null, t("ref_reason"), reason), add);
+  }
+  var FP = ["none", "lam", "condom", "pills", "injection", "implant", "iud", "sterilization"];
+  function fpPanel(m, reload) {
+    var fp = m.fp || {};
+    var sel = h("select", { id: "fp_method" }, h("option", { value: "", text: "—" }), FP.map(function (k) { return h("option", { value: k, selected: fp.method === k ? "" : null, text: t("fp_" + k) }); }));
+    var dt = h("input", { id: "fp_date", type: "date", value: fp.date || today(), max: today() });
+    return h("section", { class: "panel stack", id: "mc_fp" }, h("h3", { text: t("fp_title") }), h("p", { class: "mute small", text: t("fp_hint") }),
+      fp.method ? h("div", null, h("span", { class: "chip ok", text: t("fp_" + fp.method) + " · " + A.fmtD(fp.date) })) : h("div", null, h("span", { class: "chip warn", text: t("fp_not_yet") })),
+      h("div", { class: "grid2" }, h("label", null, t("fp_method"), sel), h("label", null, t("fp_date"), dt)),
+      h("button", { class: "btn", type: "button", id: "fp_save", text: t("save"), onclick: async function () {
+        var x = await sb.rpc("mother_fp_save", { _id: m.id, _method: sel.value || null, _date: sel.value ? dt.value : null });
+        if (x.error) { A.toast(errText(x.error)); return; } A.toast(t("fp_saved")); reload();
+      } }));
+  }
+  function addDays(iso, n) { var d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
   function questionsPanel(m) {
     var qs = m.questions || [];
     if (!qs.length) return null;
@@ -382,6 +431,8 @@ window.MothersModule = function (A) {
     parts.push(h("section", { class: "panel stack" }, h("h3", { text: t("mo_risk180_title") }), riskPanel(m.risk_eval, false)));
     var bpp = bpPanel(m); if (bpp) parts.push(bpp);
     var wp = weightPanel(m); if (wp) parts.push(wp);
+    if (m.status !== "closed") parts.push(referralsPanel(m, reload));
+    if (m.outcome === "delivered" && m.status !== "closed") parts.push(fpPanel(m, reload));
     var qp = questionsPanel(m); if (qp) parts.push(qp);
     var bb = babyPanel(m); if (bb) parts.push(bb);
     // план визитов
@@ -663,7 +714,7 @@ window.MothersModule = function (A) {
         .forEach(function (x) { body.push(h("tr", { class: "sub" }, h("td", { text: "— " + A.mahName(x.mahalla_id) }), cells(x, null))); });
     });
     body.push(h("tr", { class: "tot" }, h("th", { text: t("ms_total") }), cells(total, null)));
-    var exp = h("button", { class: "btn", type: "button", text: t("mo_export"), onclick: function () {
+    var exp = h("button", { class: "btn", type: "button", id: "ms_xlsx", text: t("mo_export"), onclick: function () {
       var head = [t("inst_label"), t("mo_mahalla")].concat(COLS.map(function (c) { return t("ms_" + c); }));
       var data = rows.map(function (x) { return [A.instName(x.institution_id), A.mahName(x.mahalla_id)].concat(COLS.map(function (c) { return x[c] || 0; })); });
       data.push([t("ms_total"), ""].concat(COLS.map(function (c) { return total[c]; })));
@@ -674,7 +725,9 @@ window.MothersModule = function (A) {
         kpi(t("ms_active"), total.active), kpi(t("ms_high_risk"), total.high_risk, total.high_risk ? "warn" : ""), kpi(t("ms_anc_missed_women"), total.anc_missed_women, total.anc_missed_women ? "bad" : "ok"),
         kpi(t("ms_home_missed"), total.home_missed, total.home_missed ? "bad" : "ok"), kpi(t("ms_early_pct"), total.registered_month ? Math.round(total.early * 100 / total.registered_month) + "%" : "—"),
         kpi(t("ms_tg_pct"), total.active ? Math.round(total.tg * 100 / total.active) + "%" : "—")),
+      mapPanel(rows),
       trendPanel(tr && !tr.error ? tr.data || [] : []),
+      monthPanel(),
       h("section", { class: "panel stack" },
         h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center" }, h("h2", { text: t("ms_title") }), exp),
         h("p", { class: "mute small", text: t("ms_hint") }),
@@ -699,6 +752,49 @@ window.MothersModule = function (A) {
         chart("tr_birth", t("ms_t_birth"), "delivered"),
         chart("tr_anc", t("ms_t_anc"), "anc_visits", function (x) { return x.anc_visits + " · " + t("ms_t_home") + ": " + x.home_visits; }),
         chart("tr_alerts", t("ms_t_alerts"), "alerts")));
+  }
+  // карта района: плитка на каждую махаллю — цвет по пропускам и сигналам, число на учёте и высокий риск
+  function mapPanel(rows) {
+    var mh = rows.filter(function (x) { return x.mahalla_id != null; });
+    if (!mh.length) return null;
+    var by = {};
+    mh.forEach(function (x) { var o = by[x.mahalla_id] = by[x.mahalla_id] || { id: x.mahalla_id, active: 0, high: 0, missed: 0, alerts: 0, insts: [] };
+      o.active += x.active || 0; o.high += x.high_risk || 0; o.missed += (x.anc_missed_women || 0) + (x.home_missed || 0); o.alerts += x.alerts || 0; o.insts.push(x.institution_id); });
+    var list = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return A.mahName(a.id).localeCompare(A.mahName(b.id)); });
+    var max = Math.max.apply(null, list.map(function (o) { return o.active; }).concat([1]));
+    return h("section", { class: "panel stack", id: "ms_map" }, h("h2", { text: t("ms_map") }), h("p", { class: "mute small", text: t("ms_map_hint") }),
+      h("div", { class: "mapgrid" }, list.map(function (o) {
+        var tone = o.alerts || o.missed >= 2 ? "bad" : o.missed || o.high ? "warn" : "ok";
+        return h("a", { class: "mtile t-" + tone, href: "#/mothers?i=" + o.insts[0] + "&m=" + o.id, title: A.mahName(o.id),
+            style: "--w:" + Math.max(0.35, o.active / max).toFixed(2) },
+          h("b", { text: A.mahName(o.id) }), h("span", { class: "big", text: String(o.active) }),
+          h("span", { class: "small", text: [o.high ? t("ms_map_high", { n: o.high }) : "", o.missed ? t("ms_map_missed", { n: o.missed }) : "", o.alerts ? "⚠️ " + o.alerts : ""].filter(Boolean).join(" · ") || t("ms_map_ok") }));
+      })),
+      h("div", { class: "legend small mute" }, h("span", { class: "chip ok", text: t("ms_map_ok") }), " ", h("span", { class: "chip warn", text: t("ms_map_l_warn") }), " ", h("span", { class: "chip bad", text: t("ms_map_l_bad") })));
+  }
+  // отчёт за месяц по учреждениям — Excel
+  var MR_COLS = ["on_register", "registered", "early", "high_risk", "delivered", "anc_visits", "home_visits", "referred", "referred_arrived", "fp_counseled", "alerts", "tg"];
+  function monthPanel() {
+    var cur = today().slice(0, 7);
+    var mi = h("input", { type: "month", id: "mr_month", value: cur, max: cur });
+    var out = h("div", { id: "mr_out" });
+    var btn = h("button", { class: "btn primary", type: "button", id: "mr_go", text: t("mr_go"), onclick: async function () {
+      btn.disabled = true; out.textContent = "";
+      var r = await sb.rpc("mothers_month_report", { _month: (mi.value || cur) + "-01" });
+      btn.disabled = false;
+      if (r.error) { A.toast(errText(r.error)); return; }
+      var rows = r.data || [], tot = {}; MR_COLS.forEach(function (c) { tot[c] = rows.reduce(function (a, x) { return a + (x[c] || 0); }, 0); });
+      var head = [t("inst_label")].concat(MR_COLS.map(function (c) { return t("mr_" + c); }));
+      var data = rows.map(function (x) { return [A.instName(x.institution_id)].concat(MR_COLS.map(function (c) { return x[c] || 0; })); });
+      data.push([t("ms_total")].concat(MR_COLS.map(function (c) { return tot[c]; })));
+      out.appendChild(h("div", { class: "tbl" }, h("table", { class: "sumtbl", id: "mr_tbl" }, h("thead", null, h("tr", null, head.map(function (x, i) { return h("th", { class: i ? "num" : "", text: x }); }))),
+        h("tbody", null, data.map(function (row, ri) { return h("tr", { class: ri === data.length - 1 ? "tot" : "" }, row.map(function (v, i) { return h(i ? "td" : "th", { class: i ? "num" : "", text: String(v) }); })); })))));
+      out.appendChild(h("button", { class: "btn", type: "button", id: "mr_xlsx", text: t("mo_export"), onclick: function () {
+        download(window.XLW.write([{ name: t("mr_title"), rows: [[t("mr_title") + " — " + (mi.value || cur)], head].concat(data) }]), "Homiladorlar_oylik_" + (mi.value || cur) + ".xlsx");
+      } }));
+    } });
+    return h("section", { class: "panel stack", id: "ms_month" }, h("h2", { text: t("mr_title") }), h("p", { class: "mute small", text: t("mr_hint") }),
+      h("div", { class: "row", style: "gap:8px;align-items:end;flex-wrap:wrap" }, h("label", null, t("mr_month"), mi), btn), out);
   }
   function kpi(label, val, tone) { return h("div", { class: "kpi " + (tone || "") }, h("div", { class: "kv-v", text: String(val) }), h("div", { class: "small mute", text: label })); }
 

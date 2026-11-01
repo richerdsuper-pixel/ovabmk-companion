@@ -843,7 +843,8 @@ expect_err("вопрос: функции бота закрыты для поль
 expect_ok("витамины: неверный час", "select public.bot_mother_pill_hour(779, 3)->>'error'", "service_role", out="bad_hour")
 HR = int(sql("select extract(hour from now() at time zone 'Asia/Tashkent')::int")[1][0])
 if 5 <= HR <= 23:
-    expect_ok("витамины: час напоминания сохранён", f"select (public.bot_mother_pill_hour(779, {HR})->>'ok') || '/' || (public.bot_mother_view(779)->>'pill_hour')", "service_role", out=f"true/{HR}")
+    expect_ok("витамины: час напоминания сохранён", f"select public.bot_mother_pill_hour(779, {HR})->>'ok'", "service_role", out="true")
+    expect_ok("витамины: час виден на «Моей странице»", "select public.bot_mother_view(779)->>'pill_hour'", "service_role", out=str(HR))
     expect_ok("витамины: напоминание — только то, что не отмечено сегодня", f"select array_to_string(kinds, ',') from public.cron_mother_pills('{SEC}') where telegram_id = 779", "service_role", out="iodine,iron")
     expect_ok("витамины: второй раз за день не напоминаем", f"select count(*) from public.cron_mother_pills('{SEC}') where telegram_id = 779", "service_role", out="0")
 expect_err("витамины: без секрета нельзя", "select * from public.cron_mother_pills('x')", "service_role", "forbidden")
@@ -857,6 +858,35 @@ expect_ok("малыш: дата до родов — ошибка", "select publi
 expect_ok("малыш: неизвестное кормление", "select public.bot_mother_baby(779, 'feed', 'juice', null)->>'error'", "service_role", out="bad_value")
 expect_ok("малыш: на «Моей странице» и в карточке доя", f"select jsonb_array_length(public.mother_get('{M3}')->'baby')", "authenticated", MD, out="3")
 expect_err("малыш: функция бота закрыта", "select public.bot_mother_baby(779, 'weight', '3200', null)", "authenticated", MD, "permission denied")
+
+# 0025: направления
+RF = expect_ok("направление: доя направляет в роддом", f"select public.referral_save('{M3}', 'Районный роддом', 'Давление 145/95', private.today() + 2)", "authenticated", MD)
+expect_err("направление: срок в прошлом", f"select public.referral_save('{M3}', 'Роддом', '', private.today() - 1)", "authenticated", MD, "bad_date")
+expect_err("направление: пустое «куда»", f"select public.referral_save('{M3}', ' ', '', private.today())", "authenticated", MD, "bad_target")
+expect_err("направление: доя другого учреждения не может", f"select public.referral_save('{M3}', 'Роддом', '', private.today())", "authenticated", MO, "forbidden")
+expect_ok("направление: в списке — открыто, не просрочено", f"select ref_open || '/' || ref_overdue from public.mothers_flags() where mother_id = '{M3}'", "authenticated", MD, out="1/0")
+sql(f"update public.referrals set due_date = private.today() - 1 where id = {RF}")
+expect_ok("направление: срок прошёл — просрочено", f"select ref_overdue from public.mothers_flags() where mother_id = '{M3}'", "authenticated", MP, out="1")
+expect_ok("направление: другое учреждение не видит меток", f"select count(*) from public.mothers_flags() where mother_id = '{M3}'", "authenticated", MO, out="0")
+expect_ok("направление: дошла — отметка с результатом", f"select public.referral_arrived({RF}, private.today(), 'Госпитализирована')", "authenticated", MD)
+expect_ok("направление: закрыто после отметки", f"select ref_open from public.mothers_flags() where mother_id = '{M3}'", "authenticated", MD, out="0")
+expect_ok("направление: видно в карточке и на «Моей странице»", f"select public.mother_get('{M3}')->'referrals'->0->>'result'", "authenticated", MD, out="Госпитализирована")
+expect_err("направление: удалить чужое нельзя", f"select public.referral_delete({RF})", "authenticated", MO, "forbidden")
+expect_err("направление: таблица закрыта напрямую", "select * from public.referrals", "authenticated", MD, "permission denied")
+# планирование семьи
+expect_ok("планирование семьи: метод после родов", f"select public.mother_fp_save('{M3}', 'iud', private.today())", "authenticated", MD)
+expect_ok("планирование семьи: метка в списке", f"select fp_method from public.mothers_flags() where mother_id = '{M3}'", "authenticated", MD, out="iud")
+expect_err("планирование семьи: неизвестный метод", f"select public.mother_fp_save('{M3}', 'magic', private.today())", "authenticated", MD, "bad_method")
+expect_err("планирование семьи: дата до родов", f"select public.mother_fp_save('{M3}', 'pills', private.today() - 30)", "authenticated", MD, "bad_date")
+expect_err("планирование семьи: чужое учреждение", f"select public.mother_fp_save('{M3}', 'pills', private.today())", "authenticated", MO, "forbidden")
+# отчёт за месяц
+expect_ok("отчёт за месяц: по учреждению — направлено/дошла/ПС", f"select referred || '/' || referred_arrived || '/' || fp_counseled from public.mothers_month_report(private.today()) where institution_id = {I1}", "authenticated", MD, out="1/1/1")
+expect_ok("отчёт за месяц: другое учреждение — без чужих", f"select count(*) from public.mothers_month_report(private.today()) where institution_id = {I1}", "authenticated", MO, out="0")
+expect_err("отчёт за месяц: посторонним нельзя", "select * from public.mothers_month_report(null)", "authenticated", N, "forbidden")
+# пол малыша
+expect_ok("малыш: пол (заменяется)", "select (public.bot_mother_baby(779, 'sex', 'f', null)->>'ok') || (public.bot_mother_baby(779, 'sex', 'm', null)->>'ok')", "service_role", out="truetrue")
+expect_ok("малыш: пол хранится один", "select string_agg(val, ',') from public.mother_baby b where b.kind = 'sex'", out="m")
+expect_ok("малыш: неверный пол", "select public.bot_mother_baby(779, 'sex', 'x', null)->>'error'", "service_role", out="bad_value")
 
 # PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
 expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",

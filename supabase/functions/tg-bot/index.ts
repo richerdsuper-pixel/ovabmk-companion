@@ -9,9 +9,9 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.ts";
 import { consentButtons, doyaText, isLang, langButtons, type Lang, menuButtons, motherCode, parseBp, parseCb, reminderText, SIGNS, SIGNS_PP, SIGNS_PREG,
-  signButtons, signLabel, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
+  signButtons, signLabel, signRu, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
 import { tipText, type Topic, topicText, topicTitle, TOPICS } from "./info.ts";
-import { answerText, dayButtons, type DayRow, dayText, type Hr36Row, hr36Texts, markText, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
+import { answerText, dayButtons, type DayRow, dayText, type Hr36Row, hr36Texts, locText, markText, validLoc, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
   questionText, STAFF_HELLO, staffMenu } from "./extra.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
@@ -126,6 +126,21 @@ async function sendAlert(tgId: number, signs: string[]): Promise<number | null> 
   }
   return sent;
 }
+// место беременной: к последнему сигналу — точка на карте каждому получателю
+async function sendLocation(tgId: number, lat: number, lon: number): Promise<{ sent: number; error?: string }> {
+  const { data, error } = await admin().rpc("bot_mother_location", { _tg: tgId, _lat: lat, _lon: lon });
+  if (error) return { sent: 0, error: "failed" };
+  const rows = (data ?? []) as { telegram_id: number | null; mother_name: string; mother_phone: string | null; signs: string[]; error: string | null }[];
+  if (rows[0]?.error) return { sent: 0, error: rows[0].error };
+  let sent = 0;
+  for (const r of rows) {
+    if (!r.telegram_id) continue;
+    await tg("sendLocation", { chat_id: r.telegram_id, latitude: lat, longitude: lon }).catch(() => null);
+    const x = await tg("sendMessage", { chat_id: r.telegram_id, text: locText(r.mother_name, r.mother_phone, r.signs ?? [], signRu), disable_web_page_preview: true }).catch(() => null);
+    if (x && x.ok) sent++;
+  }
+  return { sent };
+}
 // давление: запись, ответ и при высоком — сигнал сотрудникам
 async function recordBp(tgId: number, sys: number, dia: number): Promise<{ level?: string; error?: string; sent?: number }> {
   const { data, error } = await admin().rpc("bot_mother_bp", { _tg: tgId, _sys: sys, _dia: dia });
@@ -170,6 +185,7 @@ async function onMotherCb(q: Record<string, any>): Promise<void> {
   if (cb.k === "ms" && cb.sign) {
     const n = await sendAlert(tgId, [cb.sign]);
     await say(chat, tx(n ? "danger_sent" : "danger_nobody", lang, { sign: signLabel(cb.sign, lang), n: n ?? 0 }));
+    if (n) { try { await tg("sendMessage", { chat_id: chat, text: tx("loc_ask", lang), reply_markup: { keyboard: [[{ text: tx("loc_btn", lang), request_location: true }]], resize_keyboard: true, one_time_keyboard: true } }); } catch { /* */ } }
   }
 }
 
@@ -234,6 +250,16 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
     const { data: ok } = await admin().rpc("bot_mother_code_ok", { _code: mc });
     if (ok !== true) { await say(chat, tx("expired", "uz") + "\n" + tx("expired", "ru")); return; }
     await sayKb(chat, tx("choose_lang", "uz") + " / " + tx("choose_lang", "uzl") + " / " + tx("choose_lang", "ru"), langButtons(mc)); return;
+  }
+  if (m.location) {   // беременная отправила, где она (кнопка после тревожного сигнала)
+    const mo = await motherOf(Number(from.id));
+    if (mo) {
+      const lang: Lang = isLang(mo.lang) ? mo.lang : "uz", p = validLoc(m.location.latitude, m.location.longitude);
+      const r = p ? await sendLocation(Number(from.id), p.lat, p.lon) : { sent: 0, error: "bad_location" };
+      try { await tg("sendMessage", { chat_id: chat, text: r.error === "no_alert" ? tx("loc_none", lang) : r.error ? tx("help", lang) : tx("loc_sent", lang, { n: r.sent }),
+        reply_markup: { remove_keyboard: true } }); } catch { /* */ }
+      return;
+    }
   }
   const text = typeof m.text === "string" ? m.text.trim() : "";
   const qid = parseQid(m.reply_to_message?.text);
@@ -327,6 +353,17 @@ Deno.serve(async (req: Request) => {
       const n = await sendAlert(who.id, signs);
       if (n === null) return reply({ error: "failed" }, 500, origin);
       return reply({ sent: n }, 200, origin);
+    }
+    if (body.op === "location") {   // «Моя страница»: место после сигнала
+      const p = validLoc(body.lat, body.lon);
+      if (!p) return reply({ error: "bad_location" }, 200, origin);
+      const r = await sendLocation(who.id, p.lat, p.lon);
+      return reply(r, r.error === "failed" ? 500 : 200, origin);
+    }
+    if (body.op === "birthplan") {   // план родов
+      const p = body.p && typeof body.p === "object" ? body.p : {};
+      const { data, error } = await admin().rpc("bot_mother_birthplan", { _tg: who.id, _p: p });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
     }
     if (body.op === "lang" && isLang(body.lang)) { await admin().rpc("bot_mother_lang", { _tg: who.id, _lang: body.lang }); return reply({ ok: true }, 200, origin); }
     if (body.op === "bp") {

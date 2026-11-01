@@ -1,5 +1,5 @@
 """Проверка интерфейса сайта на мок-данных (без сервера): python3 tests/ui_test.py"""
-import json, sys, pathlib
+import json, sys, pathlib, subprocess
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -1146,7 +1146,9 @@ with sync_playwright() as p:
         "baby": [{"kind": "weight", "val": "3250", "d": "2026-11-15"}, {"kind": "feed", "val": "breast", "d": "2026-11-16"}, {"kind": "vaccine", "val": "БЦЖ", "d": "2026-11-15"}],
         "weights": [{"d": "2026-09-01", "kg": 58, "src": "reg", "ga": 60}, {"d": "2026-11-18", "kg": 62.5, "src": "self", "ga": 138}], "pills": [{"day": "2026-11-18", "kind": "iron"}, {"day": "2026-11-19", "kind": "iron"}, {"day": "2026-11-19", "kind": "iodine"}],
         "visits": [{"id": 5, "no": 0, "date": "2026-10-01", "bp_sys": 118, "bp_dia": 76, "weight": 64, "tests": [], "note": "жалоб нет", "by": "Сотрудник Тест"}], "home": [],
-        "alerts": [{"id": 77, "signs": ["bleeding", "abd_pain"], "at": "2026-11-20T03:00:00Z", "seen_at": None, "seen_by": None}]})
+        "alerts": [{"id": 77, "signs": ["bleeding", "abd_pain"], "at": "2026-11-20T03:00:00Z", "seen_at": None, "seen_by": None}],
+        "labs": [{"id": 9, "kind": "hb", "val": 96, "d": "2026-11-18", "by": "Сотрудник Тест"}], "lab_flags": {"anemia": "moderate", "hb": 96, "gdm": None, "protein": False},
+        "birthplan": None, "locs": [{"alert_id": 77, "lat": 37.95, "lon": 67.6, "at": "2026-11-20T03:05:00Z"}]})
     MTREND = [{"month": f"{2025 + (10 + k) // 12}-{(10 + k) % 12 + 1:02d}-01", "registered": 2 + k % 3, "early": 1 + k % 2, "high_risk": k % 2, "delivered": 1 + k % 2,
            "anc_visits": 10 + k, "home_visits": 3 + k % 4, "alerts": k % 3} for k in range(12)]
     MSUM = [{"institution_id": 1, "mahalla_id": 1, "active": 1, "pregnant": 1, "postpartum": 0, "high_risk": 0, "mid_risk": 0, "early": 0, "anc_due": 1, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 1, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 0, "age35": 0},
@@ -1154,6 +1156,9 @@ with sync_playwright() as p:
             {"institution_id": 2, "mahalla_id": None, "active": 4, "pregnant": 4, "postpartum": 0, "high_risk": 2, "mid_risk": 1, "early": 0, "anc_due": 0, "anc_missed_women": 0, "home_due": 0, "home_missed": 0, "tg": 0, "alerts": 0, "delivered_month": 0, "registered_month": 0, "teen": 1, "age35": 0}]
     HSCH = [{"kind": "ant12", "sort": 1, "base": "lmp", "from_day": 84, "until_day": 97, "label_ru": "Патронаж беременной, 12 недель", "label_uz": "Ҳомиладор патронажи, 12 ҳафта", "who": "mother"},
             {"kind": "pp3", "sort": 3, "base": "birth", "from_day": 0, "until_day": 3, "label_ru": "После выписки: в первые 3 дня (мать и ребёнок)", "label_uz": "Туғруқхонадан кейин 3 кун ичида (она ва бола)", "who": "both"}]
+    XLSX_PATH = ROOT / "tests/node_modules/xlsx/dist/xlsx.full.min.js"
+    if not XLSX_PATH.exists(): subprocess.run(["npm", "i", "--silent", "--no-save", "--prefix", str(ROOT / "tests"), "xlsx@0.18.5"], check=False)
+    XLSX_JS = XLSX_PATH.read_text() if XLSX_PATH.exists() else "window.XLSX=null;"
     def mo_page(uid, roles, hash, w=1200, h_=900, lang=None, position="Акушерка СВП (кабинет доя)"):
         sc_ = scenario(uid, roles)
         sc_["db"]["profiles"] = [{"id": A, "full_name": "Администратор Тест", "position": "Заместитель главного врача", "institution_id": None, "positions": []},
@@ -1168,7 +1173,9 @@ with sync_playwright() as p:
                  "window.__MOCK.rpc.mother_get = function(a){ return " + json.dumps(MGET, ensure_ascii=False) + "; };"
                  "window.__MOCK.rpc.mothers_summary = function(){ return " + json.dumps(MSUM) + "; };"
                  "window.__MOCK.rpc.mothers_trend = function(){ return " + json.dumps(MTREND) + "; };"
-                 "window.__MOCK.rpc.mothers_flags = function(){ return [{mother_id:'" + M1 + "', ref_open:1, ref_overdue:1, fp_method:null, fp_date:null}]; };"
+                 "window.__MOCK.rpc.mothers_flags = function(){ return [{mother_id:'" + M1 + "', ref_open:1, ref_overdue:1, fp_method:null, fp_date:null, anemia:'moderate', gdm:null, protein:false, plan_missing:false}]; };"
+                 "window.__MOCK.rpc.lab_save = function(a){ window.__lab = a; return 10; }; window.__MOCK.rpc.lab_delete = function(a){ window.__labdel = a; return null; };"
+                 "window.__MOCK.rpc.birthplan_save = function(a){ window.__bplan = a; return {ok:true}; };"
                  "window.__MOCK.rpc.mothers_month_report = function(a){ window.__mr = a; if (a._month < '2026-11-01') return [{institution_id:1,on_register:6,registered:4,early:1,high_risk:1,delivered:1,anc_visits:5,home_visits:1,referred:2,referred_arrived:0,fp_counseled:0,alerts:0,tg:1}]; return [{institution_id:1,on_register:7,registered:2,early:1,high_risk:1,delivered:1,anc_visits:9,home_visits:3,referred:2,referred_arrived:1,fp_counseled:1,alerts:1,tg:5}]; };"
                  "window.__MOCK.rpc.referral_save = function(a){ window.__rf = a; return 7; };"
                  "window.__MOCK.rpc.referral_arrived = function(a){ window.__ra = a; return null; };"
@@ -1185,6 +1192,7 @@ with sync_playwright() as p:
         c_.route("**/qrcode-generator*/**", lambda r: r.fulfill(status=200, content_type="application/javascript",
             body="window.qrcode=function(){return{addData:function(){},make:function(){},createSvgTag:function(){return '<svg id=\"qrsvg\"></svg>';}}};"))
         c_.route("**/fonts.g*/**", lambda r: r.abort())
+        c_.route("**/xlsx.full.min.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body=XLSX_JS))
         pg_ = c_.new_page(); er = []; pg_.on("pageerror", lambda e: er.append(str(e)))
         pg_.goto(SITE + hash); pg_.wait_for_timeout(600)
         return b_, pg_, er
@@ -1193,6 +1201,7 @@ with sync_playwright() as p:
     navt = pg.inner_text("nav.nav")
     ok("беременные: в меню доя — «Беременные» и «Патронаж», без офлайн-программы", "Беременные" in navt and "Патронаж" in navt and "Офлайн" not in navt, navt)
     ok("беременные: значок сигналов в меню", pg.locator("nav a[href='#/mothers'] .nbadge").inner_text() == "1")
+    ok("беременные: отметка анемии в списке и фильтр", "Анемия средняя" in pg.locator(".mcard").first.inner_text() and pg.locator(".fchip[data-f=anemia] .n").inner_text() == "1")
     names = pg.locator(".mcard .mname").all_inner_texts()
     ok("беременные: сначала — с сигналом и пропуском", names[0] == "Каримова Дилноза Анваровна", names)
     c0 = pg.locator(".mcard").first.inner_text()
@@ -1239,6 +1248,15 @@ with sync_playwright() as p:
     ok("карточка: отметка «дошла» с результатом", pg.evaluate("window.__ra && window.__ra._id === 3 && window.__ra._result === 'Осмотрена'"))
     pg.select_option("#rf_target", "УЗИ"); pg.fill("#rf_reason", "Контроль роста"); pg.click("#rf_add"); pg.wait_for_timeout(300)
     ok("карточка: новое направление", pg.evaluate("window.__rf && window.__rf._target === 'УЗИ' && window.__rf._reason === 'Контроль роста' && !!window.__rf._due"))
+    ok("карточка: место беременной при сигнале — ссылка на карту", pg.locator("#mc_alerts a.loc-g[href*='37.95,67.6']").count() == 1)
+    ok("карточка: анализы — анемия средняя и гемоглобин 96 г/л", "Анемия средняя" in pg.inner_text("#mc_labs") and "96 г/л" in pg.inner_text("#lab_tbl"), pg.inner_text("#mc_labs")[:300])
+    pg.select_option("#lab_kind", "glucose"); pg.fill("#lab_val", "5,4"); pg.click("#lab_add"); pg.wait_for_timeout(300)
+    ok("карточка: новый анализ (запятая в числе)", pg.evaluate("window.__lab && window.__lab._kind === 'glucose' && window.__lab._val === 5.4 && !!window.__lab._d"))
+    pg.select_option("#lab_kind", "urine_protein"); pg.select_option("#lab_prot", "2"); pg.click("#lab_add"); pg.wait_for_timeout(300)
+    ok("карточка: белок в моче «++»", pg.evaluate("window.__lab._kind === 'urine_protein' && window.__lab._val === 2"))
+    ok("карточка: план родов у беременной", pg.locator("#mc_bplan").count() == 1)
+    pg.fill("#bp_place", "Шўрчи туғруқхонаси"); pg.fill("#bp_driver", "Акмал"); pg.fill("#bp_driver_phone", "90 123 45 67"); pg.check("#bp_docs"); pg.click("#bp_save"); pg.wait_for_timeout(300)
+    ok("карточка: план родов сохраняется", pg.evaluate("window.__bplan && window.__bplan._p.place === 'Шўрчи туғруқхонаси' && window.__bplan._p.driver_phone === '90 123 45 67' && window.__bplan._p.docs === true && window.__bplan._p.bag === false"))
     ok("карточка: беременной — без блока планирования семьи", pg.locator("#mc_fp").count() == 0)
     pg.evaluate("(function(){ var g = window.__mgOrig = window.__MOCK.rpc.mother_get; window.__MOCK.rpc.mother_get = function(a){ var m = JSON.parse(JSON.stringify(g(a))); m.status = 'postpartum'; m.outcome = 'delivered'; m.outcome_date = '2026-11-10'; return m; }; location.hash = '#/mothers'; })()")
     pg.wait_for_timeout(400); pg.evaluate("location.hash = '#/mother/" + M1 + "'"); pg.wait_for_timeout(600)
@@ -1324,6 +1342,28 @@ with sync_playwright() as p:
     ok("список: фильтр по другому учреждению — пусто", pg.locator(".mcard").count() == 0)
     pg.screenshot(path=str(SHOTS / "c_mothers_summary.png"), full_page=True)
     ok("ошибок JS нет (сводка)", not errs, errs); b.close()
+    # загрузка из Excel
+    b, pg, errs = mo_page(S_, ("staff",), "#/mothers")
+    pg.click("#mo_import"); pg.wait_for_timeout(400)
+    ok("загрузка: страница с шаблоном", pg.locator("#im_file").count() == 1 and pg.locator("#im_tpl").count() == 1)
+    with pg.expect_download() as dl3: pg.click("#im_tpl")
+    ok("загрузка: шаблон Excel", dl3.value.suggested_filename == "Homiladorlar_shablon.xlsx")
+    csv = ("Ф.И.О.;Дата рождения;Телефон;Махалля;Адрес;№ карты;ДПМ;ПДР по УЗИ;Беременность (G);Роды (P);Рост, см;Вес, кг;Дата согласия\n"
+           "Каримова Нигора Ахмедовна;15.03.1998;90 123 45 67;Боғишамол;Навбаҳор 12;125;02.08.2026;;2;1;160;58;01.11.2026\n"
+           "Холова Зарина Баходировна;01.01.2000;;Неизвестная;;;10.09.2026;;;;;;\n"
+           "Ан;;;;;;;;;;;;01.11.2026\n")
+    pg.set_input_files("#im_file", files=[{"name": "list.csv", "mimeType": "text/csv", "buffer": csv.encode("utf-8")}]); pg.wait_for_timeout(1200)
+    it = pg.inner_text("#im_out") if pg.locator("#im_out").count() else ""
+    ok("загрузка: 3 строки — 1 готова, 2 с ошибками (нет согласия, короткое Ф.И.О.)", "Строк: 3. Готово к постановке: 1, с ошибками: 2" in it, it[:400])
+    ok("загрузка: махалля найдена, неизвестная — предупреждение", "Боғишамол" in pg.inner_text("#im_tbl") and "махалля «Неизвестная» не найдена" in pg.inner_text("#im_tbl"))
+    pg.check("#im_all"); pg.wait_for_timeout(600)
+    ok("загрузка: «все подписали согласие» — готово 2", "Готово к постановке: 2" in pg.inner_text("#im_sum"))
+    pg.evaluate("window.__saved = []; var o = window.__MOCK.rpc.mother_save; window.__MOCK.rpc.mother_save = function(a){ window.__saved.push(a._d); return window.__saved.length === 2 ? {error:{message:'duplicate'}} : o(a); }; null")
+    pg.click("#im_go"); pg.wait_for_timeout(800)
+    sv = pg.evaluate("window.__saved")
+    ok("загрузка: строки уходят как обычная постановка (даты, телефон, махалля)", len(sv) == 2 and sv[0]["lmp"] == "2026-08-02" and sv[0]["birth_date"] == "1998-03-15" and sv[0]["phone"] == "+998901234567" and sv[0]["mahalla_id"] == 1 and sv[0]["consent_at"] == "2026-11-01" and sv[1]["consent_at"] == "2026-11-20", sv)
+    ok("загрузка: итог — поставлено 1, уже на учёте 1", "поставлено 1, уже были на учёте 1" in pg.inner_text("#im_result"), pg.inner_text("#im_out")[:300])
+    ok("ошибок JS нет (загрузка)", not errs, errs); b.close()
     # советы: питание и памятка доя
     b, pg, errs = mo_page(S_, ("staff",), "#/advice")
     at_ = pg.inner_text("#app")

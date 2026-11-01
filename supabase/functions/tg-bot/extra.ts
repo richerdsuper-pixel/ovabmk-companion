@@ -104,3 +104,12 @@ export function hr36Texts(rows: Hr36Row[], site: string): string[] {
   }
   return out;
 }
+
+// ---------------------------------------------------------------- место беременной при тревожном сигнале (сотрудникам)
+export function locText(name: string, phone: string | null, signs: string[], signRu: (k: string) => string): string {
+  return `📍 Где сейчас беременная: ${name}${phone ? ", " + fmtPhone(phone) : ""}\nСигнал: ${signs.map(signRu).join(", ")}`;
+}
+export function validLoc(lat: unknown, lon: unknown): { lat: number; lon: number } | null {
+  const a = Number(lat), o = Number(lon);
+  return Number.isFinite(a) && Number.isFinite(o) && a >= 35 && a <= 47 && o >= 55 && o <= 75 ? { lat: a, lon: o } : null;
+}

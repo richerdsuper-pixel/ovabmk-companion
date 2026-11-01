@@ -28,7 +28,7 @@ window.MothersModule = function (A) {
   }
   function ageOf(bd) { if (!bd) return null; var a = today(), y = +a.slice(0, 4) - +bd.slice(0, 4); if (a.slice(5) < bd.slice(5)) y--; return y; }
   function errText(e) {
-    var m = A.errMsg(e), k = ["duplicate", "need_consent", "bad_lmp", "bad_edd", "bad_birth_date", "bad_phone", "bad_full_name", "need_institution", "bad_date", "bad_values", "bad_form", "forbidden"]
+    var m = A.errMsg(e), k = ["duplicate", "need_consent", "bad_lmp", "bad_edd", "bad_birth_date", "bad_phone", "bad_full_name", "need_institution", "bad_date", "bad_values", "bad_value", "bad_kind", "bad_form", "forbidden"]
       .filter(function (x) { return m.indexOf(x) >= 0; })[0];
     return k ? t("mo_err_" + k) : t("err_action", { msg: m });
   }
@@ -71,7 +71,7 @@ window.MothersModule = function (A) {
     try {
       var rows = all.slice(0, 600).map(function (m) {
         return { id: m.id, full_name: m.full_name, phone: m.phone, address: m.address, card_no: m.card_no, birth_date: m.birth_date, lmp: m.lmp, edd_us: m.edd_us,
-          risk: m.risk, status: m.status, state: m.state, alerts: m.alerts, tg: m.tg, ref_open: m.ref_open, ref_overdue: m.ref_overdue,
+          risk: m.risk, status: m.status, state: m.state, alerts: m.alerts, tg: m.tg, ref_open: m.ref_open, ref_overdue: m.ref_overdue, anemia: m.anemia, gdm: m.gdm, protein: m.protein, plan_missing: m.plan_missing,
           _mah: m.mahalla_id != null ? A.mahName(m.mahalla_id) : "", _inst: A.instName(m.institution_id) };
       });
       localStorage.setItem(OFF_KEY, JSON.stringify({ uid: S.session && S.session.user.id, at: new Date().toISOString(), rows: rows }));
@@ -110,12 +110,12 @@ window.MothersModule = function (A) {
   }
 
   // ------------------------------------------------------------------ список доя
-  var FILTERS = ["all", "due", "missed", "home", "risk", "alerts", "ref", "fp", "notg", "pp"];
+  var FILTERS = ["all", "due", "missed", "home", "risk", "alerts", "ref", "anemia", "noplan", "fp", "notg", "pp"];
   function passes(m, f) {
     var s = m.state || {};
     return f === "all" ? true : f === "due" ? !!s.due : f === "missed" ? s.missed > 0 : f === "home" ? (s.home_due + s.home_missed) > 0
       : f === "risk" ? m.risk === "high" : f === "alerts" ? m.alerts > 0 : f === "notg" ? !m.tg : f === "pp" ? m.status === "postpartum"
-      : f === "ref" ? m.ref_open > 0 : f === "fp" ? m.status === "postpartum" && !m.fp_method : true;
+      : f === "ref" ? m.ref_open > 0 : f === "anemia" ? !!m.anemia : f === "noplan" ? !!m.plan_missing : f === "fp" ? m.status === "postpartum" && !m.fp_method : true;
   }
   function qParam(route, k) { var r = new RegExp("[?&]" + k + "=([^&]*)").exec(route); return r ? decodeURIComponent(r[1]) : ""; }
 
@@ -128,7 +128,8 @@ window.MothersModule = function (A) {
     if (my !== A.token()) return;
     if (r.error) { if (netDown(A.errMsg(r.error)) && offlineCache(S.session && S.session.user.id)) return offlineView(S.session.user.id); A.shell("mothers", A.failBox(r.error)); return; }
     var flags = {}; ((rr[1] && rr[1].data) || []).forEach(function (x) { flags[x.mother_id] = x; });
-    (r.data || []).forEach(function (m) { var x = flags[m.id] || {}; m.ref_open = x.ref_open || 0; m.ref_overdue = x.ref_overdue || 0; m.fp_method = x.fp_method || null; });
+    (r.data || []).forEach(function (m) { var x = flags[m.id] || {}; m.ref_open = x.ref_open || 0; m.ref_overdue = x.ref_overdue || 0; m.fp_method = x.fp_method || null;
+      m.anemia = x.anemia || null; m.gdm = x.gdm || null; m.protein = !!x.protein; m.plan_missing = !!x.plan_missing; });
     var all = r.data || [], f = qParam(route, "f") || "all", inst = qParam(route, "i"), q = "";
     if (!archive) offSave(all);
     var insts = Array.from(new Set(all.map(function (m) { return m.institution_id; })));
@@ -158,7 +159,7 @@ window.MothersModule = function (A) {
         listBox.appendChild(h("a", { class: "mcard" + (m.alerts ? " alert" : ""), href: "#/mother/" + m.id },
           h("div", { class: "row", style: "justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap" },
             h("b", { class: "mname", text: m.full_name }), h("span", { class: "mute small", text: [age != null ? ageTxt(age) : "", m.card_no ? "№ " + m.card_no : ""].filter(Boolean).join(" · ") })),
-          h("div", { class: "chips" }, stateChips(m), m.ref_overdue ? h("span", { class: "chip bad", text: t("mo_ref_overdue") }) : m.ref_open ? h("span", { class: "chip warn", text: t("mo_ref_open") }) : null),
+          h("div", { class: "chips" }, stateChips(m), m.ref_overdue ? h("span", { class: "chip bad", text: t("mo_ref_overdue") }) : m.ref_open ? h("span", { class: "chip warn", text: t("mo_ref_open") }) : null, labChips(m)),
           h("div", { class: "mute small", text: [A.mahName(m.mahalla_id), m.address, m.phone ? A.fmtPhone(m.phone) : "", insts.length > 1 ? A.instName(m.institution_id) : ""].filter(Boolean).join(" · ") })));
       });
       listBox.appendChild(h("p", { class: "mute small", text: t("mo_shown", { n: list.length, m: all.length }) }));
@@ -177,6 +178,7 @@ window.MothersModule = function (A) {
           h("h2", { text: archive ? t("mo_archive_title") : t("mo_title") }),
           h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
             archive ? h("a", { class: "btn", href: "#/mothers", text: t("mo_back_active") }) : h("a", { class: "btn pri", id: "mo_add", href: "#/mother/new", text: "+ " + t("mo_add") }),
+            archive ? null : h("a", { class: "btn", id: "mo_import", href: "#/mothers/import", text: "📥 " + t("im_btn") }),
             exp, archive ? null : h("a", { class: "btn", href: "#/mothers?arch=1", text: t("mo_archive") }))),
         archive ? null : seg,
         h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, search, mahSel, instSel)),
@@ -404,6 +406,74 @@ window.MothersModule = function (A) {
       }),
       h("div", { class: "grid2" }, h("label", null, t("ref_target"), sel, other), h("label", null, t("ref_due"), due)), h("label", null, t("ref_reason"), reason), add);
   }
+  // ------------------------------------------------------------------ анализы: гемоглобин, сахар натощак, белок в моче (пороги ВОЗ — на сервере)
+  function labChips(m) {
+    var out = [];
+    if (m.anemia) out.push(h("span", { class: "chip " + (m.anemia === "mild" ? "warn" : "bad"), text: t("lab_anemia_" + m.anemia) }));
+    if (m.gdm) out.push(h("span", { class: "chip bad", text: t("lab_gdm_" + m.gdm) }));
+    if (m.protein) out.push(h("span", { class: "chip bad", text: t("lab_protein") }));
+    if (m.plan_missing) out.push(h("span", { class: "chip warn", text: t("bp_missing") }));
+    return out;
+  }
+  var PROT = ["−", "+", "++", "+++"];
+  function labVal(l) { return l.kind === "urine_protein" ? PROT[+l.val] || l.val : String(l.val).replace(".", ",") + " " + t("lab_unit_" + l.kind); }
+  function labsPanel(m, reload) {
+    var labs = m.labs || [], fl = m.lab_flags || {}, td = today();
+    var kind = h("select", { id: "lab_kind" }, ["hb", "glucose", "urine_protein"].map(function (k) { return h("option", { value: k, text: t("lab_k_" + k) }); }));
+    var val = h("input", { id: "lab_val", type: "text", inputmode: "decimal", placeholder: "110", maxlength: "6" });
+    var prot = h("select", { id: "lab_prot", style: "display:none" }, PROT.map(function (x, i) { return h("option", { value: String(i), text: x }); }));
+    kind.addEventListener("change", function () { var p = kind.value === "urine_protein"; prot.style.display = p ? "" : "none"; val.style.display = p ? "none" : ""; val.placeholder = kind.value === "hb" ? "110" : "4,8"; });
+    var d = h("input", { id: "lab_d", type: "date", value: td, max: td });
+    var add = h("button", { class: "btn primary", type: "button", id: "lab_add", text: t("lab_add"), onclick: async function () {
+      var v = kind.value === "urine_protein" ? +prot.value : parseFloat(String(val.value).replace(",", "."));
+      if (!isFinite(v)) { A.toast(t("mo_err_bad_value")); return; }
+      add.disabled = true;
+      var x = await sb.rpc("lab_save", { _mother: m.id, _kind: kind.value, _val: v, _d: d.value });
+      add.disabled = false;
+      if (x.error) { A.toast(errText(x.error)); return; }
+      A.toast(t("u_saved")); reload();
+    } });
+    var flags = labChips({ anemia: fl.anemia, gdm: fl.gdm, protein: fl.protein });
+    return h("section", { class: "panel stack", id: "mc_labs" }, h("h3", { text: t("lab_title") }),
+      flags.length ? h("div", { class: "chips", id: "lab_flags" }, flags, h("span", { class: "mute small", text: t("lab_flag_hint") })) : h("p", { class: "mute small", text: t("lab_hint") }),
+      labs.length ? h("div", { class: "tbl" }, h("table", { id: "lab_tbl" }, h("tbody", null, labs.slice(0, 12).map(function (l) {
+        return h("tr", null, h("td", { text: A.fmtD(l.d) }), h("td", { text: t("lab_k_" + l.kind) }), h("td", null, h("b", { text: labVal(l) })), h("td", { class: "mute small", text: l.by || "" }),
+          h("td", null, h("button", { class: "btn sm", type: "button", title: t("lab_del"), text: "✕", onclick: async function () {
+            var x = await sb.rpc("lab_delete", { _id: l.id }); if (x.error) { A.toast(errText(x.error)); return; } reload(); } })));
+      })))) : null,
+      h("div", { class: "row", style: "gap:8px;align-items:end;flex-wrap:wrap" }, h("label", null, t("lab_kind"), kind), h("label", null, t("lab_val"), val, prot), h("label", null, t("lab_date"), d), add));
+  }
+  // ------------------------------------------------------------------ план родов (доя или сама беременная в «Моей странице»)
+  function birthplanPanel(m, reload) {
+    var b = m.birthplan || {};
+    function inp(k, ph, attrs) { return h("input", Object.assign({ id: "bp_" + k, value: b[k] || "", placeholder: ph || "", maxlength: "120" }, attrs || {})); }
+    var place = inp("place", t("bp_place_ph")), comp = inp("companion", t("bp_companion_ph")), drv = inp("driver", t("bp_driver_ph"));
+    var ph = inp("driver_phone", "+998 90 123 45 67", { type: "tel", inputmode: "tel", value: b.driver_phone ? A.fmtPhone(b.driver_phone) : "" });
+    var docs = h("input", { type: "checkbox", id: "bp_docs", checked: !!b.docs }), bag = h("input", { type: "checkbox", id: "bp_bag", checked: !!b.bag });
+    var save = h("button", { class: "btn primary", type: "button", id: "bp_save", text: t("save"), onclick: async function () {
+      save.disabled = true;
+      var x = await sb.rpc("birthplan_save", { _mother: m.id, _p: { place: place.value, companion: comp.value, driver: drv.value, driver_phone: ph.value, docs: docs.checked, bag: bag.checked } });
+      save.disabled = false;
+      if (x.error) { A.toast(errText(x.error)); return; }
+      if (x.data && x.data.error) { A.toast(t(x.data.error === "bad_phone" ? "mo_err_bad_phone" : "mo_err_bad_form")); return; }
+      A.toast(t("u_saved")); reload();
+    } });
+    var ga = (m.state || {}).ga_days || 0;
+    return h("section", { class: "panel stack", id: "mc_bplan" }, h("h3", { text: "🚗 " + t("bp_title") }),
+      h("p", { class: "mute small", text: t("bp_hint") + (b.updated_at ? " · " + t(b.by_mother ? "bp_by_mother" : "bp_by_staff") + " " + A.fmtDT(b.updated_at) : "") }),
+      !b.place && ga >= 252 ? h("div", { class: "notice warn", text: t("bp_missing_long") }) : null,
+      h("div", { class: "grid2" }, h("label", null, t("bp_place"), place), h("label", null, t("bp_companion"), comp), h("label", null, t("bp_driver"), drv), h("label", null, t("bp_driver_phone"), ph)),
+      h("div", { class: "row", style: "gap:16px;flex-wrap:wrap" }, h("label", { class: "check" }, docs, h("span", { text: t("bp_docs") })), h("label", { class: "check" }, bag, h("span", { text: t("bp_bag") }))), save);
+  }
+  // место беременной при сигнале: ссылки на карты
+  function locLink(m, alertId) {
+    var l = (m.locs || []).filter(function (x) { return x.alert_id === alertId; })[0];
+    if (!l) return null;
+    var q = l.lat + "," + l.lon;
+    return h("div", { class: "small", style: "margin-top:4px" }, "📍 ", h("a", { href: "https://maps.google.com/?q=" + q, target: "_blank", rel: "noopener", class: "loc-g", text: "Google" }), " · ",
+      h("a", { href: "https://yandex.uz/maps/?pt=" + l.lon + "," + l.lat + "&z=16", target: "_blank", rel: "noopener", text: "Яндекс" }));
+  }
+
   var FP = ["none", "lam", "condom", "pills", "injection", "implant", "iud", "sterilization"];
   function fpPanel(m, reload) {
     var fp = m.fp || {};
@@ -471,7 +541,7 @@ window.MothersModule = function (A) {
     if (unseen.length) parts.push(h("section", { class: "panel stack alertbox", id: "mc_alerts" }, h("h3", { text: "⚠ " + t("mo_alerts_title") }),
       unseen.map(function (a) {
         return h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap" },
-          h("div", null, h("b", { text: a.signs.map(function (k) { return t("sg_" + k); }).join(", ") }), h("div", { class: "mute small", text: A.fmtDT(a.at) })),
+          h("div", null, h("b", { text: a.signs.map(function (k) { return t("sg_" + k); }).join(", ") }), h("div", { class: "mute small", text: A.fmtDT(a.at) }), locLink(m, a.id)),
           h("button", { class: "btn sm pri", type: "button", text: t("mo_alert_seen"), onclick: async function () {
             var x = await sb.rpc("mother_alert_seen", { _id: a.id }); if (x.error) { A.toast(errText(x.error)); return; } reload(); } }));
       }), h("p", { class: "small", text: t("mo_alert_hint") })));
@@ -479,6 +549,8 @@ window.MothersModule = function (A) {
     var bpp = bpPanel(m); if (bpp) parts.push(bpp);
     var wp = weightPanel(m); if (wp) parts.push(wp);
     if (m.status !== "closed") parts.push(referralsPanel(m, reload));
+    if (m.status !== "closed") parts.push(labsPanel(m, reload));
+    if (m.status === "pregnant") parts.push(birthplanPanel(m, reload));
     if (m.outcome === "delivered" && m.status !== "closed") parts.push(fpPanel(m, reload));
     var qp = questionsPanel(m); if (qp) parts.push(qp);
     var bb = babyPanel(m); if (bb) parts.push(bb);
@@ -821,7 +893,7 @@ window.MothersModule = function (A) {
       h("div", { class: "legend small mute" }, h("span", { class: "chip ok", text: t("ms_map_ok") }), " ", h("span", { class: "chip warn", text: t("ms_map_l_warn") }), " ", h("span", { class: "chip bad", text: t("ms_map_l_bad") })));
   }
   // отчёт за месяц по учреждениям — Excel
-  var MR_COLS = ["on_register", "registered", "early", "high_risk", "delivered", "anc_visits", "home_visits", "referred", "referred_arrived", "fp_counseled", "alerts", "tg"];
+  var MR_COLS = ["on_register", "registered", "early", "high_risk", "delivered", "anc_visits", "home_visits", "referred", "referred_arrived", "fp_counseled", "anemia", "alerts", "tg"];
   function monthPanel() {
     var cur = today().slice(0, 7);
     var mi = h("input", { type: "month", id: "mr_month", value: cur, max: cur });
@@ -855,7 +927,7 @@ window.MothersModule = function (A) {
     function ind(o) {
       return [["cmp_early_pct", pct(o.early, o.registered), true, true], ["cmp_registered", o.registered, null], ["cmp_hr", o.high_risk, null],
         ["cmp_anc", o.anc_visits, true], ["cmp_home", o.home_visits, true], ["cmp_ref_pct", pct(o.referred_arrived, o.referred), true, true],
-        ["cmp_fp", o.fp_counseled, true], ["cmp_tg_pct", pct(o.tg, o.on_register), true, true], ["cmp_alerts", o.alerts, null]];
+        ["cmp_fp", o.fp_counseled, true], ["cmp_tg_pct", pct(o.tg, o.on_register), true, true], ["cmp_anemia", o.anemia, null], ["cmp_alerts", o.alerts, null]];
     }
     var btn = h("button", { class: "btn primary", type: "button", id: "cmp_go", text: t("cmp_go"), onclick: async function () {
       btn.disabled = true; out.textContent = "";
@@ -904,6 +976,130 @@ window.MothersModule = function (A) {
       h("p", { class: "mute small", text: t("adv_src") })));
   }
 
+  // ------------------------------------------------------------------ загрузка беременных из Excel (готовый список доя)
+  // Столбцы — по шаблону (русские или узбекские заголовки). Каждая строка сохраняется как обычная постановка на учёт (mother_save):
+  // те же проверки, дубли не создаются, группа риска считается сервером. Факторы риска доя отмечает потом в карточке.
+  var IM_COLS = [["full_name", "im_c_name"], ["birth_date", "im_c_bd"], ["phone", "im_c_phone"], ["mahalla", "im_c_mah"], ["address", "im_c_addr"], ["card_no", "im_c_card"],
+    ["lmp", "im_c_lmp"], ["edd_us", "im_c_edd"], ["gravida", "im_c_g"], ["para", "im_c_p"], ["height_cm", "im_c_h"], ["weight_kg", "im_c_w"], ["consent_at", "im_c_cons"]];
+  var XLSX_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise(function (ok, bad) { var sc = document.createElement("script"); sc.src = XLSX_URL; sc.onload = function () { ok(window.XLSX); }; sc.onerror = bad; document.head.appendChild(sc); });
+  }
+  function normH(x) { return String(x == null ? "" : x).toLowerCase().replace(/[^a-zа-яёўқғҳ0-9]/g, ""); }
+  function headerMap(row) {
+    var idx = {};
+    row.forEach(function (cell, i) {
+      var n = normH(cell);
+      IM_COLS.forEach(function (c) {
+        var ru = normH(window.I18N.ru[c[1]]), uz = normH(window.I18N.uz[c[1]]), uzl = normH(window.uzLat(window.I18N.uz[c[1]]));
+        if (n && (n === ru || n === uz || n === uzl) && idx[c[0]] == null) idx[c[0]] = i;
+      });
+    });
+    return idx;
+  }
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function imDate(v) {
+    if (v == null || v === "") return "";
+    if (v instanceof Date && !isNaN(v)) return v.getFullYear() + "-" + p2(v.getMonth() + 1) + "-" + p2(v.getDate());
+    if (typeof v === "number" && v > 20000 && v < 80000) { var d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); }
+    var s = String(v).trim(), m = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/.exec(s);
+    if (m) return m[3] + "-" + p2(+m[2]) + "-" + p2(+m[1]);
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    return m ? m[1] + "-" + m[2] + "-" + m[3] : "bad";
+  }
+  function imPhone(v) {
+    var d = String(v == null ? "" : v).replace(/\D/g, "");
+    if (!d) return "";
+    if (d.length === 9) d = "998" + d;
+    return d.length === 12 && d.slice(0, 3) === "998" ? "+" + d : "bad";
+  }
+  // строки файла → данные для mother_save + замечания
+  function imRows(aoa, inst, consentAll) {
+    var idx = headerMap(aoa[0] || []), byOrder = Object.keys(idx).length < 2;
+    if (byOrder) IM_COLS.forEach(function (c, i) { idx[c[0]] = i; });
+    var mahs = (S.mahallas || []).filter(function (x) { return A.mahInsts(x.id).indexOf(inst) >= 0; });
+    var first = aoa[0] || [], skip = !byOrder || ["", "bad"].indexOf(imDate(first[6])) >= 0 ? 1 : 0;   // без узнаваемых заголовков: первая строка — данные, если в ней дата ДПМ
+    return aoa.slice(skip)
+      .filter(function (r) { return r && r.some(function (x) { return x != null && String(x).trim() !== ""; }); }).slice(0, 500)
+      .map(function (r) {
+        var g = function (k) { return idx[k] == null ? "" : r[idx[k]]; }, warn = [];
+        var d = { institution_id: inst, full_name: String(g("full_name") || "").trim(), birth_date: imDate(g("birth_date")), phone: imPhone(g("phone")),
+          address: String(g("address") || "").trim(), card_no: String(g("card_no") || "").trim(), lmp: imDate(g("lmp")), edd_us: imDate(g("edd_us")),
+          gravida: String(g("gravida") || "").trim(), para: String(g("para") || "").trim(), height_cm: String(g("height_cm") || "").trim(),
+          weight_kg: String(g("weight_kg") || "").replace(",", ".").trim(), consent_at: imDate(g("consent_at")) || consentAll || "", risk_factors: [], notes: "", mahalla_id: null };
+        var mh = String(g("mahalla") || "").trim().toLowerCase();
+        if (mh) { var hit = mahs.filter(function (x) { return x.name.toLowerCase() === mh || window.uzLat(x.name).toLowerCase() === mh; })[0]; if (hit) d.mahalla_id = hit.id; else warn.push(t("im_w_mah", { m: g("mahalla") })); }
+        var err = d.full_name.length < 5 ? "mo_err_bad_full_name" : !d.lmp && !d.edd_us ? "im_e_lmp" : d.lmp === "bad" || d.edd_us === "bad" || d.birth_date === "bad" || d.consent_at === "bad" ? "im_e_date"
+          : d.phone === "bad" ? "mo_err_bad_phone" : !d.consent_at ? "mo_err_need_consent" : null;
+        if (!d.lmp && d.edd_us && d.edd_us !== "bad") d.lmp = A.addDays(d.edd_us, -280);
+        return { d: d, err: err, warn: warn };
+      });
+  }
+  function importView() {
+    var ins = myInsts();
+    if (!ins.length) { A.shell("mothers", h("div", { class: "notice warn", text: t("mo_no_inst") })); return; }
+    var instSel = h("select", { id: "im_inst" }, ins.map(function (id) { return h("option", { value: String(id), text: A.instName(id) }); }));
+    var file = h("input", { type: "file", id: "im_file", accept: ".xlsx,.xls,.csv" });
+    var allChk = h("input", { type: "checkbox", id: "im_all" }), allDate = h("input", { type: "date", id: "im_all_date", value: today(), max: today() });
+    var out = h("div", { id: "im_out", class: "stack" });
+    var rows = [];
+    var tpl = h("button", { class: "btn", type: "button", id: "im_tpl", text: "⬇ " + t("im_tpl"), onclick: function () {
+      var head = IM_COLS.map(function (c) { return t(c[1]); });
+      var ex = [t("im_ex_name"), "15.03.1998", "+998 90 123 45 67", (S.mahallas || [])[0] ? S.mahallas[0].name : "", t("im_ex_addr"), "125", "02.08.2026", "", "2", "1", "160", "58", today().split("-").reverse().join(".")];
+      download(window.XLW.write([{ name: t("im_title"), rows: [head, ex] }]), "Homiladorlar_shablon.xlsx");
+    } });
+    function draw() {
+      out.textContent = "";
+      if (!rows.length) return;
+      var okN = rows.filter(function (r) { return !r.err; }).length;
+      out.appendChild(h("p", { id: "im_sum", text: t("im_found", { n: rows.length, ok: okN, bad: rows.length - okN }) }));
+      out.appendChild(h("div", { class: "tbl" }, h("table", { id: "im_tbl" },
+        h("thead", null, h("tr", null, ["#", t("im_c_name"), t("im_c_lmp"), t("im_c_phone"), t("im_c_mah"), t("im_state")].map(function (x) { return h("th", { text: x }); }))),
+        h("tbody", null, rows.map(function (r, i) {
+          return h("tr", { class: r.err ? "im-bad" : "" }, h("td", { text: String(i + 1) }), h("td", { text: r.d.full_name || "—" }), h("td", { text: r.d.lmp && r.d.lmp !== "bad" ? fmtD(r.d.lmp) : "—" }),
+            h("td", { text: r.d.phone && r.d.phone !== "bad" ? A.fmtPhone(r.d.phone) : "" }), h("td", { text: r.d.mahalla_id ? A.mahName(r.d.mahalla_id) : "" }),
+            h("td", { class: "im-st" }, r.res ? h("span", { class: "chip " + (r.res.ok ? "ok" : "bad"), text: r.res.text }) : r.err ? h("span", { class: "chip bad", text: t(r.err) }) : h("span", { class: "chip", text: t("im_ready") }),
+              r.warn.length ? h("div", { class: "mute small", text: r.warn.join("; ") }) : null));
+        })))));
+      var go = h("button", { class: "btn primary", type: "button", id: "im_go", disabled: !okN, text: t("im_go", { n: okN }), onclick: async function () {
+        go.disabled = true; var done = 0, dup = 0, fail = 0;
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i]; if (r.err || r.res) continue;
+          var x = await sb.rpc("mother_save", { _id: null, _d: r.d });
+          if (x.error) { var dp = /duplicate/.test(A.errMsg(x.error)); if (dp) dup++; else fail++; r.res = { ok: false, text: dp ? t("im_dup") : errText(x.error) }; }
+          else { done++; r.res = { ok: true, text: t("im_done1") }; }
+          if (i % 10 === 9) draw();
+        }
+        draw();
+        out.insertBefore(h("div", { class: "notice " + (fail ? "warn" : "ok"), id: "im_result", text: t("im_result", { ok: done, dup: dup, bad: fail }) }), out.firstChild);
+        out.appendChild(h("a", { class: "btn", href: "#/mothers", text: t("mo_title") }));
+      } });
+      out.appendChild(h("div", { class: "row", style: "gap:8px" }, go));
+      out.appendChild(h("p", { class: "mute small", text: t("im_after") }));
+    }
+    async function parse() {
+      var f = file.files && file.files[0]; if (!f) return;
+      out.textContent = ""; out.appendChild(A.loadingBox());
+      try {
+        var X = await loadXlsx();
+        var wb = /\.csv$/i.test(f.name) ? X.read(await f.text(), { type: "string", raw: true }) : X.read(await f.arrayBuffer(), { type: "array", cellDates: true });
+        var aoa = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+        rows = imRows(aoa, +instSel.value, allChk.checked ? allDate.value : "");
+        if (!rows.length) { out.textContent = ""; out.appendChild(h("div", { class: "notice warn", text: t("im_empty") })); return; }
+        draw();
+      } catch (e) { out.textContent = ""; out.appendChild(h("div", { class: "notice bad", text: t("im_read_err") })); }
+    }
+    file.addEventListener("change", parse); allChk.addEventListener("change", parse); allDate.addEventListener("change", parse); instSel.addEventListener("change", parse);
+    A.shell("mothers", h("div", { class: "stack" },
+      h("section", { class: "panel stack" },
+        h("div", { class: "row", style: "justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" }, h("h2", { text: t("im_title") }), tpl),
+        h("p", { class: "mute small", text: t("im_hint") }),
+        h("div", { class: "row", style: "gap:12px;align-items:end;flex-wrap:wrap" }, ins.length > 1 ? h("label", null, t("inst_label"), instSel) : null, h("label", null, t("im_file"), file)),
+        h("label", { class: "check" }, allChk, h("span", { text: t("im_all") }), allDate)),
+      out));
+  }
+
   // ------------------------------------------------------------------ бланк согласия (печать)
   function consentView() {
     var inst = S.profile && S.profile.institution_id != null ? A.instName(S.profile.institution_id) : "";
@@ -925,5 +1121,5 @@ window.MothersModule = function (A) {
       h("section", { class: "panel" }, block(S.lang === "uzl" ? "uzl" : "uz")), h("section", { class: "panel pbreak" }, block("ru"))));
   }
 
-  return { canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView, adviceView: adviceView, offlineView: offlineView, offlineCache: offlineCache, netDown: netDown };
+  return { canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView, adviceView: adviceView, importView: importView, offlineView: offlineView, offlineCache: offlineCache, netDown: netDown };
 };

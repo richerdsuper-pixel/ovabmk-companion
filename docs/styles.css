@@ -429,3 +429,4 @@ input[type=search],input[type=tel]{background:var(--panel);border:1px solid var(
 .mtile.t-ok{--tile:color-mix(in srgb,var(--ok,#1B6E3A) 18%,transparent)}
 .mtile.t-warn{--tile:color-mix(in srgb,#F5B843 30%,transparent)}
 .mtile.t-bad{--tile:color-mix(in srgb,#B42318 22%,transparent);border-color:#B42318}
+.im-bad td{background:var(--bad-soft)}

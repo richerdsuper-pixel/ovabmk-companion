@@ -90,6 +90,8 @@ svg.chart .bandf{fill:var(--band)}
 .bag label{display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-weight:600}
 .bag label:first-child{border-top:0}
 .bag input{width:22px;height:22px;accent-color:#1B6E3A;flex:none}
+#plan label{display:block;font-size:14px;margin-top:8px} #plan input:not([type=checkbox]){display:block;width:100%;font-size:17px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);margin-top:3px}
+#plan label.chk{display:flex;gap:10px;align-items:center;font-size:15px} #plan .chk input{width:22px;height:22px;accent-color:#1B6E3A;flex:none} #plan .btn{margin-top:10px}
 /* нижнее меню */
 nav.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:10}
 nav.bar .in{display:flex;max-width:640px;width:100%}
@@ -140,6 +142,9 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       ct_alert: "Сообщить доя",
       k_title: "Шевеления малыша", k_hint: "Лягте на бок и нажимайте при каждом шевелении. Обычно 10 шевелений набирается меньше чем за 2 часа.",
       k_btn: "👣 Малыш шевельнулся", k_count: "{n} из 10 · {m} мин", k_done: "✅ 10 шевелений за {m} мин — хорошо.", k_slow: "Прошло больше 2 часов, а шевелений меньше 10 — сообщите доя или поезжайте в роддом.",
+      loc_btn: "📍 Отправить доя, где я", loc_hint: "Если вы не дома — доя и роддом увидят место на карте.", loc_sent: "Место отправлено ({n}).", loc_err: "Не удалось определить место. Скажите адрес по телефону.",
+      pl_title: "🚗 План родов", pl_hint: "Заполните заранее — доя и роддом будут знать, куда и как вы поедете.", pl_place: "Где буду рожать", pl_companion: "Кто будет рядом", pl_driver: "Кто отвезёт",
+      pl_phone: "Телефон водителя", pl_docs: "Документы собраны (паспорт, обменная карта)", pl_bag: "Сумка готова", pl_save: "Сохранить", pl_saved: "Сохранено. Доя видит ваш план.", pl_bad_phone: "Телефон: 9 цифр после +998.",
       k_reset: "Начать заново", bag_title: "Сумка в роддом", bag_n: "Собрано {n} из {t}", more_none: "Счётчики схваток и шевелений появятся с 24 и 28 недель.",
       q_title: "❓ Вопрос доя", q_hint: "Напишите вопрос — доя ответит сюда и в Telegram. Если состояние тяжёлое — не пишите, звоните 103.", q_ph: "Ваш вопрос…", q_send: "Отправить вопрос",
       q_sent: "✅ Вопрос отправлен доя. Ответ придёт в Telegram.", q_many: "Сегодня вопросов уже много — позвоните доя.", q_wait: "ждём ответа", q_mine: "Мои вопросы",
@@ -182,6 +187,9 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       ct_alert: "Доянгизга хабар бериш",
       k_title: "Чақалоқ қимирлаши", k_hint: "Ёнбошлаб ётинг ва ҳар қимирлашда босинг. Одатда 10 та қимирлаш 2 соатдан камроқ вақтда бўлади.",
       k_btn: "👣 Чақалоқ қимирлади", k_count: "10 тадан {n} · {m} дақиқа", k_done: "✅ {m} дақиқада 10 та қимирлаш — яхши.", k_slow: "2 соатдан кўп ўтди, қимирлаш 10 тадан кам — доянгизга хабар беринг ёки туғруқхонага боринг.",
+      loc_btn: "📍 Доянгизга қаердалигимни юбориш", loc_hint: "Уйда бўлмасангиз — доя ва туғруқхона жойни харитада кўради.", loc_sent: "Жой юборилди ({n}).", loc_err: "Жойни аниқлаб бўлмади. Манзилни телефонда айтинг.",
+      pl_title: "🚗 Туғруқ режаси", pl_hint: "Олдиндан тўлдиринг — доя ва туғруқхона қаерга ва қандай боришингизни билади.", pl_place: "Қаерда туғаман", pl_companion: "Ёнимда ким бўлади", pl_driver: "Ким олиб боради",
+      pl_phone: "Ҳайдовчи телефони", pl_docs: "Ҳужжатлар йиғилган (паспорт, алмашинув картаси)", pl_bag: "Сумка тайёр", pl_save: "Сақлаш", pl_saved: "Сақланди. Доя режангизни кўради.", pl_bad_phone: "Телефон: +998 дан кейин 9 рақам.",
       k_reset: "Қайтадан бошлаш", bag_title: "Туғруқхона сумкаси", bag_n: "{t} тадан {n} таси йиғилди", more_none: "Тўлғоқ ва қимирлаш ҳисоблагичлари 24 ва 28 ҳафтадан пайдо бўлади.",
       q_title: "❓ Доянгизга савол", q_hint: "Саволингизни ёзинг — доя шу ерга ва Telegramга жавоб беради. Аҳвол оғир бўлса — ёзманг, 103 га қўнғироқ қилинг.", q_ph: "Саволингиз…", q_send: "Саволни юбориш",
       q_sent: "✅ Савол доянгизга юборилди. Жавоб Telegramга келади.", q_many: "Бугун саволлар кўп — доянгизга қўнғироқ қилинг.", q_wait: "жавоб кутилмоқда", q_mine: "Менинг саволларим",
@@ -598,9 +606,11 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
   }
   function drawMore(main, s) {
     var w = gaW();
+    if (w >= 28) main.appendChild(planCard());
     if (w >= 24) drawCt(main, s);
     if (w >= 28) drawKick(main);
     if (w < 24) main.appendChild(el("div", { class: "card" }, el("p", { class: "mute", text: tr("more_none") })));
+    if (w < 28) main.appendChild(planCard());
     var n = Object.keys(BAGS).filter(function (k) { return BAGS[k]; }).length;
     main.appendChild(el("div", { class: "card bag", id: "bag" }, el("h2", { text: tr("bag_title") }), el("div", { class: "chip", id: "bag_n", text: tr("bag_n", { n: n, t: BAG.length }) }),
       BAG.map(function (x, i) { return el("label", null, el("input", { type: "checkbox", checked: BAGS[i] ? "" : null, onchange: function (e) { BAGS[i] = e.target.checked; store("ovabmq_bag", BAGS); draw(); } }), pair(x)); })));
@@ -643,6 +653,37 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       el("div", { class: "chip", id: "k_count", text: tr("k_count", { n: n, m: mins }) }), state, alertBtn,
       k ? el("button", { class: "btn call", type: "button", text: tr("k_reset"), onclick: function () { KICK = null; store("ovabmq_kick", null); draw(); } }) : null));
   }
+  // место при сигнале: только по нажатию (разрешение браузера), к последнему сигналу
+  function locBtn() {
+    var lo = el("div");
+    var b = el("button", { class: "btn call", type: "button", id: "loc_btn", text: tr("loc_btn"), onclick: function () {
+      b.disabled = true; lo.textContent = "";
+      navigator.geolocation.getCurrentPosition(async function (pos) {
+        var r = await api({ op: "location", lat: pos.coords.latitude, lon: pos.coords.longitude });
+        lo.appendChild(el("div", { class: r.ok && r.data && !r.data.error ? "okmsg" : "alert", id: "loc_out", text: r.ok && r.data && !r.data.error ? tr("loc_sent", { n: r.data.sent || 0 }) : tr("loc_err") }));
+      }, function () { b.disabled = false; lo.appendChild(el("div", { class: "alert", id: "loc_out", text: tr("loc_err") })); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    } });
+    return el("div", { id: "loc" }, el("p", { class: "small mute", text: tr("loc_hint") }), b, lo);
+  }
+  // план родов: беременная заполняет сама, доя видит в карточке
+  function planCard() {
+    var b = DATA.birthplan || {}, o = el("div");
+    function f(k, lbl, attrs) { var i = el("input", Object.assign({ id: "pl_" + k, maxlength: "120", value: b[k] || "" }, attrs || {})); return el("label", null, tr(lbl), i); }
+    var place = f("place", "pl_place"), comp = f("companion", "pl_companion"), drv = f("driver", "pl_driver"), ph = f("driver_phone", "pl_phone", { type: "tel", inputmode: "tel", placeholder: "+998 90 123 45 67", value: b.driver_phone ? fmtPhone(b.driver_phone) : "" });
+    var docs = el("input", { type: "checkbox", id: "pl_docs", checked: b.docs ? "" : null }), bag = el("input", { type: "checkbox", id: "pl_bag", checked: b.bag ? "" : null });
+    var save = el("button", { class: "btn call", type: "button", id: "pl_save", text: tr("pl_save"), onclick: async function () {
+      var v = function (l) { return l.querySelector("input").value; };
+      var p = { place: v(place), companion: v(comp), driver: v(drv), driver_phone: v(ph), docs: docs.checked, bag: bag.checked };
+      save.disabled = true; o.textContent = "";
+      var r = await api({ op: "birthplan", p: p });
+      save.disabled = false;
+      var er = r.data && r.data.error;
+      if (!r.ok || er) { o.appendChild(el("div", { class: "alert", text: er === "bad_phone" ? tr("pl_bad_phone") : tr("err") })); return; }
+      DATA.birthplan = Object.assign({}, b, p); o.appendChild(el("div", { class: "okmsg", text: tr("pl_saved") })); haptic();
+    } });
+    return el("div", { class: "card", id: "plan" }, el("h2", { text: tr("pl_title") }), el("p", { class: "small mute", text: tr("pl_hint") }), place, comp, drv, ph,
+      el("label", { class: "chk" }, docs, tr("pl_docs")), el("label", { class: "chk" }, bag, tr("pl_bag")), save, o);
+  }
   function drawSos(main) {
     var list = (DATA.ui && DATA.ui.signs) ? DATA.ui.signs.map(function (x) { return x.k; }) : (DATA.status === "postpartum" ? PP : PREG);
     var box = el("div", { class: "signs" }, list.map(function (k) { return el("label", null, el("input", { type: "checkbox", value: k }), sg2(k)); }));
@@ -655,6 +696,7 @@ nav.bar button.on{color:var(--accent);background:var(--soft)}
       var r = await api({ op: "alert", signs: picked });
       send.disabled = false;
       out.appendChild(el("div", { class: r.ok && r.data.sent ? "okmsg" : "alert", text: r.ok ? (r.data.sent ? tr("sent", { n: r.data.sent }) : tr("sent0")) : tr("err") }));
+      if (r.ok && navigator.geolocation) out.appendChild(locBtn());
       out.appendChild(el("a", { class: "btn e103", href: "tel:103", text: tr("e103") }));
       haptic("warn");
     } });

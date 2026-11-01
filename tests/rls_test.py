@@ -907,6 +907,40 @@ expect_ok("дежурный: снятие", f"select public.admin_set_duty('{MO}
 expect_ok("дежурный: после снятия сигнал не приходит", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_alert(779, array['fever'])", "service_role", out="3101,4101,4102")
 expect_ok("дежурный: назначение записано в журнал", f"select count(*) from public.audit_log where action = 'duty_set' and object = '{MO}'", out="2")
 
+# 0027: анализы, план родов, место при сигнале
+expect_ok("анализы: гемоглобин 95 г/л", f"select public.lab_save('{MH}', 'hb', 95, private.today()) > 0", "authenticated", MD, out="t")
+expect_ok("анализы: глюкоза натощак 5,4 и белок «+»", f"select (public.lab_save('{MH}', 'glucose', 5.4, private.today()) > 0)::text || (public.lab_save('{MH}', 'urine_protein', 1, private.today()) > 0)::text", "authenticated", MD, out="truetrue")
+expect_ok("анализы: отметки в списке — анемия средняя, ГСД, белок, нет плана родов на 36 неделе", f"select anemia || '/' || gdm || '/' || protein || '/' || plan_missing from public.mothers_flags() where mother_id = '{MH}'", "authenticated", MD, out="moderate/gdm/true/true")
+expect_err("анализы: невозможное значение", f"select public.lab_save('{MH}', 'hb', 900, private.today())", "authenticated", MD, "bad_value")
+expect_err("анализы: белок только 0–3", f"select public.lab_save('{MH}', 'urine_protein', 5, private.today())", "authenticated", MD, "bad_value")
+expect_err("анализы: дата в будущем", f"select public.lab_save('{MH}', 'hb', 120, private.today() + 1)", "authenticated", MD, "bad_date")
+expect_err("анализы: неизвестный вид", f"select public.lab_save('{MH}', 'tsh', 2, private.today())", "authenticated", MD, "bad_kind")
+expect_err("анализы: другое учреждение — нельзя", f"select public.lab_save('{MH}', 'hb', 120, private.today())", "authenticated", MO, "forbidden")
+LB = expect_ok("анализы: новый гемоглобин 104 — анемия лёгкая", f"select public.lab_save('{MH}', 'hb', 104, private.today())", "authenticated", MD)
+expect_ok("анализы: по последнему результату", f"select anemia from public.mothers_flags() where mother_id = '{MH}'", "authenticated", MD, out="mild")
+expect_ok("анализы: в карточке список и отметки", f"select jsonb_array_length(public.mother_get('{MH}')->'labs') || '/' || ((public.mother_get('{MH}')->'lab_flags'->>'hb')::numeric)", "authenticated", MD, out="4/104.0")
+expect_err("анализы: удалить чужое нельзя", f"select public.lab_delete({LB})", "authenticated", MO, "forbidden")
+expect_ok("анализы: удаление", f"select public.lab_delete({LB})", "authenticated", MD)
+expect_ok("отчёт за месяц: анемия (женщины с Hb < 110 за месяц)", f"select anemia from public.mothers_month_report(private.today()) where institution_id = {I1}", "authenticated", MD, out="1")
+expect_err("анализы: таблица закрыта напрямую", "select * from public.mother_labs", "authenticated", MD, "permission denied")
+# план родов
+expect_ok("план родов: доя заполняет, телефон водителя приводится к +998", f"select public.birthplan_save('{MH}', '{{\"place\":\"Шўрчи туман туғруқхонаси\",\"driver\":\"Эри — Акмал\",\"driver_phone\":\"90 123 45 67\",\"docs\":true}}')->>'ok'", "authenticated", MD, out="true")
+expect_ok("план родов: в карточке", f"select (b->>'driver_phone') || '/' || (b->>'docs') || '/' || (b->>'by_mother') from (select public.mother_get('{MH}')->'birthplan' b) x", "authenticated", MD, out="+998901234567/true/false")
+expect_ok("план родов: метка «нет плана» снята", f"select plan_missing from public.mothers_flags() where mother_id = '{MH}'", "authenticated", MD, out="f")
+expect_ok("план родов: неверный телефон", f"select public.birthplan_save('{MH}', '{{\"place\":\"x\",\"driver_phone\":\"123\"}}')->>'error'", "authenticated", MD, out="bad_phone")
+expect_err("план родов: другое учреждение — нельзя", f"select public.birthplan_save('{MH}', '{{}}')", "authenticated", MO, "forbidden")
+expect_ok("план родов: беременная заполняет в боте", "select public.bot_mother_birthplan(779, '{\"place\":\"Роддом\",\"bag\":true}')->>'ok'", "service_role", out="true")
+expect_ok("план родов: заполнено самой беременной", f"select (b->>'bag') || '/' || (b->>'by_mother') from (select public.bot_mother_view(779)->'birthplan' b) x", "service_role", out="true/true")
+expect_ok("план родов: не подключена", "select public.bot_mother_birthplan(1, '{}')->>'error'", "service_role", out="not_linked")
+expect_err("план родов: функция бота закрыта", "select public.bot_mother_birthplan(779, '{}')", "authenticated", MD, "permission denied")
+# место при сигнале
+expect_ok("место: к последнему сигналу — уходит доя и руководителю", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_location(779, 37.95, 67.60)", "service_role", out="3101,4101,4102")
+expect_ok("место: записано у сигнала, видно в карточке", f"select jsonb_array_length(public.mother_get('{M3}')->'locs') || '/' || (public.mother_get('{M3}')->'locs'->0->>'lat')", "authenticated", MD, out="1/37.95")
+expect_ok("место: вне Узбекистана — ошибка", "select error from public.bot_mother_location(779, 10, 10)", "service_role", out="bad_location")
+expect_ok("место: не подключена", "select error from public.bot_mother_location(1, 38, 67)", "service_role", out="not_linked")
+expect_err("место: функция бота закрыта", "select * from public.bot_mother_location(779, 38, 67)", "authenticated", MD, "permission denied")
+expect_ok("сигнал: после переделки — те же получатели", "select string_agg(telegram_id::text, ',' order by telegram_id) from public.bot_mother_alert(779, array['breath'])", "service_role", out="3101,4101,4102")
+
 # PostgREST выполняет STABLE/IMMUTABLE-функции в транзакции только для чтения: такие функции не должны ничего записывать
 expect_ok("ни одна STABLE-функция не пишет в базу (иначе ошибка read-only на сайте)",
           r"""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

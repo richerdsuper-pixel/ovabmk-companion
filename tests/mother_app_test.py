@@ -21,13 +21,14 @@ VIEW = {"lang": "uz", "full_name": "Каримова Дилноза Анваро
         "ui": {"signs": [{"k": "bleeding", "label": "Қонли ажралма, қон кетиши"}, {"k": "contractions", "label": "Бир соатда 4–5 тадан кўп тўлғоқ"}, {"k": "vomit", "label": "5 мартадан кўп қусиш"}],
                "topics": [{"k": "food", "title": "🍎 Овқатланиш ва витаминлар", "text": "• Фолий кислотаси 400 мкг"}, {"k": "signs", "title": "⚠️ Қачон дарҳол шифокорга", "text": "• 5 мартадан кўп қусиш"}]}}
 def run(p, view, tg=True, status=200, search="?l=uz"):
-    b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 390, "height": 840})
+    b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 390, "height": 840}, geolocation={"latitude": 37.95, "longitude": 67.6}, permissions=["geolocation"])
     calls = []
     def fn(route):
         body = json.loads(route.request.post_data or "{}"); calls.append(body)
         if body.get("op") == "alert": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
         elif body.get("op") == "ask": route.fulfill(status=200, content_type="application/json", body=json.dumps({"qid": 9, "sent": 3}))
-        elif body.get("op") in ("weight", "pill", "pill_hour", "baby"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
+        elif body.get("op") == "location": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
+        elif body.get("op") in ("weight", "pill", "pill_hour", "baby", "birthplan"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
         elif body.get("op") == "bp":
             a, b = body["sys"], body["dia"]; lv = "severe" if a >= 160 or b >= 110 else "high" if a >= 140 or b >= 90 else "ok"
             route.fulfill(status=200, content_type="application/json", body=json.dumps({"level": lv}))
@@ -62,6 +63,9 @@ with sync_playwright() as p:
     pg.check("input[value=bleeding]"); pg.click("#send"); pg.wait_for_timeout(400)
     ok("сигнал: отправлены признаки", calls[-1].get("op") == "alert" and calls[-1].get("signs") == ["bleeding"], calls[-1])
     ok("сигнал: ответ и кнопка 103", "Хабар юборилди (3)" in pg.inner_text("#danger") and pg.locator("a[href='tel:103']").count() >= 1)
+    ok("сигнал: кнопка «отправить, где я»", pg.locator("#loc_btn").count() == 1)
+    pg.click("#loc_btn"); pg.wait_for_timeout(800)
+    ok("место: координаты уходят на сервер, ответ", calls[-1].get("op") == "location" and abs(calls[-1].get("lat", 0) - 37.95) < 0.01 and "Жой юборилди (3)" in pg.inner_text("#loc"), (calls[-1], pg.inner_text("#loc") if pg.locator("#loc").count() else ""))
     pg.click("#sosmini"); pg.wait_for_timeout(100)
     ok("SOS в шапке открывает тревожные признаки", pg.locator("#danger").count() == 1)
     pg.click("#tabs button[data-t=charts]"); pg.wait_for_timeout(200)
@@ -106,6 +110,9 @@ with sync_playwright() as p:
     late = json.loads(json.dumps(VIEW)); late["state"]["ga_days"] = 230
     b, pg, errs, calls = run(p, late)
     pg.click("#tabs button[data-t=more]"); pg.wait_for_timeout(200)
+    ok("ещё: план родов на 33 неделе — сверху", pg.locator("#plan").count() == 1 and pg.locator("main .card").first.get_attribute("id") == "plan")
+    pg.fill("#pl_place", "Шўрчи туғруқхонаси"); pg.fill("#pl_driver_phone", "901234567"); pg.check("#pl_bag"); pg.click("#pl_save"); pg.wait_for_timeout(300)
+    ok("план родов: сохраняется", calls[-1].get("op") == "birthplan" and calls[-1]["p"]["place"] == "Шўрчи туғруқхонаси" and calls[-1]["p"]["bag"] is True and "Сақланди" in pg.inner_text("#plan"), calls[-1])
     ok("ещё: счётчик схваток с 24 недель, шевелений — с 28 (33 нед: оба)", pg.locator("#ct_btn").count() == 1 and pg.locator("#k_btn").count() == 1 and pg.locator("#bag").count() == 1)
     for i in range(4):
         pg.click("#ct_btn"); pg.wait_for_timeout(60); pg.click("#ct_btn"); pg.wait_for_timeout(60)

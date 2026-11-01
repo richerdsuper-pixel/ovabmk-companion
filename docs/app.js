@@ -334,6 +334,7 @@
     if (route === "/consent") return mv().consentView();
     if (route === "/advice" || route.indexOf("/advice?") === 0) return mv().canMothers() || canSummary() ? mv().adviceView(route) : forbidden("advice");
     if (route === "/mothers" || route.indexOf("/mothers?") === 0) return mv().canMothers() ? mv().listView(route) : forbidden("mothers");
+    if (route === "/mothers/import") return mv().canMothers() ? mv().importView() : forbidden("mothers");
     if (route === "/mother/new") return mv().canMothers() ? mv().formView(null) : forbidden("mothers");
     if ((m = /^\/mother\/([0-9a-f-]{36})(\/edit)?$/.exec(route))) return m[2] ? mv().formView(m[1]) : mv().cardView(m[1]);
     if (route === "/patronage" || route.indexOf("/patronage?") === 0) return mv().canMothers() ? mv().patronageView(route) : forbidden("patronage");

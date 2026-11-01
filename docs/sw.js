@@ -1,7 +1,7 @@
 // OvaBMҚ: сайт открывается без интернета. Сначала сеть, при её отсутствии — сохранённая копия.
 // Данные (Supabase) не кэшируются: список беременных без сети — из сохранённого в браузере (docs/mothers.js, только чтение).
 // Кэш офлайн-программы (docs/app/, имя «ovabmq-…») не трогаем.
-var C = "ovabmk-site-v1";
+var C = "ovabmk-site-v2";
 var FILES = ["./", "index.html", "styles.css", "config.js", "i18n.js", "i18n_mothers.js", "positions.js", "indicators.js", "xlsx.js", "charts.js",
   "advice.js", "mothers.js", "app.js", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"];
 self.addEventListener("install", function (e) {

@@ -34,3 +34,21 @@ select cron.schedule('duty-hr36-0825', '25 3 * * *', $$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
     body := '{"action":"mother_remind","mode":"duty36"}'::jsonb)
 $$);
+-- 7) (после 0028) каждый день в 09:41 по Ташкенту (04:41 UTC) — прививки ребёнку по календарю (копия — родственникам в боте).
+select cron.schedule('mother-vacc-0941', '41 4 * * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"vaccines"}'::jsonb)
+$$);
+-- 8) (после 0028) каждый день в 11:17 по Ташкенту (06:17 UTC) — анонимный опрос на 10–20-й день после родов (один раз).
+select cron.schedule('mother-survey-1117', '17 6 * * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"survey"}'::jsonb)
+$$);
+-- 9) (после 0028) 1-го числа в 09:07 по Ташкенту (04:07 UTC) — итоги прошлого месяца тем, кому администратор отметил «Ежемесячный отчёт».
+select cron.schedule('month-digest-1st', '7 4 1 * *', $$
+  select net.http_post(url := 'https://hisbflzmobndjbtmntjg.supabase.co/functions/v1/tg-bot',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', (select secret from private.cron_secret)),
+    body := '{"action":"mother_remind","mode":"month"}'::jsonb)
+$$);

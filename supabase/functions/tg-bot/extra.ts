@@ -113,3 +113,51 @@ export function validLoc(lat: unknown, lon: unknown): { lat: number; lon: number
   const a = Number(lat), o = Number(lon);
   return Number.isFinite(a) && Number.isFinite(o) && a >= 35 && a <= 47 && o >= 55 && o <= 75 ? { lat: a, lon: o } : null;
 }
+
+// ---------------------------------------------------------------- семья: выбор, кем приходится (fr:<relation>:<код>)
+export const RELATIONS = ["husband", "mother", "mother_in_law", "other"] as const;
+export function parseFamCb(data: unknown): { rel: string; code: string } | null {
+  if (typeof data !== "string" || data.length > 64) return null;
+  const m = /^fr:(husband|mother|mother_in_law|other):(f[0-9a-f]{24})$/.exec(data);
+  return m ? { rel: m[1], code: m[2] } : null;
+}
+export function familyCode(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const m = /^\/start(?:@\w+)?\s+(f[0-9a-f]{24})\s*$/.exec(text.trim());
+  return m ? m[1] : null;
+}
+
+// ---------------------------------------------------------------- опрос после родов: sv:<вопрос>:<ответ>
+export function parseSurveyCb(data: unknown): { q: number; v: number } | null {
+  if (typeof data !== "string") return null;
+  const m = /^sv:([1-4]):([0-5])$/.exec(data);
+  return m ? { q: +m[1], v: +m[2] } : null;
+}
+export function surveyButtons(q: number, yes: string, no: string) {
+  return q === 2 || q === 3 ? [[{ text: yes, callback_data: `sv:${q}:1` }, { text: no, callback_data: `sv:${q}:0` }]]
+    : [[1, 2, 3, 4, 5].map((v) => ({ text: String(v), callback_data: `sv:${q}:${v}` }))];
+}
+
+// ---------------------------------------------------------------- ежемесячный отчёт (хокимияту и руководителям)
+type Tot = Record<string, number>;
+const MON = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const MON_UZ = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+function pct(a: number, b: number): number | null { return b ? Math.round(a * 100 / b) : null; }
+function delta(c: number, p: number): string { return c === p ? "" : c > p ? ` ▲${c - p}` : ` ▼${p - c}`; }
+export function monthDigestText(month: string, cur: Tot, prev: Tot, site: string): string {
+  const m = +month.slice(5, 7) - 1, y = month.slice(0, 4);
+  const g = (k: string) => Number(cur[k] ?? 0), h = (k: string) => Number(prev[k] ?? 0);
+  const line = (label: string, k: string) => `${label}: ${g(k)}${delta(g(k), h(k))}`;
+  const ep = pct(g("early"), g("registered")), ra = pct(g("referred_arrived"), g("referred"));
+  return [`📊 OvaBMҚ — итоги за ${MON[m]} ${y}`, `${MON_UZ[m]} ${y} ойи якунлари`, "",
+    line("Взяты на учёт / Ҳисобга олинди", "registered") + (ep != null ? ` (до 12 нед: ${ep}%)` : ""),
+    line("Высокий риск (новые) / Юқори хавф", "high_risk"),
+    line("Роды / Туғруқлар", "delivered"),
+    line("Визиты к доя / Доя кўриклари", "anc_visits"),
+    line("Патронаж", "home_visits"),
+    line("Направлены / Йўлланма", "referred") + (ra != null ? ` (дошли: ${ra}%)` : ""),
+    line("Анемия (Hb < 110) / Камқонлик", "anemia"),
+    line("Сигналы из бота / Ботдан хабарлар", "alerts"),
+    line("На учёте / Ҳисобда", "on_register"), "",
+    `▲▼ — по сравнению с прошлым месяцем. Подробно: ${site}#/mothers/summary`].join("\n");
+}

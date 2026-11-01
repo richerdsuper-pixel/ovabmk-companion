@@ -9,10 +9,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { approvedText, bindReply, helloText, isCode, startCode } from "./texts.ts";
 import { consentButtons, doyaText, isLang, langButtons, type Lang, menuButtons, motherCode, parseBp, parseCb, reminderText, SIGNS, SIGNS_PP, SIGNS_PREG,
-  signButtons, signLabel, signRu, staffAlertText, staffDigestText, tx, verifyInitData, visitText } from "./mother.ts";
+  signButtons, signLabel, signRu, staffAlertText, staffDigestText, tx, uzLat, verifyInitData, visitText } from "./mother.ts";
 import { tipText, type Topic, topicText, topicTitle, TOPICS } from "./info.ts";
 import { answerText, dayButtons, type DayRow, dayText, type Hr36Row, hr36Texts, locText, markText, validLoc, parsePillCb, parseQid, parseStaffCb, pillButtons, pillDone, pillText,
-  questionText, STAFF_HELLO, staffMenu } from "./extra.ts";
+  questionText, STAFF_HELLO, staffMenu, familyCode, parseFamCb, parseSurveyCb, surveyButtons, monthDigestText, RELATIONS } from "./extra.ts";
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -21,6 +21,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SITE = Deno.env.get("SITE_URL") ?? "https://richerdsuper-pixel.github.io/ovabmk-companion/";
 const ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://richerdsuper-pixel.github.io").split(",").map((s) => s.trim());
 const APP_URL = SITE.replace(/\/?$/, "/") + "mother.html";
+const BOT_LINK = "https://t.me/" + (Deno.env.get("BOT_USERNAME") ?? "OvaBMQbot");
 const EMAIL_DOMAIN = "tg.ovabmk-companion.example.com"; // как в tg-login: служебный адрес, писем нет
 const FORM_ERRORS = ["bad_full_name", "bad_phone", "need_institution", "bad_positions", "bad_rate", "over_rate", "bad_form", "too_many_requests"];
 const ACCEPT_ERRORS = ["invite_invalid", "invite_used", "invite_expired", "invite_revoked", "telegram_taken", "request_not_approved"];
@@ -115,6 +116,21 @@ async function motherOf(tgId: number): Promise<Record<string, any> | null> {
   const { data } = await admin().rpc("bot_mother_view", { _tg: tgId });
   return (data as Record<string, any>) ?? null;
 }
+type FamRow = { telegram_id: number; relation: string; lang: string; first_name: string };
+async function familyOf(tgId: number): Promise<FamRow[]> {
+  const { data } = await admin().rpc("bot_family_of", { _tg: tgId });
+  return (data ?? []) as FamRow[];
+}
+// копия сообщения родственникам беременной (муж, мама, свекровь — с её согласия)
+async function toFamily(tgId: number, make: (lang: Lang, name: string) => string): Promise<number> {
+  let sent = 0;
+  for (const f of await familyOf(tgId)) {
+    const lang: Lang = isLang(f.lang) ? f.lang : "uz";
+    const x = await tg("sendMessage", { chat_id: f.telegram_id, text: make(lang, f.first_name || ""), disable_web_page_preview: true }).catch(() => null);
+    if (x && x.ok) sent++;
+  }
+  return sent;
+}
 async function sendAlert(tgId: number, signs: string[]): Promise<number | null> {
   const { data, error } = await admin().rpc("bot_mother_alert", { _tg: tgId, _signs: signs });
   if (error) return null;
@@ -124,6 +140,7 @@ async function sendAlert(tgId: number, signs: string[]): Promise<number | null> 
     const x = await tg("sendMessage", { chat_id: r.telegram_id, text: staffAlertText(signs, r, SITE.replace(/\/?$/, "/")), disable_web_page_preview: true }).catch(() => null);
     if (x && x.ok) sent++;
   }
+  await toFamily(tgId, (lang, name) => tx("fam_alert", lang, { name, sign: signs.map((k) => signLabel(k, lang)).join(", ") }));
   return sent;
 }
 // место беременной: к последнему сигналу — точка на карте каждому получателю
@@ -216,8 +233,26 @@ async function onPillCb(q: Record<string, any>, kinds: string[]): Promise<void> 
   try { await tg("answerCallbackQuery", { callback_query_id: q.id, text: pillDone(lang) }); } catch { /* */ }
   await say(chat, pillDone(lang));
 }
-// ответ сотрудника на вопрос беременной (Reply на сообщение бота с #q…)
-async function onStaffReply(chat: number, tgId: number, qid: number, text: string): Promise<boolean> {
+// вопрос доя (текстом из мини-приложения или голосом в боте): сотрудникам — текст с #q, и сам голос следом
+async function askDoya(tgId: number, text: string, voice?: { chat: number; msg: number }): Promise<{ qid?: number; sent: number; error?: string }> {
+  const { data, error } = await admin().rpc("bot_mother_ask", { _tg: tgId, _text: text.slice(0, 1000) });
+  if (error) return { sent: 0, error: "failed" };
+  const r = (data ?? {}) as { error?: string; qid?: number; q?: string; mother_id?: string; mother_name?: string; mother_phone?: string | null; recipients?: number[] };
+  if (r.error) return { sent: 0, error: r.error };
+  let sent = 0;
+  for (const id of r.recipients ?? []) {
+    const x = await tg("sendMessage", { chat_id: id, text: questionText(r.qid!, r.q ?? "", r.mother_name ?? "", r.mother_phone ?? null, r.mother_id ?? "", SITE), disable_web_page_preview: true }).catch(() => null);
+    if (!(x && x.ok)) continue;
+    sent++;
+    if (voice) {
+      const j = await x.json().catch(() => null) as { result?: { message_id?: number } } | null;
+      await tg("copyMessage", { chat_id: id, from_chat_id: voice.chat, message_id: voice.msg, reply_to_message_id: j?.result?.message_id }).catch(() => null);
+    }
+  }
+  return { qid: r.qid, sent };
+}
+// ответ сотрудника на вопрос беременной (Reply на сообщение бота с #q…), текстом или голосом
+async function onStaffReply(chat: number, tgId: number, qid: number, text: string, voiceMsg?: number): Promise<boolean> {
   const { data, error } = await admin().rpc("bot_staff_answer", { _tg: tgId, _qid: qid, _text: text });
   if (error) return false;
   const r = (data ?? {}) as { ok?: boolean; error?: string; q?: string; a?: string; staff_name?: string; telegram_id?: number; lang?: string };
@@ -228,9 +263,39 @@ async function onStaffReply(chat: number, tgId: number, qid: number, text: strin
     const lang: Lang = isLang(r.lang) ? r.lang : "uz";
     const x = await tg("sendMessage", { chat_id: r.telegram_id, text: answerText(lang, r.q ?? "", r.a ?? "", r.staff_name ?? ""), disable_web_page_preview: true }).catch(() => null);
     sent = !!(x && x.ok);
+    if (sent && voiceMsg) await tg("copyMessage", { chat_id: r.telegram_id, from_chat_id: chat, message_id: voiceMsg }).catch(() => null);
   }
   await say(chat, sent ? "✅ Ответ отправлен беременной." : "Ответ сохранён, но беременная не подключена к боту — позвоните ей.");
   return true;
+}
+
+// ---------------------------------------------------------------- семья и опрос
+async function onFamCb(q: Record<string, any>, cb: { rel: string; code: string }): Promise<void> {
+  const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id);
+  try { await tg("answerCallbackQuery", { callback_query_id: q.id }); } catch { /* */ }
+  const { data } = await admin().rpc("bot_family_link", { _code: cb.code, _tg: tgId, _relation: cb.rel });
+  const r = (data ?? {}) as { ok?: boolean; error?: string; first_name?: string; lang?: string };
+  const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+  if (!r.ok) {
+    const k = r.error === "is_mother" ? "fam_is_mother" : r.error === "too_many" ? "fam_too_many" : "fam_expired";
+    await say(chat, tx(k, "uz") + "\n" + tx(k, "ru")); return;
+  }
+  await say(chat, tx("fam_welcome", lang, { name: r.first_name || "" }));
+}
+async function onSurveyCb(q: Record<string, any>, cb: { q: number; v: number }): Promise<void> {
+  const chat = Number(q.message?.chat?.id ?? q.from?.id), tgId = Number(q.from?.id), mid = q.message?.message_id;
+  try { await tg("answerCallbackQuery", { callback_query_id: q.id }); } catch { /* */ }
+  const { data } = await admin().rpc("bot_survey_answer", { _tg: tgId, _q: cb.q, _v: cb.v });
+  const r = (data ?? {}) as { ok?: boolean; next?: number };
+  if (!r.ok) return;
+  const mo = await motherOf(tgId), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
+  const text = r.next ? tx("sv_q" + r.next, lang) : tx("sv_thanks", lang);
+  const kb = r.next ? surveyButtons(r.next, tx("sv_yes", lang), tx("sv_no", lang)) : [];
+  const x = mid ? await tg("editMessageText", { chat_id: chat, message_id: mid, text, reply_markup: { inline_keyboard: kb } }).catch(() => null) : null;
+  if (!(x && x.ok)) await sayKb(chat, text, kb);
+}
+function famChooseKb(code: string) {
+  return [RELATIONS.slice(0, 2), RELATIONS.slice(2)].map((row) => row.map((rel) => ({ text: tx("rel_" + rel, "uz") + " / " + tx("rel_" + rel, "ru"), callback_data: `fr:${rel}:${code}` })));
 }
 
 // ---------------------------------------------------------------- Telegram webhook
@@ -238,6 +303,10 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
   if (u.callback_query) {
     const sc = parseStaffCb(u.callback_query.data);
     if (sc) { await onStaffCb(u.callback_query, sc); return; }
+    const fc = parseFamCb(u.callback_query.data);
+    if (fc) { await onFamCb(u.callback_query, fc); return; }
+    const sv = parseSurveyCb(u.callback_query.data);
+    if (sv) { await onSurveyCb(u.callback_query, sv); return; }
     const pk = parsePillCb(u.callback_query.data);
     if (pk) { await onPillCb(u.callback_query, pk); return; }
     await onMotherCb(u.callback_query); return;
@@ -245,6 +314,10 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
   const m = u.message;
   if (!m || !m.from || m.chat?.type !== "private") return;
   const from = m.from, chat = Number(m.chat.id);
+  const fcode = familyCode(m.text);
+  if (fcode) {   // родственник открыл ссылку беременной
+    await sayKb(chat, tx("fam_choose", "uz") + "\n\n" + tx("fam_choose", "ru"), famChooseKb(fcode)); return;
+  }
   const mc = motherCode(m.text);
   if (mc) {
     const { data: ok } = await admin().rpc("bot_mother_code_ok", { _code: mc });
@@ -264,8 +337,19 @@ async function onUpdate(u: Record<string, any>): Promise<void> {
   const text = typeof m.text === "string" ? m.text.trim() : "";
   const qid = parseQid(m.reply_to_message?.text);
   if (qid && text && await onStaffReply(chat, Number(from.id), qid, text)) return;
+  if (m.voice || m.audio) {   // голосовой вопрос беременной или голосовой ответ сотрудника
+    if (qid && await onStaffReply(chat, Number(from.id), qid, "🎤 Голосовой ответ", Number(m.message_id))) return;
+    const mo = await motherOf(Number(from.id));
+    if (mo) {
+      const lang: Lang = isLang(mo.lang) ? mo.lang : "uz";
+      const r = await askDoya(Number(from.id), "🎤 Голосовое сообщение", { chat, msg: Number(m.message_id) });
+      await say(chat, r.error === "too_many" ? tx("bp_many", lang) : r.error ? tx("help", lang) : tx("voice_sent", lang, { n: r.sent })); return;
+    }
+  }
   if (/^\/stop(@\w+)?$/.test(text)) {
     const mo = await motherOf(Number(from.id)), lang: Lang = mo && isLang(mo.lang) ? mo.lang : "uz";
+    const { data: fam } = await admin().rpc("bot_family_stop", { _tg: Number(from.id) });
+    if (fam === true) { await say(chat, tx("fam_stopped", "uz") + "\n" + tx("fam_stopped", "ru")); return; }
     const { data: was } = await admin().rpc("bot_mother_stop", { _tg: Number(from.id) });
     if (was === true) { try { await tg("setChatMenuButton", { chat_id: chat, menu_button: { type: "default" } }); } catch { /* */ } }
     await say(chat, was === true ? tx("stopped", lang) : tx("not_linked", lang)); return;
@@ -333,6 +417,28 @@ Deno.serve(async (req: Request) => {
       reply_markup: { inline_keyboard: [[{ text: "Войти / Kirish", url }]] } }).catch(() => null);
     return reply({ sent: !!(r && r.ok) }, 200, origin);
   }
+  if (body.action === "announce") {   // объявление беременным учреждения / махалли — от имени сотрудника (права проверяет база)
+    const auth = req.headers.get("authorization") ?? "";
+    if (!auth.toLowerCase().startsWith("bearer ") || !ANON_KEY) return reply({ error: "bad_request" }, 400, origin);
+    const user = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } }, auth: { persistSession: false, autoRefreshToken: false } });
+    const mah = Array.isArray(body.mahallas) ? (body.mahallas as unknown[]).map(Number).filter(Number.isInteger).slice(0, 200) : null;
+    const { data: id, error } = await user.rpc("announce_create", { _inst: Number(body.institution) || 0, _mah: mah && mah.length ? mah : null, _body: String(body.body ?? "").slice(0, 1000) });
+    if (error) {
+      const k = ["forbidden", "bad_text", "too_many"].find((x) => (error.message ?? "").includes(x)) ?? "failed";
+      return reply({ error: k }, k === "forbidden" ? 403 : 400, origin);
+    }
+    const db = admin();
+    const { data: rows } = await db.rpc("announce_targets", { _id: id });
+    let sent = 0;
+    for (const r of (rows ?? []) as { telegram_id: number; lang: string; body: string; inst_name: string }[]) {
+      const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+      const x = await tg("sendMessage", { chat_id: r.telegram_id, text: `📢 ${r.inst_name}\n\n${r.body}`, disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: menuButtons(lang, APP_URL) } }).catch(() => null);
+      if (x && x.ok) sent++;
+    }
+    await db.rpc("announce_done", { _id: id, _total: (rows ?? []).length, _sent: sent });
+    return reply({ id, total: (rows ?? []).length, sent }, 200, origin);
+  }
   if (body.action === "staff_app") {   // сайт открыт внутри Telegram: вход сотрудника по подписи Telegram
     const who = await verifyInitData(typeof body.init === "string" ? body.init : "", BOT_TOKEN);
     if (!who) return reply({ error: "unauthorized" }, 401, origin);
@@ -378,16 +484,23 @@ Deno.serve(async (req: Request) => {
       return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
     }
     if (body.op === "ask") {   // вопрос доя
-      const { data, error } = await admin().rpc("bot_mother_ask", { _tg: who.id, _text: typeof body.text === "string" ? body.text.slice(0, 1000) : "" });
+      const r = await askDoya(who.id, typeof body.text === "string" ? body.text : "");
+      if (r.error) return reply({ error: r.error }, r.error === "failed" ? 500 : 200, origin);
+      return reply({ qid: r.qid, sent: r.sent }, 200, origin);
+    }
+    if (body.op === "family_invite") {   // ссылка для мужа / мамы / свекрови
+      const { data, error } = await admin().rpc("bot_family_invite", { _tg: who.id });
       if (error) return reply({ error: "failed" }, 500, origin);
-      const r = (data ?? {}) as { error?: string; qid?: number; q?: string; mother_id?: string; mother_name?: string; mother_phone?: string | null; recipients?: number[] };
-      if (r.error) return reply({ error: r.error }, 200, origin);
-      let sent = 0;
-      for (const id of r.recipients ?? []) {
-        const x = await tg("sendMessage", { chat_id: id, text: questionText(r.qid!, r.q ?? "", r.mother_name ?? "", r.mother_phone ?? null, r.mother_id ?? "", SITE), disable_web_page_preview: true }).catch(() => null);
-        if (x && x.ok) sent++;
-      }
-      return reply({ qid: r.qid, sent }, 200, origin);
+      const r = (data ?? {}) as { code?: string; error?: string };
+      return reply(r.code ? { link: BOT_LINK + "?start=" + r.code } : r, 200, origin);
+    }
+    if (body.op === "vacc") {   // календарь прививок для вкладки «Малыш»
+      const { data, error } = await admin().rpc("vacc_list");
+      return reply(error ? { error: "failed" } : data ?? [], error ? 500 : 200, origin);
+    }
+    if (body.op === "family_remove") {
+      const { data, error } = await admin().rpc("bot_family_remove", { _tg: who.id, _id: Number(body.id) || 0 });
+      return reply(error ? { error: "failed" } : data, error ? 500 : 200, origin);
     }
     if (body.op === "pill_hour") {
       const h = body.hour === null ? null : Number(body.hour);
@@ -437,6 +550,42 @@ Deno.serve(async (req: Request) => {
       }
       return reply({ total: (data ?? []).length, sent }, 200, origin);
     }
+    if (body.mode === "vaccines") {   // прививки ребёнку по календарю (до 5 лет)
+      const { data, error } = await db.rpc("cron_mother_vaccines", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; lang: string; first_name: string; labels_ru: string[]; labels_uz: string[] }[]) {
+        const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+        const list = (lang === "ru" ? r.labels_ru : r.labels_uz).join("\n• ");
+        const text = tx("vac_rem", lang, { name: r.first_name || "", list: lang === "uzl" ? uzLat(list) : list });
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text, disable_web_page_preview: true, reply_markup: { inline_keyboard: menuButtons(lang, APP_URL) } }).catch(() => null);
+        if (x && x.ok) sent++;
+        await toFamily(r.telegram_id, (fl, name) => tx("fam_rem", fl, { name }) + "\n" + tx("vac_rem", fl, { name, list: fl === "ru" ? r.labels_ru.join("\n• ") : fl === "uzl" ? uzLat(r.labels_uz.join("\n• ")) : r.labels_uz.join("\n• ") }));
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
+    if (body.mode === "survey") {   // анонимный опрос после родов
+      const { data, error } = await db.rpc("cron_mother_survey", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; lang: string; first_name: string }[]) {
+        const lang: Lang = isLang(r.lang) ? r.lang : "uz";
+        await tg("sendMessage", { chat_id: r.telegram_id, text: tx("sv_intro", lang, { name: r.first_name || "" }) }).catch(() => null);
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: tx("sv_q1", lang), reply_markup: { inline_keyboard: surveyButtons(1, tx("sv_yes", lang), tx("sv_no", lang)) } }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
+    if (body.mode === "month") {   // 1-го числа: итоги прошлого месяца руководителям / хокимияту
+      const { data, error } = await db.rpc("cron_month_digest", { _secret: sec });
+      if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
+      let sent = 0;
+      for (const r of (data ?? []) as { telegram_id: number; month: string; cur: Record<string, number>; prev: Record<string, number> }[]) {
+        const x = await tg("sendMessage", { chat_id: r.telegram_id, text: monthDigestText(String(r.month), r.cur ?? {}, r.prev ?? {}, SITE_SLASH), disable_web_page_preview: true }).catch(() => null);
+        if (x && x.ok) sent++;
+      }
+      return reply({ total: (data ?? []).length, sent }, 200, origin);
+    }
     if (body.mode === "duty36") {   // дежурному роддома: женщины высокого риска на 36 неделе
       const { data, error } = await db.rpc("cron_duty_hr36", { _secret: sec });
       if (error) return reply({ error: /forbidden/.test(error.message) ? "forbidden" : "failed" }, /forbidden/.test(error.message) ? 403 : 500, origin);
@@ -470,6 +619,7 @@ Deno.serve(async (req: Request) => {
       const x = await tg("sendMessage", { chat_id: r.telegram_id, text: reminderText(r), disable_web_page_preview: true,
         reply_markup: { inline_keyboard: menuButtons(lang, APP_URL) } }).catch(() => null);
       if (x && x.ok) sent++;
+      await toFamily(r.telegram_id, (fl, name) => tx("fam_rem", fl, { name }) + "\n" + reminderText({ ...r, lang: fl }));
     }
     return reply({ total: (data ?? []).length, sent }, 200, origin);
   }

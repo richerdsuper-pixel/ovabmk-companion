@@ -179,6 +179,7 @@ window.MothersModule = function (A) {
           h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
             archive ? h("a", { class: "btn", href: "#/mothers", text: t("mo_back_active") }) : h("a", { class: "btn pri", id: "mo_add", href: "#/mother/new", text: "+ " + t("mo_add") }),
             archive ? null : h("a", { class: "btn", id: "mo_import", href: "#/mothers/import", text: "📥 " + t("im_btn") }),
+            archive ? null : h("a", { class: "btn", id: "mo_announce", href: "#/announce", text: "📢 " + t("an_btn") }),
             exp, archive ? null : h("a", { class: "btn", href: "#/mothers?arch=1", text: t("mo_archive") }))),
         archive ? null : seg,
         h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, search, mahSel, instSel)),
@@ -398,7 +399,7 @@ window.MothersModule = function (A) {
         var res = h("input", { placeholder: t("ref_result"), maxlength: "500", class: "rf_res" });
         return h("div", { class: "qa rf" }, h("div", null, h("b", { text: "➡️ " + r.target }), r.reason ? " — " + r.reason : "",
             " ", h("span", { class: "chip " + (r.arrived_at ? "ok" : over ? "bad" : "warn"), text: r.arrived_at ? t("ref_arrived_on", { d: A.fmtD(r.arrived_at) }) + (r.result ? ": " + r.result : "") : over ? t("mo_ref_overdue") : t("ref_until", { d: A.fmtD(r.due_date) }) })),
-          h("div", { class: "mute small", text: A.fmtDT(r.created_at) + (r.by ? " · " + r.by : "") }),
+          h("div", { class: "mute small" }, A.fmtDT(r.created_at) + (r.by ? " · " + r.by : "") + " ", h("a", { class: "btn sm", href: "#/ref/" + r.id, text: "🖨 " + t("rfp_btn") })),
           r.arrived_at ? null : h("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, res, h("button", { class: "btn sm", type: "button", text: t("ref_mark_arrived"), onclick: async function () {
             var x = await sb.rpc("referral_arrived", { _id: r.id, _date: td, _result: res.value });
             if (x.error) { A.toast(errText(x.error)); return; } reload();
@@ -669,6 +670,7 @@ window.MothersModule = function (A) {
       var off = h("button", { class: "btn sm", type: "button", text: t("mo_tg_unlink") });
       A.armed(off, t("mo_tg_unlink"), async function () { var x = await sb.rpc("mother_unlink", { _id: m.id }); if (x.error) { A.toast(errText(x.error)); return; } reload(); });
       box.appendChild(h("div", { class: "notice ok", text: t("mo_tg_linked", { d: fmtD((m.tg.linked_at || "").slice(0, 10)) }) }));
+      var fp = familyPanel(m); if (fp) box.appendChild(fp);
       box.appendChild(h("div", null, off));
     } else {
       var out = h("div", { class: "stack" });
@@ -848,6 +850,8 @@ window.MothersModule = function (A) {
       trendPanel(tr && !tr.error ? tr.data || [] : []),
       monthPanel(),
       comparePanel(),
+      staffLoadPanel(),
+      surveyPanel(),
       h("section", { class: "panel stack" },
         h("div", { class: "row", style: "justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center" }, h("h2", { text: t("ms_title") }), exp),
         h("p", { class: "mute small", text: t("ms_hint") }),
@@ -960,19 +964,19 @@ window.MothersModule = function (A) {
     }));
   }
   function adviceView(route) {
-    var tab = qParam(route, "t") === "memo" ? "memo" : "food";
+    var tab = ["memo", "vacc"].indexOf(qParam(route, "t")) >= 0 ? qParam(route, "t") : "food";
     var L = S.lang === "ru" ? "ru" : "uz", conv = S.lang === "uzl" ? window.uzLat : function (x) { return x; };
     var data = (window.ADVICE && window.ADVICE[tab] && window.ADVICE[tab][L]) || [];
-    var tabs = h("div", { class: "fchips noprint", role: "tablist" }, ["food", "memo"].map(function (k) {
+    var tabs = h("div", { class: "fchips noprint", role: "tablist" }, ["food", "memo", "vacc"].map(function (k) {
       return h("a", { class: "fchip" + (k === tab ? " on" : ""), href: "#/advice?t=" + k, role: "tab", "aria-selected": k === tab ? "true" : "false", text: t("adv_" + k) });
     }));
     A.shell("advice", h("div", { class: "stack" },
       h("section", { class: "panel stack" },
         h("div", { class: "row", style: "justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" },
-          h("h2", { text: t(tab === "food" ? "adv_food_title" : "adv_memo_title") }),
+          h("h2", { text: t(tab === "food" ? "adv_food_title" : tab === "vacc" ? "vc_title" : "adv_memo_title") }),
           h("button", { class: "btn pri", type: "button", id: "adv_print", text: "🖨 " + t("pt_print"), onclick: function () { window.print(); } })),
-        h("p", { class: "mute small", text: t(tab === "food" ? "adv_food_hint" : "adv_memo_hint") }), tabs),
-      adviceCards(data, conv),
+        h("p", { class: "mute small", text: t(tab === "food" ? "adv_food_hint" : tab === "vacc" ? "vc_sub" : "adv_memo_hint") }), tabs),
+      tab === "vacc" ? (function () { var b = h("section", { class: "panel stack", id: "vc_box" }, A.loadingBox()); vaccTab(b); return b; })() : adviceCards(data, conv),
       h("p", { class: "mute small", text: t("adv_src") })));
   }
 
@@ -1121,5 +1125,215 @@ window.MothersModule = function (A) {
       h("section", { class: "panel" }, block(S.lang === "uzl" ? "uzl" : "uz")), h("section", { class: "panel pbreak" }, block("ru"))));
   }
 
-  return { canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView, adviceView: adviceView, importView: importView, offlineView: offlineView, offlineCache: offlineCache, netDown: netDown };
+
+  // ------------------------------------------------------------------ 0028: нагрузка доя, опрос после родов (в «Сводке»)
+  function asyncPanel(id, load) {
+    var box = h("section", { class: "panel stack", id: id }, A.loadingBox());
+    load().then(function (el) { box.textContent = ""; if (el) box.appendChild(el); else box.remove(); }).catch(function () { box.remove(); });
+    return box;
+  }
+  function staffLoadPanel() {
+    return asyncPanel("ms_load", async function () {
+      var r = await sb.rpc("staff_load");
+      if (r.error || !(r.data || []).length) return null;
+      var rows = r.data, max = Math.max.apply(null, rows.map(function (x) { return x.registered_active; }).concat([1]));
+      return h("div", { class: "stack" }, h("h2", { text: t("sl_title") }), h("p", { class: "mute small", text: t("sl_hint") }),
+        h("div", { class: "tbl" }, h("table", { class: "sumtbl", id: "sl_tbl" },
+          h("thead", null, h("tr", null, h("th", { text: t("sl_name") }), h("th", { text: t("inst_label") }), h("th", { class: "num", text: t("sl_active") }),
+            h("th", { class: "num", text: t("sl_anc") }), h("th", { class: "num", text: t("sl_home") }))),
+          h("tbody", null, rows.map(function (x) {
+            var over = x.registered_active > 60;
+            return h("tr", null, h("td", { text: x.full_name || "—" }), h("td", { text: A.instName(x.institution_id) }),
+              h("td", { class: "num" + (over ? " badn" : "") }, h("span", { class: "bar", style: "--w:" + Math.round(x.registered_active * 100 / max) + "%" }), String(x.registered_active)),
+              h("td", { class: "num", text: String(x.anc_30) }), h("td", { class: "num", text: String(x.home_30) }));
+          })))));
+    });
+  }
+  function surveyPanel() {
+    return asyncPanel("ms_survey", async function () {
+      var r = await sb.rpc("survey_summary", { _from: null });
+      if (r.error) return null;
+      var by = {}; (r.data || []).forEach(function (x) { by[x.q] = x; });
+      return h("div", { class: "stack" }, h("h2", { text: t("sv_title") }), h("p", { class: "mute small", text: t("sv_hint") }),
+        !(r.data || []).length ? h("p", { class: "mute", text: t("sv_empty") }) :
+        h("div", { class: "kpis" }, [1, 2, 3, 4].map(function (q) {
+          var x = by[q]; if (!x) return kpi(t("sv_q" + q), "—");
+          var v = q === 2 || q === 3 ? x.yes_pct + "% " + t("sv_yes") : x.avg + " / 5";
+          var bad = q === 2 || q === 3 ? x.yes_pct < 70 : Number(x.avg) < 3.5;
+          return kpi(t("sv_q" + q) + " (n=" + x.n + ")", v, bad ? "warn" : "ok");
+        })));
+    });
+  }
+
+  // ------------------------------------------------------------------ направление для печати, с QR: роддом/специалист сканирует и отмечает «дошла»
+  async function refView(id) {
+    var my = A.token();
+    A.shell("mothers", A.loadingBox());
+    await A.loadInstitutions();
+    var r = await sb.rpc("referral_get", { _id: id });
+    if (my !== A.token()) return;
+    if (r.error) { A.shell("mothers", A.failBox(r.error)); return; }
+    var x = r.data, link = A.CFG.siteUrl.replace(/\/?$/, "/") + "#/ref/" + x.id, qr = h("div", { class: "qr", id: "rf_qr" });
+    var res = h("input", { id: "rf_result", placeholder: t("ref_result"), maxlength: "500" });
+    var mark = x.arrived_at ? null : h("div", { class: "panel stack noprint", id: "rf_mark" }, h("b", { text: t("rfp_mark") }), res,
+      h("button", { class: "btn pri", type: "button", id: "rf_arrived", text: "✅ " + t("ref_mark_arrived"), onclick: async function () {
+        var y = await sb.rpc("referral_arrived", { _id: x.id, _date: today(), _result: res.value });
+        if (y.error) { A.toast(errText(y.error)); return; }
+        A.toast(t("u_saved")); refView(id);
+      } }));
+    A.shell("mothers", h("div", { class: "stack" },
+      h("div", { class: "row noprint", style: "gap:8px;flex-wrap:wrap" },
+        x.can_card ? h("a", { class: "btn", href: "#/mother/" + x.mother_id, text: "← " + t("mo_open") }) : null,
+        h("button", { class: "btn pri", type: "button", id: "rf_print", text: "🖨 " + t("pt_print"), onclick: function () { window.print(); } })),
+      h("section", { class: "panel stack refsheet", id: "rf_sheet" },
+        h("div", { class: "row", style: "justify-content:space-between;gap:16px;align-items:start;flex-wrap:wrap" },
+          h("div", { class: "stack", style: "gap:6px;flex:1;min-width:220px" },
+            h("div", { class: "mute small", text: x.institution || "" }),
+            h("h2", { text: t("rfp_title") + " №" + x.id }),
+            h("div", { class: "kv" },
+              kv(t("rfp_patient"), x.mother_name), kv(t("mo_birth"), fmtD(x.birth_date)), kv(t("mo_phone"), x.phone ? A.fmtPhone(x.phone) : "—"),
+              x.ga_days != null ? kv(t("mo_ga_col"), gaTxt(x.ga_days)) : null, kv(t("mo_risk"), t("mo_risk_" + (x.risk || "low"))),
+              kv(t("ref_target"), x.target), kv(t("ref_reason"), x.reason || "—"), kv(t("ref_due"), fmtD(x.due_date)),
+              kv(t("rfp_by"), (x.by || "—") + " · " + A.fmtDT(x.created_at)),
+              x.arrived_at ? kv(t("rfp_status"), t("ref_arrived_on", { d: fmtD(x.arrived_at) }) + (x.result ? ": " + x.result : "")) : null)),
+          h("div", { class: "stack", style: "gap:4px;align-items:center" }, qr, h("div", { class: "mute small", style: "max-width:180px;text-align:center", text: t("rfp_scan") }))),
+        h("p", { class: "small", text: t("rfp_note") })),
+      mark));
+    drawQr(qr, link);
+  }
+
+  // ------------------------------------------------------------------ объявление беременным (через бот): учреждение и махалли
+  async function announceView() {
+    var my = A.token();
+    A.shell("mothers", A.loadingBox());
+    await A.loadInstitutions();
+    var ls = await sb.rpc("announce_list");
+    if (my !== A.token()) return;
+    var insts = (S.institutions || []).filter(function (i) { return !S.profile || S.profile.institution_id == null || A.isManager() || A.isHead() || i.id === S.profile.institution_id; });
+    var inst = h("select", { id: "an_inst" }, insts.map(function (i) { return h("option", { value: String(i.id), text: i.name }); }));
+    if (S.profile && S.profile.institution_id != null) inst.value = String(S.profile.institution_id);
+    var mahBox = h("div", { class: "chips", id: "an_mah" }), cnt = h("span", { class: "chip", id: "an_cnt" });
+    var body = h("textarea", { id: "an_body", rows: "5", maxlength: "1000", placeholder: t("an_ph") });
+    function picked() { return Array.prototype.slice.call(mahBox.querySelectorAll("input:checked")).map(function (c) { return +c.value; }); }
+    async function count() {
+      var x = await sb.rpc("announce_count", { _inst: +inst.value, _mah: picked().length ? picked() : null });
+      cnt.textContent = x.error ? "—" : t("an_count", { n: x.data });
+    }
+    function mahs() {
+      mahBox.textContent = "";
+      (S.mahallas || []).filter(function (m) { return A.mahInsts(m.id).indexOf(+inst.value) >= 0; }).forEach(function (m) {
+        var c = h("input", { type: "checkbox", value: String(m.id) }); c.addEventListener("change", count);
+        mahBox.appendChild(h("label", { class: "check small" }, c, h("span", { text: m.name })));
+      });
+      count();
+    }
+    inst.addEventListener("change", mahs);
+    var send = h("button", { class: "btn pri", type: "button", id: "an_send", text: "📢 " + t("an_send") });
+    A.armed(send, t("an_send_confirm"), async function () {
+      var txt = body.value.trim();
+      if (txt.length < 5) { A.toast(t("an_short")); send.disabled = false; return; }
+      var x = await sb.functions.invoke("tg-bot", { body: { action: "announce", institution: +inst.value, mahallas: picked(), body: txt } });
+      send.disabled = false;
+      var d = x.data || {};
+      if (x.error || d.error) {
+        var e = d.error; if (!e && x.error && x.error.context && x.error.context.json) { try { e = (await x.error.context.json()).error; } catch (q) { /* */ } }
+        A.toast(e === "too_many" ? t("an_too_many") : e === "forbidden" ? t("forbidden") : t("err_action", { msg: e || (x.error && x.error.message) || "" })); return;
+      }
+      A.toast(t("an_done", { sent: d.sent, total: d.total })); announceView();
+    });
+    A.shell("mothers", h("div", { class: "stack" },
+      h("section", { class: "panel stack" },
+        h("div", null, h("a", { href: "#/mothers", class: "small", text: "← " + t("mo_title") }), h("h2", { text: "📢 " + t("an_title") })),
+        h("p", { class: "mute small", text: t("an_hint") }),
+        h("label", null, t("inst_label"), inst), h("div", null, h("b", { class: "small", text: t("an_mah") }), mahBox),
+        h("label", null, t("an_text"), body), h("div", { class: "row", style: "gap:8px;align-items:center;flex-wrap:wrap" }, send, cnt)),
+      h("section", { class: "panel stack", id: "an_list" }, h("h3", { text: t("an_history") }),
+        (ls.data || []).length ? (ls.data || []).map(function (a) {
+          return h("div", { class: "qa" }, h("div", { class: "mute small", text: A.fmtDT(a.created_at) + " · " + A.instName(a.institution_id) + (a.mahalla_ids && a.mahalla_ids.length ? " · " + a.mahalla_ids.map(A.mahName).join(", ") : "") + (a.by_name ? " · " + a.by_name : "") }),
+            h("div", { text: a.body }), h("span", { class: "chip " + (a.sent ? "ok" : "warn"), text: a.sent == null ? t("an_pending") : t("an_done", { sent: a.sent, total: a.total }) }));
+        }) : h("p", { class: "mute", text: t("an_none") }))));
+    mahs();
+  }
+
+  // ------------------------------------------------------------------ журнал тяжёлых случаев (near-miss, смерти) — только администратор
+  var CASE_KINDS = ["severe_pph", "eclampsia", "sepsis", "uterine_rupture", "abortion", "anesthesia", "maternal_death", "neonatal_death", "other"];
+  async function casesView() {
+    var my = A.token();
+    A.shell("cases", A.loadingBox());
+    await A.loadInstitutions();
+    var r = await sb.rpc("cases_list");
+    if (my !== A.token()) return;
+    if (r.error) { A.shell("cases", A.failBox(r.error)); return; }
+    var rows = r.data || [];
+    function form(c) {
+      c = c || {};
+      var f = {
+        case_date: h("input", { type: "date", value: c.case_date || today(), max: today() }),
+        institution_id: h("select", null, h("option", { value: "", text: "—" }), (S.institutions || []).map(function (i) { return h("option", { value: String(i.id), text: i.name }); })),
+        kind: h("select", null, CASE_KINDS.map(function (k) { return h("option", { value: k, text: t("cs_k_" + k) }); })),
+        patient: h("input", { maxlength: "120", value: c.patient || "", placeholder: t("cs_patient_ph") }),
+        description: h("textarea", { rows: "3", maxlength: "3000" }), actions: h("textarea", { rows: "3", maxlength: "3000" }), lessons: h("textarea", { rows: "3", maxlength: "3000" }),
+        status: h("select", null, ["open", "reviewed"].map(function (k) { return h("option", { value: k, text: t("cs_st_" + k) }); }))
+      };
+      f.institution_id.value = c.institution_id != null ? String(c.institution_id) : ""; f.kind.value = c.kind || "severe_pph"; f.status.value = c.status || "open";
+      ["description", "actions", "lessons"].forEach(function (k) { f[k].value = c[k] || ""; });
+      var save = h("button", { class: "btn pri", type: "button", text: t("save"), onclick: async function () {
+        var d = {}; Object.keys(f).forEach(function (k) { d[k] = f[k].value; });
+        save.disabled = true;
+        var x = await sb.rpc("case_save", { _id: c.id || null, _d: d });
+        save.disabled = false;
+        if (x.error) { A.toast(errText(x.error)); return; }
+        A.toast(t("u_saved")); casesView();
+      } });
+      var del = c.id ? h("button", { class: "btn sm", type: "button", text: t("del") }) : null;
+      if (del) A.armed(del, t("del"), async function () { var x = await sb.rpc("case_delete", { _id: c.id }); if (x.error) { A.toast(errText(x.error)); del.disabled = false; return; } casesView(); });
+      return h("div", { class: "stack cs-form" },
+        h("div", { class: "grid2" }, h("label", null, t("cs_date"), f.case_date), h("label", null, t("inst_label"), f.institution_id),
+          h("label", null, t("cs_kind"), f.kind), h("label", null, t("cs_patient"), f.patient)),
+        h("label", null, t("cs_desc"), f.description), h("label", null, t("cs_actions"), f.actions), h("label", null, t("cs_lessons"), f.lessons),
+        h("div", { class: "row", style: "gap:8px;align-items:end;flex-wrap:wrap" }, h("label", null, t("cs_status"), f.status), save, del));
+    }
+    A.shell("cases", h("div", { class: "stack" },
+      h("section", { class: "panel stack" }, h("h2", { text: t("cs_title") }), h("p", { class: "mute small", text: t("cs_hint") }),
+        h("details", { id: "cs_new" }, h("summary", { style: "cursor:pointer;font-weight:800", text: "+ " + t("cs_add") }), form(null))),
+      h("section", { class: "panel stack", id: "cs_list" },
+        rows.length ? rows.map(function (c) {
+          return h("details", { class: "qa" }, h("summary", { style: "cursor:pointer" },
+            h("b", { text: fmtD(c.case_date) + " · " + t("cs_k_" + c.kind) }), " · " + (A.instName(c.institution_id) || "—") + (c.patient ? " · " + c.patient : "") + " ",
+            h("span", { class: "chip " + (c.status === "open" ? "warn" : "ok"), text: t("cs_st_" + c.status) })), form(c));
+        }) : h("p", { class: "mute", text: t("cs_none") }))));
+  }
+
+  // ------------------------------------------------------------------ календарь прививок (в «Советах»): администратор правит по действующему приказу
+  async function vaccTab(box) {
+    var r = await sb.rpc("vacc_list");
+    box.textContent = "";
+    if (r.error) { box.appendChild(A.failBox(r.error)); return; }
+    var L = S.lang === "ru";
+    function ageLbl(d) { return d < 30 ? t("vc_days", { n: d }) : d < 365 ? t("vc_months", { n: Math.round(d / 30.4) }) : t("vc_years", { n: Math.round(d / 365.25 * 10) / 10 }); }
+    box.appendChild(h("p", { class: "mute small", text: t("vc_hint") }));
+    box.appendChild(h("div", { class: "tbl" }, h("table", { class: "sumtbl", id: "vc_tbl" },
+      h("thead", null, h("tr", null, h("th", { text: t("vc_age") }), h("th", { text: t("vc_name") }), A.isAdmin() ? h("th") : null)),
+      h("tbody", null, (r.data || []).map(function (v) {
+        return h("tr", null, h("td", { text: ageLbl(v.age_days) }), h("td", { text: L ? v.label_ru : A.uzT(v.label_uz) }),
+          A.isAdmin() ? h("td", null, h("button", { class: "btn sm", type: "button", text: t("del"), onclick: async function () {
+            var x = await sb.rpc("admin_vacc_delete", { _code: v.code }); if (x.error) { A.toast(errText(x.error)); return; } vaccTab(box); } })) : null);
+      })))));
+    if (A.isAdmin()) {
+      var f = { code: h("input", { placeholder: "code", maxlength: "20", style: "max-width:110px" }), ru: h("input", { placeholder: t("vc_name") + " (рус)" }),
+        uz: h("input", { placeholder: t("vc_name") + " (ўзб)" }), age: h("input", { type: "number", min: "0", max: "1826", placeholder: t("vc_age_days"), style: "max-width:120px" }) };
+      box.appendChild(h("div", { class: "row noprint", style: "gap:6px;flex-wrap:wrap;align-items:center", id: "vc_add" }, f.code, f.ru, f.uz, f.age,
+        h("button", { class: "btn sm pri", type: "button", text: t("save"), onclick: async function () {
+          var x = await sb.rpc("admin_vacc_save", { _code: f.code.value.trim(), _ru: f.ru.value.trim(), _uz: f.uz.value.trim(), _age: +f.age.value, _sort: 0 });
+          if (x.error) { A.toast(errText(x.error)); return; } A.toast(t("u_saved")); vaccTab(box); } })));
+    }
+  }
+  function familyPanel(m) {
+    var f = m.family || [];
+    if (!f.length) return null;
+    return h("div", { class: "small", id: "mc_family" }, h("b", { text: "👪 " + t("fm_title") + ": " }),
+      f.map(function (x) { return t("fm_" + x.relation) + " (" + fmtD(String(x.linked_at).slice(0, 10)) + ")"; }).join(", "));
+  }
+
+  return { refView: refView, announceView: announceView, casesView: casesView, canMothers: canMothers, listView: listView, formView: formView, cardView: cardView, patronageView: patronageView, summaryView: summaryView, consentView: consentView, adviceView: adviceView, importView: importView, offlineView: offlineView, offlineCache: offlineCache, netDown: netDown };
 };

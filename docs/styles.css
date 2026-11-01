@@ -430,3 +430,10 @@ input[type=search],input[type=tel]{background:var(--panel);border:1px solid var(
 .mtile.t-warn{--tile:color-mix(in srgb,#F5B843 30%,transparent)}
 .mtile.t-bad{--tile:color-mix(in srgb,#B42318 22%,transparent);border-color:#B42318}
 .im-bad td{background:var(--bad-soft)}
+/* 0028 */
+.sumtbl td .bar{display:inline-block;width:48px;height:6px;margin-right:6px;vertical-align:middle;border-radius:3px;
+  background:linear-gradient(to right,var(--accent) var(--w,0%),var(--line) 0)}
+.refsheet .kv{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}
+.cs-form label,#an_list~* label,.panel>label{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.cs-form textarea,#an_body{width:100%}
+@media print{ .refsheet{font-size:14px} .refsheet .qr{width:150px;height:150px} }

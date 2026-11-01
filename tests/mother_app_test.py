@@ -20,6 +20,9 @@ VIEW = {"lang": "uz", "full_name": "Каримова Дилноза Анваро
         "questions": [{"id": 3, "q": "Можно ли кофе?", "a": "Не больше 2 чашек", "a_by": "Холова Жамила", "at": "2026-10-30T05:00:00Z"}], "baby": [], "referrals": [{"id": 1, "target": "Акушер-гинеколог", "reason": "Анемия", "due_date": "2026-11-05", "arrived_at": None}],
         "ui": {"signs": [{"k": "bleeding", "label": "Қонли ажралма, қон кетиши"}, {"k": "contractions", "label": "Бир соатда 4–5 тадан кўп тўлғоқ"}, {"k": "vomit", "label": "5 мартадан кўп қусиш"}],
                "topics": [{"k": "food", "title": "🍎 Овқатланиш ва витаминлар", "text": "• Фолий кислотаси 400 мкг"}, {"k": "signs", "title": "⚠️ Қачон дарҳол шифокорга", "text": "• 5 мартадан кўп қусиш"}]}}
+VACC = [{"code": "hepb1", "label_ru": "Гепатит B (1)", "label_uz": "Гепатит B (1)", "age_days": 0, "sort": 1}, {"code": "bcg", "label_ru": "БЦЖ", "label_uz": "БЦЖ", "age_days": 2, "sort": 2},
+        {"code": "m2", "label_ru": "2 месяца: пентавалентная, полио, ротавирус, пневмококк", "label_uz": "2 ой: пентавалент, полио, ротавирус, пневмококк", "age_days": 60, "sort": 1},
+        {"code": "m12", "label_ru": "12 месяцев: КПК", "label_uz": "12 ой: ҚПҚ", "age_days": 365, "sort": 1}]
 def run(p, view, tg=True, status=200, search="?l=uz"):
     b = p.chromium.launch(); ctx = b.new_context(viewport={"width": 390, "height": 840}, geolocation={"latitude": 37.95, "longitude": 67.6}, permissions=["geolocation"])
     calls = []
@@ -27,6 +30,9 @@ def run(p, view, tg=True, status=200, search="?l=uz"):
         body = json.loads(route.request.post_data or "{}"); calls.append(body)
         if body.get("op") == "alert": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
         elif body.get("op") == "ask": route.fulfill(status=200, content_type="application/json", body=json.dumps({"qid": 9, "sent": 3}))
+        elif body.get("op") == "vacc": route.fulfill(status=200, content_type="application/json", body=json.dumps(VACC))
+        elif body.get("op") == "family_invite": route.fulfill(status=200, content_type="application/json", body=json.dumps({"link": "https://t.me/OvaBMQbot?start=f" + "ab" * 12}))
+        elif body.get("op") == "family_remove": route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
         elif body.get("op") == "location": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sent": 3}))
         elif body.get("op") in ("weight", "pill", "pill_hour", "baby", "birthplan"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True}))
         elif body.get("op") == "bp":
@@ -125,6 +131,17 @@ with sync_playwright() as p:
     ok("сумка в роддом: отметки считаются", "10 тадан 2 таси" in pg.inner_text("#bag_n"), pg.inner_text("#bag_n"))
     pg.screenshot(path=str(ROOT / "tests/shots/m_mother_more.png"), full_page=True)
     ok("ошибок JS нет (схватки)", not errs, errs); b.close()
+    fv = dict(VIEW); fv["family"] = [{"id": 5, "relation": "husband", "linked_at": "2026-10-20T10:00:00Z"}]
+    b, pg, errs, calls = run(p, fv)
+    ok("семья: родственник в списке", "Эри · 20.10.2026" in pg.inner_text("#family"), pg.inner_text("#family"))
+    pg.click("#fm_btn"); pg.wait_for_timeout(300)
+    ok("семья: ссылка для родственника", calls[-1].get("op") == "family_invite" and "start=fabab" in pg.inner_text("#fm_out") and pg.locator("#fm_share").count() == 1, pg.inner_text("#fm_out"))
+    pg.click("#family .vis button"); pg.wait_for_timeout(300)
+    ok("семья: отключить родственника", calls[-1].get("op") == "family_remove" and calls[-1].get("id") == 5 and "Эри ·" not in pg.inner_text("#family"))
+    fv["family"] = [{"id": 1, "relation": "husband", "linked_at": "2026-10-20"}, {"id": 2, "relation": "mother", "linked_at": "2026-10-21"}]
+    pg.close(); b.close(); b, pg, errs, calls = run(p, fv)
+    ok("семья: двое — кнопки ссылки нет", pg.locator("#fm_btn").count() == 0 and "Онаси" in pg.inner_text("#family"))
+    ok("ошибок JS нет (семья)", not errs, errs); b.close()
     pp = dict(VIEW); pp["status"] = "postpartum"; pp["outcome"] = "delivered"; pp["outcome_date"] = "2026-10-27"; pp["baby"] = []; pp.pop("ui"); pp["state"] = {"pp_day": 5, "anc": [], "home": [{"kind": "pp15", "from": "2026-12-01", "to": "2026-12-04", "state": "next"}]}
     b, pg, errs, calls = run(p, pp)
     ok("после родов: день и признаки ребёнка", "Туғруқдан кейин 5-кун" in pg.inner_text("body") and pg.locator("#tabs button[data-t=more]").count() == 0)
@@ -141,6 +158,10 @@ with sync_playwright() as p:
     ok("малыш: пол — девочка, полоса нормы ВОЗ", calls[-1].get("kind") == "sex" and calls[-1].get("val") == "f" and pg.locator("#b_chart polygon.bandf").count() == 1 and "ЖССТ" in pg.inner_text("#b_chart"), pg.inner_text("#b_chart"))
     pg.click("#b_feed .pill[data-k=breast]"); pg.wait_for_timeout(300)
     ok("малыш: кормление грудью отмечено", calls[-1].get("val") == "breast" and pg.locator("#b_feed .pill.on[data-k=breast]").count() == 1)
+    vt = pg.inner_text("#vc")
+    ok("малыш: календарь прививок — сделать сейчас, скоро, без далёких", pg.locator("#vc .vis[data-code=bcg] button").count() == 1 and "2 ой" in vt and "12 ой" not in vt and pg.locator("#vc .vis[data-code=m2] button").count() == 0, vt)
+    pg.click("#vc .vis[data-code=bcg] button"); pg.wait_for_timeout(300)
+    ok("малыш: прививка из календаря — «Сделано»", calls[-1].get("op") == "baby" and calls[-1].get("kind") == "vaccine" and calls[-1].get("val") == "bcg" and pg.locator("#vc .vis[data-code=bcg] .chip").count() == 1, calls[-1])
     pg.fill("#b_vac", "БЦЖ"); pg.click("#b_v_save"); pg.wait_for_timeout(300)
     ok("малыш: прививка записана с датой", calls[-1].get("kind") == "vaccine" and calls[-1].get("val") == "БЦЖ" and calls[-1].get("d") and "БЦЖ" in pg.inner_text("#b_vacs"))
     pg.screenshot(path=str(ROOT / "tests/shots/m_mother_baby.png"), full_page=True)

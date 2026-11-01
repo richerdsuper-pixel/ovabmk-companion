@@ -303,7 +303,7 @@
     if (mv().canMothers()) items.splice(1, 0, ["#/mothers", "nav_mothers", "mothers", "mo"], ["#/patronage", "nav_patronage", "patronage"], ["#/advice", "nav_advice", "advice"]);
     else if (canSummary()) items.splice(1, 0, ["#/advice", "nav_advice", "advice"]);
     if (canSummary()) items.push(["#/mothers/summary", "nav_mosum", "mosum"], ["#/mahallas", "nav_mah", "mahallas"], ["#/indicators/summary", "nav_indsum", "indsum"]);
-    if (isAdmin()) items.push(["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
+    if (isAdmin()) items.push(["#/cases", "nav_cases", "cases"], ["#/admin/requests", "nav_requests", "requests"], ["#/admin/users", "nav_users", "users"], ["#/admin/institutions", "nav_inst", "institutions"], ["#/admin/invites", "nav_invites", "invites"], ["#/admin/log", "nav_log", "log"]);
     return h("nav", { class: "nav", "aria-label": "Menu" }, items.map(function (i) {
       var n = i[3] && S.badge ? S.badge[i[3]] : 0;
       return h("a", { href: i[0], "aria-current": cur === i[2] ? "page" : null }, t(i[1]), n ? h("span", { class: "nbadge", text: String(n) }) : null);
@@ -335,6 +335,9 @@
     if (route === "/advice" || route.indexOf("/advice?") === 0) return mv().canMothers() || canSummary() ? mv().adviceView(route) : forbidden("advice");
     if (route === "/mothers" || route.indexOf("/mothers?") === 0) return mv().canMothers() ? mv().listView(route) : forbidden("mothers");
     if (route === "/mothers/import") return mv().canMothers() ? mv().importView() : forbidden("mothers");
+    if (route === "/announce") return mv().canMothers() || canSummary() ? mv().announceView() : forbidden("mothers");
+    if (route === "/cases") return isAdmin() ? mv().casesView() : forbidden("cases");
+    if ((m = /^\/ref\/(\d{1,12})$/.exec(route))) return mv().refView(+m[1]);
     if (route === "/mother/new") return mv().canMothers() ? mv().formView(null) : forbidden("mothers");
     if ((m = /^\/mother\/([0-9a-f-]{36})(\/edit)?$/.exec(route))) return m[2] ? mv().formView(m[1]) : mv().cardView(m[1]);
     if (route === "/patronage" || route.indexOf("/patronage?") === 0) return mv().canMothers() ? mv().patronageView(route) : forbidden("patronage");
@@ -1872,9 +1875,10 @@
     var r = await sb.rpc("admin_list_users");
     await loadInstitutions(true);
     var orl = await sb.rpc("admin_offline_roles");
-    var dl = await sb.rpc("admin_duty_list");
+    var dl = await sb.rpc("admin_duty_list"), rl = await sb.rpc("admin_report_list");
     if (my !== renderToken) return;
     var duty = {}; (dl.data || []).forEach(function (x) { duty[typeof x === "string" ? x : x.admin_duty_list] = true; });
+    var rep = {}; (rl.data || []).forEach(function (x) { rep[typeof x === "string" ? x : x.admin_report_list] = true; });
     if (r.error) return shell("users", failBox(r.error));
     var offRole = {}; (orl.data || []).forEach(function (x) { offRole[x.user_id] = x.offline_role; });
     var rows = r.data.map(function (u) {
@@ -1899,6 +1903,12 @@
         if (x.error) { dutyCb.checked = !dutyCb.checked; toast(t("err_action", { msg: errMsg(x.error) })); } else toast(t("u_saved"));
       });
       roleBoxes.push(h("label", { class: "check small", title: t("u_duty_hint") }, dutyCb, h("span", { text: "🏥 " + t("u_duty") })));
+      var repCb = h("input", { type: "checkbox", checked: !!rep[u.user_id], class: "report-cb" });
+      repCb.addEventListener("change", async function () {
+        var x = await sb.rpc("admin_set_report", { _uid: u.user_id, _on: repCb.checked });
+        if (x.error) { repCb.checked = !repCb.checked; toast(t("err_action", { msg: errMsg(x.error) })); } else toast(t("u_saved"));
+      });
+      roleBoxes.push(h("label", { class: "check small", title: t("u_report_hint") }, repCb, h("span", { text: "📊 " + t("u_report") })));
       var picks = h("div", { class: "fold-picks" });
       for (var i = 1; i <= 20; i++) (function (n) {
         var off = n === 15;

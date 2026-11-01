@@ -3,7 +3,7 @@ import { signRu, motherCode, parseCb, uzLat, tx, signLabel, reminderText, staffA
 import { startCode } from "../supabase/functions/tg-bot/texts.ts";
 import { parseBp, visitText, doyaText, SIGNS_PREG } from "../supabase/functions/tg-bot/mother.ts";
 import { TOPICS, topicText, tipText, TIP_TOPICS } from "../supabase/functions/tg-bot/info.ts";
-import { parseStaffCb, dayText, dayButtons, markText, questionText, parseQid, answerText, pillText, pillButtons, parsePillCb, staffMenu, hr36Texts, locText, validLoc } from "../supabase/functions/tg-bot/extra.ts";
+import { parseStaffCb, dayText, dayButtons, markText, questionText, parseQid, answerText, pillText, pillButtons, parsePillCb, staffMenu, hr36Texts, locText, validLoc, familyCode, parseFamCb, parseSurveyCb, surveyButtons, monthDigestText } from "../supabase/functions/tg-bot/extra.ts";
 let pass = 0, fail = 0;
 function t(name: string, cond: boolean, info: unknown = "") { console.log((cond ? "PASS " : "FAIL ") + name + (cond ? "" : "  <- " + JSON.stringify(info))); cond ? pass++ : fail++; }
 const C = "m0123456789abcdef01234567";
@@ -99,4 +99,15 @@ t("36 недель: две части по 15, срок, ПДР, телефон,
 t("место: текст сотруднику с телефоном и признаком", locText("Каримова Нигора", "+998901234567", ["bleeding"], signRu).includes("Кровянистые выделения") && locText("К", null, [], signRu).startsWith("📍"));
 t("место: проверка координат (Узбекистан)", JSON.stringify(validLoc("37.9", 67.6)) === '{"lat":37.9,"lon":67.6}' && validLoc(0, 0) === null && validLoc("x", 67) === null);
 t("место: кнопка и ответы на трёх языках", tx("loc_btn", "uzl").startsWith("📍 Qayerdaligimni") && tx("loc_sent", "ru", { n: 3 }).includes("(3)") && !!tx("loc_none", "uz"));
+// 0028: семья, опрос, отчёт за месяц, голос
+const FC = "f" + "a1".repeat(12);
+t("семья: код из /start и кнопки «кем приходится»", familyCode("/start " + FC) === FC && familyCode("/start m" + "a1".repeat(12)) === null && familyCode("/start fzz") === null);
+t("семья: разбор кнопки", JSON.stringify(parseFamCb(`fr:mother_in_law:${FC}`)) === JSON.stringify({ rel: "mother_in_law", code: FC }) && parseFamCb(`fr:boss:${FC}`) === null && `fr:mother_in_law:${FC}`.length <= 64);
+t("семья: тексты на трёх языках", tx("fam_alert", "ru", { name: "Нигора", sign: "Кровь" }).includes("Нигора") && tx("rel_mother_in_law", "uzl") === "Qaynonasi" && !!tx("fam_welcome", "uz", { name: "Н" }));
+t("опрос: кнопки 1–5 и да/нет", surveyButtons(1, "Да", "Нет")[0].length === 5 && surveyButtons(2, "Да", "Нет")[0][1].callback_data === "sv:2:0" && JSON.stringify(parseSurveyCb("sv:4:5")) === '{"q":4,"v":5}' && parseSurveyCb("sv:5:1") === null && parseSurveyCb("sv:1:9") === null);
+t("опрос: вопросы на трёх языках", [1, 2, 3, 4].every((q) => tx("sv_q" + q, "ru").startsWith(q + "/4") && tx("sv_q" + q, "uzl").startsWith(q + "/4")));
+const md = monthDigestText("2026-10-01", { registered: 40, early: 30, high_risk: 5, delivered: 22, anc_visits: 300, home_visits: 80, alerts: 3, referred: 10, referred_arrived: 9, anemia: 12, on_register: 410 },
+  { registered: 35, early: 20, high_risk: 5, delivered: 25, anc_visits: 280, home_visits: 80, alerts: 1, referred: 8, referred_arrived: 8, anemia: 15, on_register: 400 }, "https://s/");
+t("отчёт за месяц: месяц, проценты, изменения, ссылка", md.includes("октябрь 2026") && md.includes("40 ▲5 (до 12 нед: 75%)") && md.includes("Роды / Туғруқлар: 22 ▼3") && md.includes("(дошли: 90%)") && md.includes("Патронаж: 80\n") && md.includes("https://s/#/mothers/summary"), md);
+t("голос: ответ беременной", tx("voice_sent", "ru", { n: 2 }).includes("(2)") && tx("vac_rem", "ru", { name: "Н", list: "БЦЖ" }).includes("• БЦЖ"));
 console.log(`\n${pass}/${pass + fail} passed`); if (fail) process.exit(1);

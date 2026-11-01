@@ -1379,6 +1379,61 @@ with sync_playwright() as p:
     ok("советы: латиница и телефон без прокрутки вбок", "Har kuni nima yeyish kerak" in lt_ and "Mumkin emas" in lt_ and not hscroll(pg), lt_[:300])
     pg.screenshot(path=str(SHOTS / "m_advice_food.png"), full_page=True)
     ok("ошибок JS нет (советы, латиница)", not errs, errs); b.close()
+    # 0028: нагрузка доя и опрос в сводке, направление с QR, объявления, журнал случаев, прививки, отчёт в Telegram
+    X28 = ("window.__MOCK.rpc.staff_load = function(){ return [{user_id:'u1', full_name:'Холова Жамила', institution_id:1, registered_active:72, anc_30:40, home_30:12},"
+           "{user_id:'u2', full_name:'Рахимова Сабина', institution_id:1, registered_active:20, anc_30:9, home_30:3}]; };"
+           "window.__MOCK.rpc.survey_summary = function(){ return [{q:1,n:10,avg:4.6,yes_pct:0},{q:2,n:10,avg:0.9,yes_pct:90},{q:3,n:9,avg:0.4,yes_pct:44},{q:4,n:9,avg:4.8,yes_pct:0}]; };"
+           "window.__MOCK.rpc.referral_get = function(a){ return {id:a._id, mother_id:'" + M1 + "', target:'Роддом', reason:'Давление', due_date:'2026-11-22', created_at:'2026-11-15T05:00:00Z', arrived_at:null, result:'', by:'Холова Жамила',"
+           " mother_name:'Каримова Дилноза Анваровна', birth_date:'1999-05-01', phone:'+998901234567', risk:'high', institution:'ОШП №3', ga_days:163, can_card:!window.__noCard}; };"
+           "window.__MOCK.rpc.announce_count = function(a){ window.__ac = a; return a._mah ? 3 : 8; };"
+           "window.__MOCK.rpc.announce_list = function(){ return window.__al || []; };"
+           "window.__MOCK.fn['tg-bot'] = function(b){ window.__an = b; return window.__anErr ? {error:{message:window.__anErr}} : {id:1, total:8, sent:7}; };"
+           "window.__MOCK.rpc.cases_list = function(){ return [{id:4, case_date:'2026-11-02', institution_id:1, kind:'eclampsia', patient:'К.Д.', description:'Судороги дома', actions:'Магнезия', lessons:'', status:'open'}]; };"
+           "window.__MOCK.rpc.case_save = function(a){ window.__cs = a; return a._d.case_date > '2026-11-20' ? {error:{message:'bad_date'}} : 5; };"
+           "window.__MOCK.rpc.case_delete = function(a){ window.__csd = a; return null; };"
+           "window.__MOCK.rpc.vacc_list = function(){ return [{code:'hepb1',label_ru:'Гепатит B (1)',label_uz:'Гепатит B (1)',age_days:0,sort:1},{code:'m2',label_ru:'2 месяца: пентавалентная',label_uz:'2 ой: пентавалент',age_days:60,sort:1},{code:'m12',label_ru:'12 месяцев: КПК',label_uz:'12 ой: ҚПҚ',age_days:365,sort:1}]; };"
+           "window.__MOCK.rpc.admin_vacc_save = function(a){ window.__vs = a; return null; }; window.__MOCK.rpc.admin_vacc_delete = function(a){ window.__vd = a; return null; };"
+           "window.__MOCK.rpc.admin_report_list = function(){ return []; }; window.__MOCK.rpc.admin_set_report = function(a){ window.__rep = a; return null; };")
+    b, pg, errs = mo_page(A, ("admin",), "#/overview")
+    pg.evaluate(X28 + "location.hash = '#/mothers/summary'; null"); pg.wait_for_timeout(700)
+    ok("сводка: нагрузка доя — больше 60 красным", "Холова Жамила" in pg.inner_text("#sl_tbl") and pg.locator("#sl_tbl td.badn").count() == 1, pg.inner_text("#ms_load") if pg.locator("#ms_load").count() else "нет")
+    sv_ = pg.inner_text("#ms_survey") if pg.locator("#ms_survey").count() else "нет"
+    ok("сводка: опрос после родов — оценки и доля «да» (мало патронажа — жёлтым)", "4.6 / 5" in sv_ and "90% да" in sv_ and "44% да" in sv_ and pg.locator("#ms_survey .kpi.warn").count() == 1, sv_)
+    pg.goto(SITE + "#/ref/3"); pg.wait_for_timeout(600)
+    rt_ = pg.inner_text("#rf_sheet")
+    ok("направление: бланк для печати — пациентка, срок, куда, QR", "НАПРАВЛЕНИЕ №3" in rt_ and "Каримова Дилноза Анваровна" in rt_ and "23 нед 2 дн" in rt_ and "Роддом" in rt_ and pg.locator("#rf_qr #qrsvg").count() == 1, rt_[:400])
+    pg.fill("#rf_result", "Осмотрена, госпитализирована"); pg.click("#rf_arrived"); pg.wait_for_timeout(400)
+    ok("направление: по QR отмечают «дошла» с результатом", pg.evaluate("window.__ra && window.__ra._id === 3 && window.__ra._result === 'Осмотрена, госпитализирована'"), pg.evaluate("window.__ra"))
+    pg.goto(SITE + "#/cases"); pg.wait_for_timeout(600)
+    ok("журнал случаев: пункт меню у администратора и список", pg.locator("nav.nav a[href='#/cases']").count() == 1 and "Эклампсия" in pg.inner_text("#cs_list"))
+    pg.click("#cs_new summary"); pg.select_option("#cs_new select >> nth=1", "maternal_death"); pg.fill("#cs_new textarea >> nth=0", "Кровотечение после родов"); pg.click("#cs_new button.pri"); pg.wait_for_timeout(400)
+    ok("журнал случаев: новый случай сохраняется", pg.evaluate("window.__cs && window.__cs._id === null && window.__cs._d.kind === 'maternal_death' && window.__cs._d.description === 'Кровотечение после родов'"), pg.evaluate("window.__cs"))
+    pg.goto(SITE + "#/advice?t=vacc"); pg.wait_for_timeout(600)
+    vt_ = pg.inner_text("#vc_box")
+    ok("прививки: календарь в «Советах», возраст по-человечески, правка у администратора", "2 мес" in vt_ and "1 г" in vt_ and "КПК" in vt_ and pg.locator("#vc_add").count() == 1 and "приказ" in vt_, vt_[:300])
+    pg.fill("#vc_add input >> nth=0", "m6"); pg.fill("#vc_add input >> nth=1", "6 месяцев"); pg.fill("#vc_add input >> nth=2", "6 ой"); pg.fill("#vc_add input >> nth=3", "182"); pg.click("#vc_add button"); pg.wait_for_timeout(400)
+    ok("прививки: администратор добавляет строку", pg.evaluate("window.__vs && window.__vs._code === 'm6' && window.__vs._age === 182"), pg.evaluate("window.__vs"))
+    pg.goto(SITE + "#/admin/users"); pg.wait_for_timeout(700)
+    pg.locator(".report-cb").first.check(); pg.wait_for_timeout(300)
+    ok("сотрудники: «Ежемесячный отчёт» — галочка у администратора", pg.locator(".report-cb").count() >= 1 and pg.evaluate("window.__rep && window.__rep._on === true"), pg.evaluate("window.__rep"))
+    ok("ошибок JS нет (0028, администратор)", not errs, errs); b.close()
+    b, pg, errs = mo_page(S_, ("staff",), "#/overview")
+    pg.evaluate(X28 + "location.hash = '#/mothers'; null"); pg.wait_for_timeout(600)
+    pg.click("#mo_announce"); pg.wait_for_timeout(600)
+    ok("объявление: учреждение доя, махалли, сколько получат", pg.input_value("#an_inst") == "1" and pg.locator("#an_mah input").count() == 2 and "Получат: 8" in pg.inner_text("#an_cnt"), pg.inner_text("#app")[:300])
+    pg.locator("#an_mah input").first.check(); pg.wait_for_timeout(300)
+    ok("объявление: одна махалля — 3 получателя", "Получат: 3" in pg.inner_text("#an_cnt") and pg.evaluate("JSON.stringify(window.__ac._mah)") == "[1]")
+    pg.fill("#an_body", "В пятницу в 10:00 — школа будущих мам"); pg.click("#an_send"); pg.wait_for_timeout(200); pg.click("#an_send"); pg.wait_for_timeout(500)
+    ok("объявление: отправка через бот с подтверждением", pg.evaluate("window.__an && window.__an.action === 'announce' && window.__an.institution === 1 && window.__an.mahallas.length === 1 && window.__an.body.indexOf('школа') > 0"), pg.evaluate("window.__an"))
+    pg.evaluate("window.__anErr = 'too_many'; null"); pg.click("#an_send"); pg.wait_for_timeout(200); pg.fill("#an_body", "Ещё одно объявление"); pg.click("#an_send"); pg.wait_for_timeout(200); pg.click("#an_send"); pg.wait_for_timeout(500)
+    ok("объявление: больше 10 в сутки — понятная ошибка", "10 объявлений" in pg.inner_text("body"), pg.inner_text("body")[-300:])
+    pg.goto(SITE + "#/mother/" + M1); pg.wait_for_timeout(700)
+    ok("карточка: кнопка печати направления", pg.locator("#mc_ref a[href='#/ref/3']").count() == 1)
+    pg.evaluate("window.__noCard = true; null"); pg.goto(SITE + "#/ref/3"); pg.wait_for_timeout(500)
+    ok("направление: чужое учреждение (роддом) — без ссылки на карточку", pg.locator("a[href='#/mother/" + M1 + "']").count() == 0 and pg.locator("#rf_arrived").count() == 1)
+    pg.goto(SITE + "#/cases"); pg.wait_for_timeout(400)
+    ok("журнал случаев: сотруднику закрыт", pg.locator("#cs_list").count() == 0 and pg.locator("nav.nav a[href='#/cases']").count() == 0)
+    ok("ошибок JS нет (0028, доя)", not errs, errs); b.close()
     # без интернета: сохранённый список
     b, pg, errs = mo_page(S_, ("staff",), "#/mothers")
     ok("без интернета: список сохранён на телефоне", pg.evaluate("JSON.parse(localStorage.getItem('ovabmk-offline')).rows.length") == len(MLIST))

@@ -13,8 +13,8 @@ def uz(s):  # узбекская латиница: oʻ gʻ и тутуқ бел�
 ROLE = {"R0": ["orinbosar"], "DEV": ["orinbosar"], "AG": ["bosh_akusher"], "PED": ["bosh_pediatr"], "STAT": ["statistik"],
         "SCH": ["maktab_mtm_hamshira"], "VAC": ["emlash_xonasi"], "EPI": ["dsenm"], "SVP": ["oilaviy_shifokor"],
         "DOYA": ["doya_qvp"], "RSM": ["reproduktiv_markaz"], "SKR": ["skrining_markazi"], "TER": ["bosh_terapevt"],
-        "AK": ["akusherlik_kompleksi"], "BRIG": ["onalar_olimi"], "HR": ["kadrlar"], "APT": ["ombor_dorixona"], "ARX": ["arxiv"]}
-EXTRA = {"3.1": ["bosh_pediatr"], "3.2": ["bosh_pediatr"], "14.4": ["ombor_dorixona"]}
+        "AK": ["akusherlik_kompleksi"], "BRIG": ["onalar_olimi"], "HR": ["kadrlar"], "APT": ["ombor_dorixona"], "ARX": ["arxiv"], "AGV": ["akusher_ginekolog"]}
+EXTRA = {"3.1": ["bosh_pediatr"], "3.2": ["bosh_pediatr"], "14.4": ["ombor_dorixona"], "9.8": ["oilaviy_shifokor"], "19.8": ["oilaviy_shifokor"]}
 ST = {"S": "site", "R": "numbers", "O": "offline"}
 PER = {"1": "once", "M": "month", "Q": "quarter", "Y": "year", "K": "incoming", "H": "case"}
 

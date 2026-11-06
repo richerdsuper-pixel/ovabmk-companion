@@ -514,7 +514,7 @@ expect_err("отмена: чужую нельзя", f"select public.cancel_leave
 # ---------------- подпапки (миграции 0017–0018)
 F1 = new_user("f1@t"); c = invite("staff", by=f"'{A}'", folders="'{1,10}'"); rc, r = accept(c, F1, 3201); ok("подпапки: сотрудник с папками 1 и 10", rc == 0, r)
 F2 = new_user("f2@t"); c = invite("staff", by=f"'{A}'", folders="'{2}'");   rc, r = accept(c, F2, 3202); ok("подпапки: сотрудник с папкой 2", rc == 0, r)
-expect_ok("подпапки: всего 140", "select count(*) from public.subfolders", out="140")
+expect_ok("подпапки: всего 145", "select count(*) from public.subfolders", out="145")
 expect_ok("подпапки: в каждой папке есть подпапки", "select count(distinct folder_id) from public.subfolders", out="20")
 expect_ok("подпапки: папка 15 вся «только офлайн»", "select count(*) from public.subfolders where folder_id=15 and storage<>'offline'", out="0")
 expect_ok("подпапки: без узбекской кириллицы", "select count(*) from public.subfolders where title_uz ~ '[а-яА-ЯёЁўқғҳЎҚҒҲ]' or title_ru ~ '[ўқғҳЎҚҒҲ]'", out="0")

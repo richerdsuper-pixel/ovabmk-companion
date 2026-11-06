@@ -12,7 +12,8 @@ P=[
 ("Kiruvchi hujjatlarni ro'yxatga olish jurnali","Журнал регистрации входящих документов"),
 ("Hujjatlarni o'rganish va ijro nazorati varaqasi","Лист изучения документов и контроля исполнения"),
 ("Ijro to'g'risida chiquvchi xat va ma'lumotnomalar","Исходящие письма и справки об исполнении"),
-("Ijro muddati o'tgan hujjatlar ro'yxati","Перечень документов с истёкшим сроком исполнения")]),
+("Ijro muddati o'tgan hujjatlar ro'yxati","Перечень документов с истёкшим сроком исполнения"),
+("Chiquvchi hujjatlarni ro'yxatga olish jurnali","Журнал регистрации исходящих документов")]),
 (2,"Ish tashkil etish, rejalar, hisobotlar","Организация работы, планы, отчёты руководителю",[
 ("Yillik ish rejasi","Годовой план работы"),
 ("Choraklik va oylik ish rejalari","Квартальные и месячные планы работы"),
@@ -45,7 +46,8 @@ P=[
 ("Emlashdan bosh tortganlar ro'yxati","Список отказов от прививок"),
 ("DSENM (Sanepidxizmat) bilan qo'shma dalolatnomalar","Совместные акты с ДСЭНМ (СЭС)"),
 ("Vaksinalar saqlanishi («sovuq zanjir») tekshiruv dalolatnomalari","Акты проверки хранения вакцин («холодовой цепи»)"),
-("Immunoprofilaktika bo'yicha buyruq va ko'rsatmalar","Приказы и указания по иммунопрофилактике")]),
+("Immunoprofilaktika bo'yicha buyruq va ko'rsatmalar","Приказы и указания по иммунопрофилактике"),
+("Vaksinalar sarfi va qoldig'i hisoboti","Отчёт о расходе и остатке вакцин")]),
 (6,"«Sog'lom avlod uchun» jamg'armasi va ijtimoiy tashkilotlar","Фонд «Sogʻlom avlod uchun» и социальные организации",[
 ("Qo'shma ish rejalari","Совместные планы работы"),
 ("Hamkorlik shartnoma va bitimlari","Договоры и соглашения о сотрудничестве"),
@@ -76,7 +78,8 @@ P=[
 ("Qamrov va natijalar to'g'risida hisobotlar","Отчёты об охвате и результатах"),
 ("Hisobdan chiqarilganlar ro'yxati","Список снятых с учёта"),
 ("Muassasalardan olingan ma'lumotnomalar","Справки от учреждений"),
-("Nazorat tekshiruvi dalolatnomalari","Акты контрольных проверок")]),
+("Nazorat tekshiruvi dalolatnomalari","Акты контрольных проверок"),
+("Voyaga yetmaganlar: homiladorlik va erta nikoh holatlari","Несовершеннолетние: беременность и ранние браки")]),
 (10,"Homilador ayollarni erta hisobga olish va oilani rejalashtirish","Ранний учёт беременных и планирование семьи",[
 ("Homiladorlarni hisobga olish muddatlari to'g'risida ma'lumotlar","Данные о сроках постановки беременных на учёт"),
 ("Erta hisobga olish (12 haftagacha) bo'yicha hisobot","Отчёт по раннему учёту (до 12 недель)"),
@@ -116,7 +119,8 @@ P=[
 ("Dori-darmon qoldiqlari va sarfi hisobotlari","Отчёты об остатках и расходе лекарств"),
 ("Yaroqlilik muddati nazorati","Контроль сроков годности"),
 ("Akusherlik komplekslari ro'yxati","Список акушерских комплексов"),
-("Aniqlangan kamchiliklar va choralar","Выявленные недостатки и меры")]),
+("Aniqlangan kamchiliklar va choralar","Выявленные недостатки и меры"),
+("Birinchi yordam dori ta'minotini shaxsan tekshirish dalolatnomalari","Акты личной проверки обеспечения лекарствами первой помощи")]),
 (15,"Onalar o'limi","Материнская смертность",[
 ("Onalar o'limi holatlari ro'yxati","Реестр случаев материнской смерти"),
 ("Har bir holat bo'yicha tahlil kartasi","Карта разбора по каждому случаю"),
@@ -126,7 +130,7 @@ P=[
 ("Qabul qilingan choralar to'g'risida ma'lumotnoma","Справка о принятых мерах"),
 ("Vazirlik va boshqarmaga xabarnomalar","Донесения в министерство и управление")]),
 (16,"Kadrlar malakasini oshirish","Кадры: повышение квалификации",[
-("Akusher-ginekolog, pediatr, neonatolog va boshqa mutaxassislar ro'yxati","Список акушеров-гинекологов, педиатров, неонатологов и др."),
+("Akusher-ginekolog, pediatr, neonatolog, bolalar akusher-ginekologi va boshqa mutaxassislar ro'yxati","Список акушеров-гинекологов, педиатров, неонатологов, детских гинекологов и др."),
 ("Malaka oshirish jadvali","График повышения квалификации"),
 ("Malaka oshirish haqidagi guvohnoma nusxalari","Копии удостоверений о повышении квалификации"),
 ("Attestatsiya natijalari","Результаты аттестации"),
@@ -156,7 +160,8 @@ P=[
 ("Adliya boshqarmasi bilan hujjatlar","Документы с управлением юстиции"),
 ("Qo'shma tadbirlar bayonnomalari","Протоколы совместных мероприятий"),
 ("Yozishmalar","Переписка"),
-("Hisobotlar","Отчёты")]),
+("Hisobotlar","Отчёты"),
+("Prokuratura va IIB ga xabarnomalar","Хабарномы в прокуратуру и ОВД")]),
 (20,"Tibbiyot arxivi","Медицинский архив",[
 ("Arxiv nomenklaturasi","Номенклатура архива"),
 ("Arxivga topshirilgan hujjatlar ro'yxati (opis)","Описи документов, сданных в архив"),
@@ -169,7 +174,7 @@ P=[
 
 A = {
 1: [("S","DEV","K",0,""),("S","DEV","K",0,""),("S","R0","1",0,""),("S","DEV","M",1,""),
-    ("S","R0","K",1,""),("S","R0","K",1,"Срок — по сроку исполнения документа"),("S","R0","M",1,"")],
+    ("S","R0","K",1,""),("S","R0","K",1,"Срок — по сроку исполнения документа"),("S","R0","M",1,""),("S","DEV","M",1,"Ведёт секретарь; заместитель проверяет")],
 2: [("S","R0","Y",1,""),("S","R0","M",1,""),("S","R0","M",1,""),("S","R0","K",1,""),
     ("S","R0","1",1,""),("S","R0","Q",1,""),("S","R0","M",1,"")],
 3: [("S","AG","Y",1,"Совместно с главным педиатром"),("S","AG","M",1,"Отдельно сдаёт главный педиатр"),
@@ -180,7 +185,7 @@ A = {
     ("S","PED","M",1,""),("S","R0","K",1,"")],
 5: [("S","VAC","Y",1,"Месячный план — тоже сюда, по месяцам"),("S","VAC","M",1,""),
     ("O","VAC","H",1,"ФИО ребёнка и диагноз — на сайт не загружать"),
-    ("R","VAC","M",1,"На сайт — только число отказов"),("S","EPI","K",1,""),("S","VAC","M",1,""),("S","R0","K",0,"")],
+    ("R","VAC","M",1,"На сайт — только число отказов"),("S","EPI","K",1,""),("S","VAC","M",1,""),("S","R0","K",0,""),("S","VAC","M",1,"По должностной инструкции прививочной медсестры")],
 6: [("S","R0","Y",1,""),("S","R0","1",1,""),("S","R0","K",1,""),("S","R0","Q",1,""),
     ("S","R0","K",1,""),("S","R0","K",0,""),("R","R0","Q",1,"Списки с ФИО — только на бумаге")],
 7: [("S","AG","M",1,""),("R","STAT","Q",1,"Разборы конкретных случаев — только на бумаге"),
@@ -189,7 +194,7 @@ A = {
     ("O","SVP","K",1,"Содержит ФИО"),("R","SVP","Q",1,""),("O","R0","K",1,"Может содержать личные данные"),
     ("O","SVP","K",1,"Результаты осмотров конкретных женщин")],
 9: [("R","SVP","M",1,"Список — офлайн, на сайт число"),("R","SVP","Q",1,"Список — офлайн, на сайт число"),
-    ("R","SVP","Q",1,""),("S","SVP","Q",1,""),("R","SVP","Q",1,""),("O","SVP","K",1,"Справки на конкретных лиц"),("S","AG","K",1,"")],
+    ("R","SVP","Q",1,""),("S","SVP","Q",1,""),("R","SVP","Q",1,""),("O","SVP","K",1,"Справки на конкретных лиц"),("S","AG","K",1,""),("O","AGV","H",1,"До 18 лет: списки, справки, разборы — только бумага, под замок")],
 10:[("R","DOYA","M",1,""),("S","DOYA","M",1,""),("R","DOYA","M",1,"Список беременных — только в офлайн-программе"),
     ("S","RSM","Q",1,""),("S","RSM","Q",1,""),("S","R0","K",1,""),("S","DOYA","M",1,"")],
 11:[("S","SKR","Y",1,""),("S","SKR","M",1,""),("S","SKR","M",1,""),("R","SKR","M",1,"Список с ФИО — офлайн"),
@@ -199,7 +204,7 @@ A = {
 13:[("S","R0","1",0,""),("S","TER","Y",1,""),("S","SVP","M",1,""),("R","SVP","M",1,"Список с ФИО — офлайн"),
     ("R","SVP","Q",1,""),("S","TER","K",1,""),("S","TER","Q",1,"")],
 14:[("S","R0","1",0,""),("S","AG","K",1,""),("S","AK","1",1,"Обновлять при изменении перечня"),
-    ("S","AK","M",1,"Совместно с аптекой"),("S","AK","M",1,""),("S","R0","Y",1,""),("S","AG","K",1,"")],
+    ("S","AK","M",1,"Совместно с аптекой"),("S","AK","M",1,""),("S","R0","Y",1,""),("S","AG","K",1,""),("S","R0","K",1,"Заместитель проверяет лично (должностная инструкция)")],
 15:[("O","BRIG","H",1,"Строго офлайн, личные данные"),("O","BRIG","H",1,"Строго офлайн"),
     ("O","BRIG","H",1,"Строго офлайн"),("O","AG","H",1,"Строго офлайн"),
     ("R","R0","Y",1,"На сайт — обезличенная сводка по причинам"),("S","R0","K",1,"Без ФИО"),
@@ -211,7 +216,7 @@ A = {
 18:[("S","APT","K",1,""),("S","APT","K",1,""),("S","APT","K",1,""),("S","APT","M",1,""),
     ("S","R0","K",1,""),("S","R0","Q",1,""),("S","APT","K",0,"")],
 19:[("S","R0","Y",1,""),("S","R0","K",1,""),("R","SVP","M",1,"Добрачное обследование: ФИО — офлайн"),
-    ("S","R0","K",1,""),("S","R0","K",1,""),("S","R0","K",0,""),("S","R0","Q",1,"")],
+    ("S","R0","K",1,""),("S","R0","K",1,""),("S","R0","K",0,""),("S","R0","Q",1,""),("O","AGV","H",1,"Копия с отметкой о получении, в течение суток; содержит ФИО")],
 20:[("S","ARX","Y",1,""),("S","ARX","Y",1,""),("S","ARX","Y",1,""),("S","ARX","K",1,""),
     ("O","ARX","M",1,"В журнале — ФИО пациентов"),("S","ARX","K",1,""),("S","ARX","Y",1,"")],
 }

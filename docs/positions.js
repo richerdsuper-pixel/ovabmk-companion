@@ -4,7 +4,7 @@
 // role: staff — видит только свои папки; deputy / chief_physician — руководители, видят все папки, кроме №15.
 window.POSITIONS = [
   { code: "doya_qvp",            ru: "Акушерка СВП (кабинет доя)",                 uz: "ОШП доя хонаси (акушерка)",              role: "staff", folders: [9, 10, 12, 13] },
-  { code: "akusher_ginekolog",   ru: "Врач акушер-гинеколог",                      uz: "Акушер-гинеколог шифокор",              role: "staff", folders: [7, 9, 10, 12, 13, 14] },
+  { code: "akusher_ginekolog",   ru: "Врач акушер-гинеколог",                      uz: "Акушер-гинеколог шифокор",              role: "staff", folders: [7, 9, 10, 12, 13, 14, 19] },
   { code: "oilaviy_shifokor",    ru: "Семейный врач (СВП)",                        uz: "Оилавий шифокор (ОШП)",                 role: "staff", folders: [5, 8, 9, 10, 12, 13, 19] },
   { code: "doya_patronaj",       ru: "Патронажная доя",                            uz: "Патронаж доя",                           role: "staff", folders: [9, 10, 12, 13] },
   { code: "patronaj_hamshira",   ru: "Патронажная медсестра",                      uz: "Патронаж ҳамшира",                       role: "staff", folders: [5, 9, 10] },

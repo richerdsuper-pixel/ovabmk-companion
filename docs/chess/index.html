@@ -10,17 +10,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Nunito:wght@400;600;800&display=swap">
 <style>
-/* Layout: one narrow column — opponent bar, board, your bar, status and two actions. The board itself is the thesis: sand at the savanna's end fades into sea at the ocean's end. */
+/* Layout: one narrow column — opponent bar, board, your bar, status and two actions. The board blends the two chosen worlds: each army's home ground fades into the other's. */
 :root {
   --bg: #e9f1ee;
   --surface: #ffffff;
   --ink: #13262b;
   --ink-dim: #557077;
   --line: rgba(19, 38, 43, 0.12);
-  --sand: #e9c98c;
-  --sand-deep: #c98f2e;
-  --sea: #79c3d3;
-  --sea-deep: #1d5f93;
   --coral: #e2603f;
   --display: "Unbounded", "Arial Black", system-ui, sans-serif;
   --body: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -49,6 +45,7 @@ body {
 }
 button { font: inherit; color: inherit; }
 button:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .app { max-width: 620px; margin: 0 auto; padding-block: 12px 24px; display: flex; flex-direction: column; gap: 10px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -63,19 +60,22 @@ h1 .amp { color: var(--coral); }
 
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
 .team { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.crest { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-family: var(--emoji); font-size: 22px; flex: none; }
-.crest.w { background: radial-gradient(circle at 35% 30%, #ffe8b3, var(--sand-deep)); box-shadow: inset 0 0 0 2px #8a5a12; }
-.crest.b { background: radial-gradient(circle at 35% 30%, #5aa0d6, #123a62); box-shadow: inset 0 0 0 2px #0b2240; }
+.crest { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--crest, #ddd); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.crest .glyph { font-size: 24px; }
+.crest .art { width: 34px; height: 34px; }
 .team-name { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
 .team-name b { font-weight: 800; }
 .team-name span { font-size: 12px; color: var(--ink-dim); }
 .bar.turn .team-name b::after { content: " · ходит"; color: var(--coral); font-weight: 600; }
-.tray { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0; font-family: var(--emoji); font-size: 16px; line-height: 1; min-width: 0; max-width: 60%; }
-.tray span { margin-left: -3px; filter: saturate(0.8); }
+.tray { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; min-width: 0; max-width: 58%; }
+.tray > span { margin-left: -4px; display: inline-grid; place-items: center; width: 20px; height: 20px; }
+.tray .glyph { font-size: 16px; }
+.tray .art { width: 20px; height: 20px; }
 
 .board-wrap { display: flex; justify-content: center; }
 .board {
   --cell: 40px;
+  --top1: #79c3d3; --top2: #a9d6cf; --bot2: #d9d2a4; --bot1: #e9c98c;
   position: relative;
   width: min(100%, 600px, calc(100vh - 290px));
   width: min(100%, 600px, calc(100dvh - 290px));
@@ -83,12 +83,11 @@ h1 .amp { color: var(--coral); }
   aspect-ratio: 1;
   border-radius: 14px;
   overflow: hidden;
-  background: linear-gradient(to bottom, var(--sea) 0%, #a9d6cf 46%, #d9d2a4 56%, var(--sand) 100%);
+  background: linear-gradient(to bottom, var(--top1) 0%, var(--top2) 46%, var(--bot2) 56%, var(--bot1) 100%);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08), 0 14px 40px rgba(10, 40, 50, 0.22);
   touch-action: manipulation;
   user-select: none; -webkit-user-select: none;
 }
-.board.flipped { background: linear-gradient(to top, var(--sea) 0%, #a9d6cf 46%, #d9d2a4 56%, var(--sand) 100%); }
 .board.shake { animation: shake 0.35s ease-out; }
 @keyframes shake { 20% { transform: translateY(3px); } 40% { transform: translateY(-2px); } 60% { transform: translateY(1px); } }
 .squares { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); }
@@ -100,9 +99,7 @@ h1 .amp { color: var(--coral); }
   content: ""; position: absolute; left: 50%; top: 50%; width: 26%; height: 26%; transform: translate(-50%, -50%);
   border-radius: 50%; background: rgba(15, 45, 50, 0.32);
 }
-.sq.cap::after {
-  content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 4px solid rgba(226, 96, 63, 0.75);
-}
+.sq.cap::after { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 4px solid rgba(226, 96, 63, 0.75); }
 .sq.check { background: radial-gradient(circle, rgba(226, 70, 50, 0.7), rgba(226, 70, 50, 0) 72%); }
 .coord { position: absolute; font-size: 10px; font-weight: 800; color: rgba(15, 45, 50, 0.5); pointer-events: none; }
 .coord.f { right: 4px; bottom: 2px; }
@@ -111,53 +108,84 @@ h1 .amp { color: var(--coral); }
 .pieces, .fx { position: absolute; inset: 0; pointer-events: none; }
 .pc { position: absolute; left: 0; top: 0; width: 12.5%; height: 12.5%; will-change: transform; }
 .pc.moving { z-index: 5; }
+/* the stand under each figure: white or black, like a chess figurine */
 .pc::before {
-  content: ""; position: absolute; inset: 14%; border-radius: 50%;
+  content: ""; position: absolute; left: 15%; right: 15%; bottom: 7%; height: 17%; border-radius: 50%;
   transition: opacity 0.4s, transform 0.4s;
 }
-.pc.team-w::before { background: radial-gradient(circle at 35% 30%, #fff0c8, #dca34a 70%); box-shadow: inset 0 0 0 2px #8a5a12, 0 3px 6px rgba(80, 50, 10, 0.3); }
-.pc.team-b::before { background: radial-gradient(circle at 35% 30%, #5aa0d6, #123a62 72%); box-shadow: inset 0 0 0 2px #071c33, 0 3px 6px rgba(5, 25, 45, 0.4); }
-.pc.die-land::before, .pc.die-sea::before { opacity: 0; transform: scale(0.4); }
-.face { position: absolute; inset: 0; display: grid; place-items: center; transition: transform 0.18s; }
+.pc.side-w::before { background: radial-gradient(ellipse at 50% 30%, #ffffff 0%, #ece6d8 55%, #bfb7a5 100%); box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.14); }
+.pc.side-b::before { background: radial-gradient(ellipse at 50% 30%, #5b6770 0%, #252f36 55%, #0b1116 100%); box-shadow: 0 2px 3px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.pc.dying::before { opacity: 0; transform: scale(0.4); }
+.face { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12%; transition: transform 0.18s; }
 .face.flip { transform: scaleX(-1); }
-.idle { display: grid; place-items: center; width: 100%; height: 100%; }
-.glyph { font-family: var(--emoji); font-size: calc(var(--cell) * 0.6); line-height: 1; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.25)); }
+.idle { width: 88%; height: 88%; display: flex; align-items: flex-end; justify-content: center; transform-origin: 50% 100%; }
+.pc.side-w .idle > * { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.pc.side-b .idle > * { filter: drop-shadow(0 0 1px #0b1116) drop-shadow(0 0 1px #0b1116) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.glyph { font-family: var(--emoji); line-height: 1; display: block; }
+.pc .glyph { font-size: calc(var(--cell) * 0.7); }
+.art { display: block; overflow: visible; }
+.pc .art { width: 100%; height: 100%; }
+.flag { transform-box: fill-box; transform-origin: 50% 100%; animation: flag 0.5s ease-in-out infinite alternate; }
+.flag.r { transform-origin: 0% 50%; }
+@keyframes flag { from { transform: skewX(-14deg); } to { transform: skewX(14deg); } }
 
-/* idle behaviour, one per animal */
-.i-wk .idle { animation: breathe 2.6s ease-in-out infinite; }
-.i-wq .idle { animation: prowl 2.2s ease-in-out infinite; }
-.i-wr .idle { animation: snort 3.4s ease-in-out infinite; }
-.i-wb .idle { animation: sway 3s ease-in-out infinite; transform-origin: 50% 80%; }
-.i-wn .idle { animation: nod 2.8s ease-in-out infinite; }
-.i-wp .idle { animation: bounce 1.3s ease-in-out infinite; }
-.i-bk .idle { animation: float 3.6s ease-in-out infinite; }
-.i-bq .idle { animation: patrol 2.4s ease-in-out infinite; }
-.i-br .idle { animation: tnod 4.2s ease-in-out infinite; }
-.i-bb .idle { animation: pinch 2.6s ease-in-out infinite; }
-.i-bn .idle { animation: porpoise 2s ease-in-out infinite; }
-.i-bp .idle { animation: fishswim 1.5s ease-in-out infinite; }
+/* idle behaviour, one per creature */
+.i-savanna-k .idle { animation: breathe 2.6s ease-in-out infinite; }
+.i-savanna-q .idle { animation: prowl 2.2s ease-in-out infinite; }
+.i-savanna-r .idle { animation: snort 3.4s ease-in-out infinite; }
+.i-savanna-b .idle { animation: sway 3s ease-in-out infinite; }
+.i-savanna-n .idle { animation: nod 2.8s ease-in-out infinite; }
+.i-savanna-p .idle { animation: bounce 1.3s ease-in-out infinite; }
+.i-ocean-k .idle { animation: float 3.6s ease-in-out infinite; }
+.i-ocean-q .idle { animation: patrol 2.4s ease-in-out infinite; }
+.i-ocean-r .idle { animation: tnod 4.2s ease-in-out infinite; }
+.i-ocean-b .idle { animation: pinch 2.6s ease-in-out infinite; }
+.i-ocean-n .idle { animation: porpoise 2s ease-in-out infinite; }
+.i-ocean-p .idle { animation: fishswim 1.5s ease-in-out infinite; }
+.i-bacteria-k .idle { animation: breathe 2s ease-in-out infinite; }
+.i-bacteria-q .idle { animation: wiggle 0.9s ease-in-out infinite; }
+.i-bacteria-r .idle { animation: sway 2.4s ease-in-out infinite; }
+.i-bacteria-b .idle { animation: twist 1.6s ease-in-out infinite; }
+.i-bacteria-n .idle { animation: jitter 1.1s steps(2) infinite; }
+.i-bacteria-p .idle { animation: divide 2.2s ease-in-out infinite; }
+.i-fungi-k .idle { animation: breathe 3.4s ease-in-out infinite; }
+.i-fungi-q .idle { animation: tilt 2.6s ease-in-out infinite; }
+.i-fungi-r .idle { animation: breathe 4.6s ease-in-out infinite; }
+.i-fungi-b .idle { animation: sway 3.2s ease-in-out infinite; }
+.i-fungi-n .idle { animation: puffpulse 2.4s ease-in-out infinite; }
+.i-fungi-p .idle { animation: sway 2.2s ease-in-out infinite; }
 .pc.sel .idle { animation: excite 0.6s ease-in-out infinite; }
 .pc.check .idle { animation: panic 0.45s ease-in-out infinite; }
 .pc.moving .idle { animation: none; }
-.pc.die-land .idle { animation: poof 0.55s ease-in forwards; }
-.pc.die-sea .idle { animation: sink 0.75s ease-in forwards; }
+.pc.die-dust .idle { animation: poof 0.55s ease-in forwards; }
+.pc.die-sink .idle { animation: sink 0.75s ease-in forwards; }
+.pc.die-lysis .idle { animation: lysis 0.5s ease-in forwards; }
+.pc.die-spores .idle { animation: wilt 0.8s ease-in forwards; }
 
-@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 @keyframes prowl { 0%, 100% { transform: translateX(-5%); } 50% { transform: translateX(5%); } }
 @keyframes snort { 0%, 78%, 100% { transform: rotate(0); } 84% { transform: rotate(-8deg) translateX(-3%); } 90% { transform: rotate(6deg); } 95% { transform: rotate(-3deg); } }
 @keyframes sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
 @keyframes nod { 0%, 66%, 100% { transform: rotate(0); } 76% { transform: rotate(-10deg) translateY(-5%); } 86% { transform: rotate(7deg); } }
-@keyframes bounce { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-12%); } 55% { transform: translateY(0) scale(1.05, 0.95); } }
-@keyframes float { 0%, 100% { transform: translateY(4%); } 50% { transform: translateY(-6%); } }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-12%); } 55% { transform: translateY(0) scale(1.06, 0.94); } }
+@keyframes float { 0%, 100% { transform: translateY(2%); } 50% { transform: translateY(-7%); } }
 @keyframes patrol { 0%, 100% { transform: translateX(-6%) rotate(-4deg); } 50% { transform: translateX(6%) rotate(4deg); } }
 @keyframes tnod { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%) rotate(-4deg); } }
 @keyframes pinch { 0%, 58%, 100% { transform: rotate(0); } 64% { transform: rotate(-12deg); } 70% { transform: rotate(12deg); } 76% { transform: rotate(-10deg); } 82% { transform: rotate(8deg); } 88% { transform: rotate(0); } }
-@keyframes porpoise { 0%, 100% { transform: translateY(3%) rotate(8deg); } 50% { transform: translateY(-9%) rotate(-12deg); } }
+@keyframes porpoise { 0%, 100% { transform: translateY(2%) rotate(8deg); } 50% { transform: translateY(-9%) rotate(-12deg); } }
 @keyframes fishswim { 0%, 100% { transform: translateX(-4%) rotate(-7deg); } 50% { transform: translateX(4%) rotate(7deg); } }
-@keyframes excite { 0%, 100% { transform: translateY(0) scale(1.12); } 50% { transform: translateY(-14%) scale(1.2); } }
+@keyframes wiggle { 0%, 100% { transform: rotate(-7deg) translateX(-3%); } 50% { transform: rotate(7deg) translateX(3%); } }
+@keyframes twist { 0%, 100% { transform: rotate(-9deg) scaleX(1); } 50% { transform: rotate(9deg) scaleX(0.9); } }
+@keyframes jitter { 0% { transform: translate(-3%, 0); } 25% { transform: translate(3%, -3%); } 50% { transform: translate(-2%, -2%); } 75% { transform: translate(2%, 1%); } 100% { transform: translate(-3%, 0); } }
+@keyframes divide { 0%, 60%, 100% { transform: scale(1); } 75% { transform: scale(1.16, 0.88); } 88% { transform: scale(0.94, 1.06); } }
+@keyframes tilt { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg) translateY(-2%); } }
+@keyframes puffpulse { 0%, 70%, 100% { transform: scale(1); } 80% { transform: scale(1.1, 0.86); } 90% { transform: scale(0.95, 1.06); } }
+@keyframes excite { 0%, 100% { transform: translateY(0) scale(1.1); } 50% { transform: translateY(-14%) scale(1.18); } }
 @keyframes panic { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7%) rotate(-5deg); } 75% { transform: translateX(7%) rotate(5deg); } }
 @keyframes poof { 30% { transform: scale(1.25) rotate(-20deg); } 100% { transform: scale(0) rotate(240deg); opacity: 0; } }
-@keyframes sink { 100% { transform: translateY(70%) scale(0.45) rotate(25deg); opacity: 0; } }
+@keyframes sink { 100% { transform: translateY(60%) scale(0.45) rotate(25deg); opacity: 0; } }
+@keyframes lysis { 60% { transform: scale(1.35); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes wilt { 40% { transform: rotate(-14deg) scale(1, 0.9); } 100% { transform: rotate(-30deg) scale(0.8, 0); opacity: 0; } }
 
 .fx-p { position: absolute; border-radius: 50%; pointer-events: none; }
 .say {
@@ -172,10 +200,7 @@ h1 .amp { color: var(--coral); }
 .status.alert { color: var(--coral); }
 .lastmove { margin: -4px 0 0; text-align: center; font-size: 13px; color: var(--ink-dim); min-height: 1.3em; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.btn {
-  border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 13px 14px;
-  font-weight: 800; cursor: pointer;
-}
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 13px 14px; font-weight: 800; cursor: pointer; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--coral); border-color: transparent; color: #fff; }
 
@@ -188,7 +213,7 @@ h1 .amp { color: var(--coral); }
   overflow-y: auto;
 }
 .card {
-  width: min(100%, 460px); background: var(--surface); border-radius: 20px; padding: 22px 18px 18px;
+  width: min(100%, 480px); background: var(--surface); border-radius: 20px; padding: 22px 18px 18px;
   display: flex; flex-direction: column; gap: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   animation: rise 0.3s ease-out both; max-height: 100%; overflow-y: auto;
 }
@@ -199,37 +224,63 @@ h1 .amp { color: var(--coral); }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > span { font-size: 12px; font-weight: 800; color: var(--ink-dim); letter-spacing: 0.06em; text-transform: uppercase; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); }
-.seg button { border: 0; background: transparent; border-radius: 10px; padding: 10px 6px; font-weight: 700; cursor: pointer; }
+.seg button { border: 0; background: transparent; border-radius: 10px; padding: 10px 4px; font-weight: 700; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); color: var(--coral); }
+.seg.armies button { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; padding: 8px 2px; }
+.seg.armies .glyph { font-size: 24px; }
+.seg.armies .art { width: 30px; height: 30px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.legend h3 { margin: 0 0 6px; font-family: var(--display); font-size: 13px; font-weight: 700; }
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.legend h3 { margin: 0 0 2px; font-family: var(--display); font-size: 13px; font-weight: 700; }
+.legend .kingdom { display: block; margin-bottom: 6px; font-size: 11px; color: var(--ink-dim); }
 .legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.legend li { display: grid; grid-template-columns: 30px 1fr; gap: 6px; align-items: center; font-size: 13px; line-height: 1.2; }
-.legend .em { font-family: var(--emoji); font-size: 22px; text-align: center; }
+.legend li { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; font-size: 13px; line-height: 1.2; }
+.legend .em { display: grid; place-items: center; height: 34px; }
+.legend .em .glyph { font-size: 24px; }
+.legend .em .art { width: 34px; height: 34px; }
 .legend small { display: block; color: var(--ink-dim); font-size: 11px; }
-.legend-full li { grid-template-columns: 34px 1fr; align-items: start; }
+.legend-full li { align-items: start; }
 .legend-full .why { color: var(--ink-dim); font-size: 12px; }
 .promo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .promo-grid button {
   border: 1px solid var(--line); background: var(--bg); border-radius: 14px; padding: 10px 4px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 700;
 }
-.promo-grid .em { font-family: var(--emoji); font-size: 30px; }
+.promo-grid .glyph { font-size: 32px; }
+.promo-grid .art { width: 40px; height: 40px; }
 
 @media (max-width: 380px) { .legend { grid-template-columns: 1fr; } h1 { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) {
-  .idle { animation: none !important; }
+  .idle, .flag { animation: none !important; }
   .card { animation: none; }
 }
 </style>
 </head>
 <body>
 
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="g-vio" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#efdcff"/><stop offset=".45" stop-color="#a77bd8"/><stop offset="1" stop-color="#55298a"/></radialGradient>
+    <radialGradient id="g-pink" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffd9e8"/><stop offset=".5" stop-color="#e2779f"/><stop offset="1" stop-color="#8f2c58"/></radialGradient>
+    <linearGradient id="g-teal" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1f6e55"/><stop offset=".5" stop-color="#46b88e"/><stop offset="1" stop-color="#a3f0d0"/></linearGradient>
+    <linearGradient id="g-amber" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#9a5412"/><stop offset=".55" stop-color="#f0a040"/><stop offset="1" stop-color="#ffe2a0"/></linearGradient>
+    <radialGradient id="g-blue" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#e0f1ff"/><stop offset=".5" stop-color="#6ab0e6"/><stop offset="1" stop-color="#2a5794"/></radialGradient>
+    <radialGradient id="g-gold" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff5c4"/><stop offset=".5" stop-color="#f2c23c"/><stop offset="1" stop-color="#9c6d0c"/></radialGradient>
+    <radialGradient id="g-honey" cx="40%" cy="25%" r="80%"><stop offset="0" stop-color="#f6d79a"/><stop offset=".55" stop-color="#c98a3a"/><stop offset="1" stop-color="#7a4b18"/></radialGradient>
+    <linearGradient id="g-stem" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e4d6bb"/><stop offset=".45" stop-color="#fffaf0"/><stop offset="1" stop-color="#d4c3a2"/></linearGradient>
+    <linearGradient id="g-wood" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4e301a"/><stop offset=".4" stop-color="#9a6a40"/><stop offset="1" stop-color="#4a2e18"/></linearGradient>
+    <radialGradient id="g-shelf" cx="30%" cy="30%" r="90%"><stop offset="0" stop-color="#f8dca6"/><stop offset=".55" stop-color="#d39443"/><stop offset="1" stop-color="#8a5522"/></radialGradient>
+    <linearGradient id="g-chant" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd66e"/><stop offset=".6" stop-color="#f6a21f"/><stop offset="1" stop-color="#d77f0c"/></linearGradient>
+    <radialGradient id="g-puff" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#efe5cf"/><stop offset="1" stop-color="#bba981"/></radialGradient>
+    <radialGradient id="g-red" cx="40%" cy="25%" r="85%"><stop offset="0" stop-color="#ff9c8a"/><stop offset=".5" stop-color="#e12b1d"/><stop offset="1" stop-color="#8a1009"/></radialGradient>
+    <radialGradient id="g-porc" cx="40%" cy="25%" r="85%"><stop offset="0" stop-color="#d9a468"/><stop offset=".55" stop-color="#97592a"/><stop offset="1" stop-color="#55300f"/></radialGradient>
+  </defs>
+</svg>
+
 <div class="app">
   <header class="top">
-    <h1>Саванна <span class="amp">и</span> Океан</h1>
+    <h1 id="title">Саванна <span class="amp">и</span> Океан</h1>
     <div class="tools">
       <button class="icon-btn" id="btn-legend" type="button" aria-label="Кто есть кто">📖</button>
       <button class="icon-btn" id="btn-sound" type="button" aria-label="Звук" aria-pressed="false">🔊</button>
@@ -265,8 +316,10 @@ h1 .amp { color: var(--coral); }
 <div class="modal" id="m-menu">
   <section class="card">
     <span class="eyebrow">Шахматы, где фигуры живые</span>
-    <h2>Саванна против Океана</h2>
-    <p>Правила обычных шахмат. Белые — звери саванны, чёрные — жители океана.</p>
+    <h2>Четыре царства</h2>
+    <p>Правила обычных шахмат. Выберите, кто играет белыми и кто чёрными: звери саванны, жители океана, бактерии или грибы.</p>
+    <div class="field"><span>Белые</span><div class="seg armies" id="seg-w"></div></div>
+    <div class="field"><span>Чёрные</span><div class="seg armies" id="seg-b"></div></div>
     <div class="legend" id="legend-short"></div>
     <div class="field"><span>Соперник</span>
       <div class="seg" id="seg-mode">
@@ -274,10 +327,10 @@ h1 .amp { color: var(--coral); }
         <button type="button" data-v="duo">Вдвоём</button>
       </div>
     </div>
-    <div class="field" id="f-side"><span>Вы играете за</span>
+    <div class="field" id="f-side"><span>Вы играете</span>
       <div class="seg" id="seg-side">
-        <button type="button" data-v="w">🦁 Саванну</button>
-        <button type="button" data-v="b">🐋 Океан</button>
+        <button type="button" data-v="w">Белыми</button>
+        <button type="button" data-v="b">Чёрными</button>
       </div>
     </div>
     <div class="field" id="f-level"><span>Сила компьютера</span>
@@ -297,7 +350,7 @@ h1 .amp { color: var(--coral); }
 <div class="modal" id="m-legend" hidden>
   <section class="card">
     <span class="eyebrow">Кто есть кто</span>
-    <h2>Звери и их ходы</h2>
+    <h2>Четыре армии и их ходы</h2>
     <div class="legend legend-full" id="legend-full"></div>
     <button class="btn primary" id="btn-legend-close" type="button">Понятно</button>
   </section>
@@ -333,10 +386,55 @@ h1 .amp { color: var(--coral); }
   };
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // ---------------- drawn creatures (bacteria and fungi have no emoji) ----------------
+  const hl = (cx, cy, rx, ry, o = 0.5) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#fff" opacity="${o}"/>`;
+  const ball = (cx, cy, r, g) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${g})"/>${hl(cx - r * 0.33, cy - r * 0.38, r * 0.32, r * 0.2, 0.55)}`;
+  const ART = {
+    // Bacteria
+    coccus: ball(50, 64, 26, 'g-vio') + '<circle cx="44" cy="70" r="3" fill="#4a1f7a" opacity=".35"/><circle cx="58" cy="62" r="2.5" fill="#4a1f7a" opacity=".35"/><circle cx="52" cy="77" r="2" fill="#4a1f7a" opacity=".3"/>',
+    bacillus: '<g class="flag"><path d="M44 24 q-6 -7 0 -12 q6 -5 0 -10" stroke="#8f2c58" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M56 24 q6 -7 0 -12 q-6 -5 0 -10" stroke="#8f2c58" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>'
+      + '<rect x="33" y="20" width="34" height="72" rx="17" fill="url(#g-pink)"/><path d="M50 36 q8 7 0 14 q-8 7 0 14 q8 7 0 12" stroke="#7a2048" stroke-width="3" fill="none" opacity=".4" stroke-linecap="round"/><rect x="39" y="28" width="6" height="38" rx="3" fill="#fff" opacity=".45"/>',
+    spirillum: '<g class="flag"><path d="M70 14 l6 -9 M70 14 l9 -4 M70 14 l2 -11" stroke="#1f6e55" stroke-width="2" stroke-linecap="round"/></g>'
+      + '<path d="M30 88 C 14 74, 50 72, 40 58 S 62 44, 52 32 S 76 24, 70 14" stroke="url(#g-teal)" stroke-width="13" fill="none" stroke-linecap="round"/><path d="M28 85 C 14 72, 48 70, 38 57 S 60 43, 50 31" stroke="#fff" stroke-width="3" fill="none" opacity=".4" stroke-linecap="round"/>',
+    vibrio: '<g class="flag r"><path d="M70 28 q8 -10 14 -2 q6 8 12 -4" stroke="#9a5412" stroke-width="2.6" fill="none" stroke-linecap="round"/></g>'
+      + '<path d="M38 86 C 18 62, 34 32, 68 28" stroke="url(#g-amber)" stroke-width="24" fill="none" stroke-linecap="round"/><path d="M34 76 C 24 58, 36 40, 58 34" stroke="#fff" stroke-width="4" fill="none" opacity=".45" stroke-linecap="round"/><circle cx="44" cy="58" r="3" fill="#7a3f0a" opacity=".35"/>',
+    proteus: '<g transform="rotate(-32 50 58)"><g class="flag">'
+      + '<path d="M34 46 q-4 -8 1 -15 M46 45 q-4 -9 1 -17 M58 45 q-4 -9 1 -17 M68 46 q-4 -8 1 -15 M34 70 q4 8 -1 15 M46 71 q4 9 -1 17 M58 71 q4 9 -1 17 M68 70 q4 8 -1 15 M27 58 q-8 -3 -14 2 M75 58 q8 3 14 -2" stroke="#2a5794" stroke-width="2" fill="none" stroke-linecap="round"/></g>'
+      + '<rect x="26" y="44" width="50" height="28" rx="14" fill="url(#g-blue)"/><rect x="33" y="49" width="26" height="5" rx="2.5" fill="#fff" opacity=".5"/></g>',
+    staph: ball(32, 76, 13, 'g-gold') + ball(50, 79, 13, 'g-gold') + ball(68, 76, 13, 'g-gold') + ball(41, 58, 13, 'g-gold') + ball(59, 58, 13, 'g-gold') + ball(50, 40, 13, 'g-gold') + ball(30, 52, 9, 'g-gold') + ball(70, 52, 9, 'g-gold'),
+    // Fungi
+    honey: '<path d="M37 92 Q34 74 39 52" stroke="url(#g-stem)" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M62 92 Q66 78 63 62" stroke="url(#g-stem)" stroke-width="7" fill="none" stroke-linecap="round"/>'
+      + '<path d="M33 66 q6 3 12 0" stroke="#fff" stroke-width="3" fill="none"/><path d="M58 74 q5 3 10 0" stroke="#fff" stroke-width="3" fill="none"/>'
+      + '<path d="M18 54 Q22 30 40 28 Q58 30 62 54 Q40 60 18 54Z" fill="url(#g-honey)"/><path d="M48 64 Q51 46 64 45 Q77 46 80 64 Q64 69 48 64Z" fill="url(#g-honey)"/>'
+      + '<circle cx="32" cy="42" r="1.8" fill="#5a3410" opacity=".55"/><circle cx="42" cy="37" r="1.8" fill="#5a3410" opacity=".55"/><circle cx="50" cy="44" r="1.6" fill="#5a3410" opacity=".55"/><circle cx="60" cy="54" r="1.5" fill="#5a3410" opacity=".55"/><circle cx="68" cy="51" r="1.5" fill="#5a3410" opacity=".55"/>' + hl(32, 36, 7, 3, 0.35),
+    polypore: '<rect x="30" y="34" width="40" height="58" rx="4" fill="url(#g-wood)"/><ellipse cx="50" cy="34" rx="20" ry="6" fill="#caa070"/><ellipse cx="50" cy="34" rx="12" ry="3.5" fill="none" stroke="#8a5f35" stroke-width="1.4"/><ellipse cx="50" cy="34" rx="5" ry="1.6" fill="none" stroke="#8a5f35" stroke-width="1.2"/>'
+      + '<path d="M38 46 v40 M60 44 v44" stroke="#3a2210" stroke-width="1.4" opacity=".45"/>'
+      + '<path d="M69 50 q20 0 22 10 q-11 5 -22 1 Z" fill="url(#g-shelf)"/><path d="M71 54 q12 0 16 5" stroke="#8a5522" stroke-width="1.2" fill="none" opacity=".6"/>'
+      + '<path d="M69 68 q24 0 27 12 q-13 6 -27 1 Z" fill="url(#g-shelf)"/><path d="M71 72 q15 0 20 6" stroke="#8a5522" stroke-width="1.2" fill="none" opacity=".6"/>'
+      + '<path d="M31 60 q-17 0 -20 9 q10 4 20 1 Z" fill="url(#g-shelf)"/><path d="M29 63 q-10 1 -14 5" stroke="#8a5522" stroke-width="1.2" fill="none" opacity=".6"/>',
+    chanterelle: '<path d="M20 36 Q50 26 80 36 Q74 46 59 52 L56 88 Q50 93 44 88 L41 52 Q26 46 20 36Z" fill="url(#g-chant)"/>'
+      + '<path d="M20 36 q7 -6 15 -1 q7 -6 15 -1 q7 -6 15 -1 q7 -6 15 2" stroke="#d77f0c" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
+      + '<ellipse cx="50" cy="35" rx="22" ry="4.5" fill="#e98f12" opacity=".55"/>'
+      + '<path d="M30 42 L44 56 M40 44 L47 58 M50 44 L50 60 M60 44 L53 58 M70 42 L56 56" stroke="#c2700a" stroke-width="1.3" opacity=".6"/>' + hl(36, 33, 8, 2, 0.35),
+    puffball: '<path d="M34 90 q-6 -6 -10 -4 M40 91 q-2 -8 -7 -10 M62 91 q3 -8 8 -9 M68 90 q6 -5 10 -3" stroke="#5f8f3a" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
+      + '<path d="M44 90 Q42 80 36 78 L64 78 Q58 80 56 90 Z" fill="#dccfae"/>'
+      + '<path d="M50 30 C 82 30, 88 64, 66 79 Q50 86 34 79 C 12 64, 18 30, 50 30Z" fill="url(#g-puff)"/>'
+      + '<g fill="#bfae86"><path d="M38 42 l2 -5 l2 5z"/><path d="M50 38 l2 -5 l2 5z"/><path d="M61 44 l2 -5 l2 5z"/><path d="M32 56 l2 -5 l2 5z"/><path d="M45 52 l2 -5 l2 5z"/><path d="M57 58 l2 -5 l2 5z"/><path d="M68 56 l2 -4 l2 4z"/><path d="M40 66 l2 -4 l2 4z"/><path d="M52 69 l2 -4 l2 4z"/><path d="M64 68 l2 -4 l2 4z"/></g>'
+      + '<ellipse cx="50" cy="32" rx="5" ry="2.4" fill="#6f5c36"/><path d="M47 28 q-3 -6 2 -9 M53 28 q4 -5 0 -10" stroke="#a89470" stroke-width="2" fill="none" opacity=".7" stroke-linecap="round"/>' + hl(38, 40, 9, 5, 0.6),
+    amanita: '<ellipse cx="50" cy="90" rx="13" ry="5" fill="#f2ead8"/><path d="M44 90 Q42 72 46 54 L54 54 Q58 72 56 90 Z" fill="url(#g-stem)"/>'
+      + '<path d="M40 64 q10 6 20 0 l3 5 q-13 7 -26 0 Z" fill="#fbf6ea" stroke="#d9cfb8" stroke-width="1"/>'
+      + '<path d="M14 56 Q18 18 50 16 Q82 18 86 56 Q50 63 14 56Z" fill="url(#g-red)"/><path d="M16 56 Q50 64 84 56" stroke="#f4ead6" stroke-width="3.5" fill="none"/>'
+      + '<g fill="#fff"><ellipse cx="36" cy="30" rx="4.5" ry="3.2"/><ellipse cx="54" cy="25" rx="5" ry="3.4"/><ellipse cx="70" cy="36" rx="4" ry="3"/><ellipse cx="28" cy="46" rx="3.6" ry="2.6"/><ellipse cx="48" cy="42" rx="4" ry="3"/><ellipse cx="64" cy="50" rx="3.4" ry="2.4"/><ellipse cx="78" cy="48" rx="2.6" ry="2"/></g>',
+    porcini: '<path d="M36 91 Q26 72 39 52 L61 52 Q74 72 64 91 Q50 95 36 91Z" fill="url(#g-stem)"/>'
+      + '<path d="M38 64 q12 5 24 0 M36 74 q14 5 28 0 M38 84 q12 4 24 0" stroke="#b6a07a" stroke-width="1.2" fill="none" opacity=".7"/>'
+      + '<path d="M10 54 Q12 14 50 12 Q88 14 90 54 Q50 61 10 54Z" fill="url(#g-porc)"/><path d="M13 54 Q50 64 87 54 Q50 59 13 54Z" fill="#e7cf7e"/>' + hl(36, 26, 12, 5, 0.25),
+  };
+
   // ---------------- who is who ----------------
-  const SP = {
-    w: {
-      name: 'Саванна', gen: 'саванны', crest: '🦁',
+  const ARMIES = {
+    savanna: {
+      name: 'Саванна', gen: 'саванны', kingdom: 'Царство животных · суша', ground: ['#e9c98c', '#d9d2a4'], crest: '#f3dca8',
+      die: 'dust', land: 'dust', mated: 'Лев загнан в угол, и саванна признаёт поражение.',
       k: { e: '🦁', n: 'Лев', mv: 'king', say: 'Р-р-р!', why: 'Царь зверей. Шагает на одну клетку в любую сторону.' },
       q: { e: '🐆', n: 'Леопард', mv: 'dash', why: 'Самый ловкий хищник: бьёт в любую сторону и на любое расстояние.' },
       r: { e: '🦏', n: 'Носорог', mv: 'charge', why: 'Несётся напролом, но только по прямой.' },
@@ -344,8 +442,9 @@ h1 .amp { color: var(--coral); }
       n: { e: '🦓', n: 'Зебра', mv: 'leap', why: 'Полосатая лошадь: прыгает буквой «Г» через кого угодно.' },
       p: { e: '🐒', n: 'Мартышка', mv: 'hop', why: 'Их много. Скачут вперёд, а дойдя до края, становятся кем захотят.' },
     },
-    b: {
-      name: 'Океан', gen: 'океана', crest: '🐋',
+    ocean: {
+      name: 'Океан', gen: 'океана', kingdom: 'Царство животных · море', ground: ['#79c3d3', '#a9d6cf'], crest: '#b4dde6',
+      die: 'sink', land: 'ripple', mated: 'Кит окружён со всех сторон, и океан сдаётся.',
       k: { e: '🐋', n: 'Кит', mv: 'glide', say: 'У-у-у!', why: 'Самый большой и неторопливый житель моря. Плывёт на одну клетку.' },
       q: { e: '🦈', n: 'Акула', mv: 'lunge', why: 'Гроза океана: бросается в любую сторону на любое расстояние.' },
       r: { e: '🐢', n: 'Черепаха', mv: 'crawl', why: 'Панцирь-крепость. Плывёт только прямо.' },
@@ -353,12 +452,37 @@ h1 .amp { color: var(--coral); }
       n: { e: '🐬', n: 'Дельфин', mv: 'dive', why: 'Выпрыгивает из воды и перелетает через фигуры буквой «Г».' },
       p: { e: '🐠', n: 'Рыбка', mv: 'swim', why: 'Стайка мальков. Доплыв до края, вырастает в кого угодно.' },
     },
+    bacteria: {
+      name: 'Бактерии', gen: 'бактерий', kingdom: 'Царство бактерий', ground: ['#dcc0e4', '#e8d8e4'], crest: '#ead8f0',
+      die: 'lysis', land: 'goo', mated: 'Стафилококк окружён, и колония больше не может делиться.',
+      k: { a: 'staph', n: 'Стафилококк', mv: 'wobble', say: 'Ай, антибиотик!', why: 'Золотистый стафилококк: гроздь шариков, похожая на корону. Ползёт на одну клетку.' },
+      q: { a: 'vibrio', n: 'Вибрион', mv: 'dart', why: 'Холерный вибрион — самый быстрый пловец: жгутик несёт его куда угодно.' },
+      r: { a: 'bacillus', n: 'Бацилла', mv: 'slide', why: 'Прямая палочка — и ходит только прямо.' },
+      b: { a: 'spirillum', n: 'Спирилла', mv: 'corkscrew', why: 'Спираль ввинчивается наискосок — по диагонали.' },
+      n: { a: 'proteus', n: 'Протей', mv: 'swarm', why: 'Покрыт жгутиками, роится и перескакивает буквой «Г».' },
+      p: { a: 'coccus', n: 'Кокк', mv: 'roll', why: 'Маленький шарик. Катится вперёд и, доделившись до края, становится кем угодно.' },
+    },
+    fungi: {
+      name: 'Грибы', gen: 'грибов', kingdom: 'Царство грибов', ground: ['#9fbf7c', '#c6d4a4'], crest: '#cfe0b0',
+      die: 'spores', land: 'spores', mated: 'Белый гриб окружён, и грибница сдаётся.',
+      k: { a: 'porcini', n: 'Белый гриб', mv: 'waddle', say: 'Спасите споры!', why: 'Боровик — «царь грибов». Важно шагает на одну клетку.' },
+      q: { a: 'amanita', n: 'Мухомор', mv: 'spin', why: 'Самый опасный гриб леса: бьёт в любую сторону на любое расстояние.' },
+      r: { a: 'polypore', n: 'Трутовик', mv: 'heavy', why: 'Растёт на пне, как крепость с балконами. Ходит только прямо.' },
+      b: { a: 'chanterelle', n: 'Лисичка', mv: 'sway', why: 'Хитрая, как лиса: ходит наискосок.' },
+      n: { a: 'puffball', n: 'Дождевик', mv: 'puff', why: 'Пыхает спорами и скачет, как мячик, буквой «Г».' },
+      p: { a: 'honey', n: 'Опята', mv: 'sprout', why: 'Растут гурьбой. Дойдя до края, вырастают в кого угодно.' },
+    },
   };
+  const ARMY_IDS = ['savanna', 'ocean', 'bacteria', 'fungi'];
   const ROLE = { k: 'Король', q: 'Ферзь', r: 'Ладья', b: 'Слон', n: 'Конь', p: 'Пешка' };
   const ORDER = ['k', 'q', 'r', 'b', 'n', 'p'];
   const FILES = 'abcdefgh';
   const sqName = (i) => FILES[i & 7] + (8 - (i >> 3));
   const other = (c) => (c === 'w' ? 'b' : 'w');
+  const art = (armyId, t) => {
+    const P = ARMIES[armyId][t];
+    return P.e ? `<span class="glyph">${P.e}</span>` : `<svg class="art" viewBox="0 0 100 100" aria-hidden="true">${ART[P.a]}</svg>`;
+  };
 
   // ---------------- engine ----------------
   const D = {
@@ -575,6 +699,7 @@ h1 .amp { color: var(--coral); }
     return rest.length === 0 || (rest.length === 1 && (rest[0].t === 'n' || rest[0].t === 'b'));
   }
 
+
   // ---------------- sound ----------------
   let actx = null;
   let muted = store.get('zoochess.muted') === '1';
@@ -594,10 +719,31 @@ h1 .amp { color: var(--coral); }
     o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.05);
   }
   const SFX = {
-    pick(c) { c === 'w' ? tone(330, 0.08, 'triangle', 0.07) : tone(520, 0.08, 'sine', 0.07, 1.4); },
-    move(c) { c === 'w' ? tone(150, 0.16, 'triangle', 0.14, 0.6) : (tone(280, 0.12, 'sine', 0.1, 2.4), tone(420, 0.1, 'sine', 0.06, 2, 0.07)); },
-    capture(c) { c === 'w' ? (tone(220, 0.22, 'square', 0.06, 0.4), tone(120, 0.3, 'triangle', 0.12, 0.5)) : (tone(600, 0.25, 'sine', 0.08, 0.3), tone(900, 0.12, 'sine', 0.05, 1.6, 0.1)); },
-    check(c) { c === 'w' ? tone(110, 0.55, 'sawtooth', 0.07, 0.7) : tone(240, 0.9, 'sine', 0.1, 0.55); },
+    pick(army) { ({ savanna: () => tone(330, 0.08, 'triangle', 0.07), ocean: () => tone(520, 0.08, 'sine', 0.07, 1.4), bacteria: () => tone(760, 0.06, 'sine', 0.06, 0.7), fungi: () => tone(440, 0.07, 'triangle', 0.06, 1.3) })[army](); },
+    move(army) {
+      ({
+        savanna: () => tone(150, 0.16, 'triangle', 0.14, 0.6),
+        ocean: () => { tone(280, 0.12, 'sine', 0.1, 2.4); tone(420, 0.1, 'sine', 0.06, 2, 0.07); },
+        bacteria: () => { tone(620, 0.09, 'sine', 0.07, 0.5); tone(480, 0.08, 'sine', 0.05, 0.6, 0.06); },
+        fungi: () => tone(360, 0.12, 'triangle', 0.09, 1.7),
+      })[army]();
+    },
+    capture(army) {
+      ({
+        savanna: () => { tone(220, 0.22, 'square', 0.06, 0.4); tone(120, 0.3, 'triangle', 0.12, 0.5); },
+        ocean: () => { tone(600, 0.25, 'sine', 0.08, 0.3); tone(900, 0.12, 'sine', 0.05, 1.6, 0.1); },
+        bacteria: () => { tone(900, 0.08, 'square', 0.04, 0.4); tone(300, 0.2, 'sine', 0.08, 0.4, 0.05); },
+        fungi: () => { tone(500, 0.3, 'triangle', 0.06, 0.5); tone(1200, 0.2, 'sine', 0.03, 0.8, 0.08); },
+      })[army]();
+    },
+    check(army) {
+      ({
+        savanna: () => tone(110, 0.55, 'sawtooth', 0.07, 0.7),
+        ocean: () => tone(240, 0.9, 'sine', 0.1, 0.55),
+        bacteria: () => { tone(880, 0.12, 'square', 0.04); tone(660, 0.12, 'square', 0.04, 1, 0.14); },
+        fungi: () => tone(300, 0.5, 'triangle', 0.08, 0.6),
+      })[army]();
+    },
     end() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.25, 'triangle', 0.08, 1, i * 0.12)); },
   };
   function setMuted(v) {
@@ -609,14 +755,16 @@ h1 .amp { color: var(--coral); }
   setMuted(muted);
 
   // ---------------- game state ----------------
-  const SAVE_KEY = 'zoochess.v1';
-  let G = null;          // { mode, side, level, hist:[state], log:[text], over }
-  let S = null;          // current position
-  let moves = [];        // legal moves of S
+  const SAVE_KEY = 'zoochess.v2';
+  let G = null;          // { mode, side, level, armies:{w,b}, hist:[state], log:[text], over, lastMove }
+  let S = null;
+  let moves = [];
   let sel = -1, selMoves = [];
   let busy = false;
-  const opts = { mode: 'ai', side: 'w', level: 2 };
+  const opts = { mode: 'ai', side: 'w', level: 2, w: 'savanna', b: 'ocean' };
 
+  const armyOf = (c) => (G ? G.armies[c] : opts[c]);
+  const A = (c) => ARMIES[armyOf(c)];
   const isHumanTurn = () => G && !G.over && (G.mode === 'duo' || S.turn === G.side);
   const bottomColor = () => (G && G.mode === 'ai' ? G.side : 'w');
   const flipped = () => bottomColor() === 'b';
@@ -627,6 +775,7 @@ h1 .amp { color: var(--coral); }
       const raw = store.get(SAVE_KEY); if (!raw) return null;
       const g = JSON.parse(raw);
       if (!g || !Array.isArray(g.hist) || !g.hist.length || !g.hist[0].b || g.hist[0].b.length !== 64) return null;
+      if (!g.armies || !ARMIES[g.armies.w] || !ARMIES[g.armies.b]) return null;
       return g;
     } catch (e) { return null; }
   }
@@ -651,7 +800,12 @@ h1 .amp { color: var(--coral); }
       if (x === 0) { const f = document.createElement('span'); f.className = 'coord r'; f.textContent = 8 - r; d.appendChild(f); }
       squaresEl.appendChild(d);
     }
-    boardEl.classList.toggle('flipped', flipped());
+    const bot = A(bottomColor()), top = A(other(bottomColor()));
+    boardEl.style.setProperty('--top1', top.ground[0]);
+    boardEl.style.setProperty('--top2', top.ground[1]);
+    boardEl.style.setProperty('--bot2', bot.ground[1]);
+    boardEl.style.setProperty('--bot1', bot.ground[0]);
+    $('title').innerHTML = `${A('w').name} <span class="amp">и</span> ${A('b').name}`;
   }
   const sqEl = (i) => squaresEl.querySelector(`[data-sq="${i}"]`);
 
@@ -659,16 +813,16 @@ h1 .amp { color: var(--coral); }
     let el = els.get(p.id);
     if (!el) {
       el = document.createElement('div');
-      el.innerHTML = '<div class="face"><div class="idle"><span class="glyph"></span></div></div>';
+      el.innerHTML = '<div class="face"><div class="idle"></div></div>';
       el.querySelector('.idle').style.animationDelay = (-Math.random() * 3).toFixed(2) + 's';
       piecesEl.appendChild(el);
       els.set(p.id, el);
     }
-    const cls = 'pc team-' + p.c + ' i-' + p.c + p.t;
+    const army = armyOf(p.c);
+    const key = army + '-' + p.t;
     const keep = ['sel', 'check'].filter((k) => el.classList.contains(k));
-    el.className = cls + (keep.length ? ' ' + keep.join(' ') : '');
-    el.dataset.t = p.t;
-    el.querySelector('.glyph').textContent = SP[p.c][p.t].e;
+    el.className = `pc side-${p.c} i-${key}` + (keep.length ? ' ' + keep.join(' ') : '');
+    if (el.dataset.key !== key) { el.dataset.key = key; el.querySelector('.idle').innerHTML = art(army, p.t); }
     return el;
   }
 
@@ -680,7 +834,6 @@ h1 .amp { color: var(--coral); }
       const el = pieceEl(p);
       const d = disp(i);
       el.style.transform = T(d.x, d.y);
-      el.classList.remove('sel', 'check');
     });
     for (const [id, el] of els) if (!seen.has(id)) { el.remove(); els.delete(id); }
     paintSquares();
@@ -706,7 +859,6 @@ h1 .amp { color: var(--coral); }
   }
 
   function capturedBy(color) {
-    // pieces of the other side that are no longer on the board
     const enemy = other(color);
     const full = { q: 1, r: 2, b: 2, n: 2, p: 8 };
     const now = { q: 0, r: 0, b: 0, n: 0, p: 0 };
@@ -715,18 +867,19 @@ h1 .amp { color: var(--coral); }
     const lost = [];
     for (const t of ['q', 'r', 'b', 'n']) for (let k = now[t]; k < full[t]; k++) lost.push(t);
     for (let k = now.p + extra; k < 8; k++) lost.push('p');
-    return lost.map((t) => SP[enemy][t].e);
+    return lost.map((t) => art(armyOf(enemy), t));
   }
 
   function paintBars() {
     const bot = bottomColor(), top = other(bot);
-    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'ходят первыми' : 'ходят вторыми') : c === G.side ? 'вы' : 'компьютер · ' + ['', 'детёныш', 'охотник', 'вожак'][G.level]);
+    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : (c === G.side ? 'вы' : 'компьютер · ' + ['', 'детёныш', 'охотник', 'вожак'][G.level]) + (c === 'w' ? ' · белые' : ' · чёрные'));
     [['top', top], ['bot', bot]].forEach(([pos, c]) => {
-      $('crest-' + pos).textContent = SP[c].crest;
-      $('crest-' + pos).className = 'crest ' + c;
-      $('name-' + pos).textContent = SP[c].name;
+      const crest = $('crest-' + pos);
+      crest.innerHTML = art(armyOf(c), 'k');
+      crest.style.setProperty('--crest', A(c).crest);
+      $('name-' + pos).textContent = A(c).name;
       $('sub-' + pos).textContent = who(c);
-      $('tray-' + pos).innerHTML = capturedBy(c).map((e) => `<span>${e}</span>`).join('');
+      $('tray-' + pos).innerHTML = capturedBy(c).map((h) => `<span>${h}</span>`).join('');
       $('bar-' + pos).classList.toggle('turn', !G.over && S.turn === c);
     });
     $('btn-undo').disabled = busy || G.hist.length < (G.mode === 'ai' && G.side === 'b' ? 4 : 2);
@@ -737,9 +890,9 @@ h1 .amp { color: var(--coral); }
     st.classList.remove('alert');
     if (text) { st.textContent = text; }
     else if (G.over) { st.textContent = G.over.title; st.classList.add('alert'); }
-    else if (inCheck(S)) { st.textContent = `Шах! ${SP[S.turn].k.n} под ударом`; st.classList.add('alert'); }
-    else if (G.mode === 'ai') st.textContent = S.turn === G.side ? 'Ваш ход' : `${SP[S.turn].name} думает…`;
-    else st.textContent = `Ход ${SP[S.turn].gen}`;
+    else if (inCheck(S)) { st.textContent = `Шах! ${A(S.turn).k.n} под ударом`; st.classList.add('alert'); }
+    else if (G.mode === 'ai') st.textContent = S.turn === G.side ? 'Ваш ход' : `${A(S.turn).name}: думают…`;
+    else st.textContent = `Ход: ${A(S.turn).name}`;
     $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : 'Выберите фигуру, чтобы увидеть её ходы';
   }
 
@@ -765,7 +918,7 @@ h1 .amp { color: var(--coral); }
   function dust(p, n = 7, big = false) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, r = (big ? 0.55 : 0.35) * (0.6 + Math.random() * 0.6);
-      particle(p.x, p.y + 0.25, { size: big ? 12 : 9, bg: 'rgba(160,120,60,0.55)', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.5 - 0.1, s0: 0.6, s1: 1.4, dur: 520 + Math.random() * 200 });
+      particle(p.x, p.y + 0.3, { size: big ? 12 : 9, bg: 'rgba(160,120,60,0.55)', dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.5 - 0.1, s0: 0.6, s1: 1.4, dur: 520 + Math.random() * 200 });
     }
   }
   function bubbles(p, n = 6, rise = 0.9) {
@@ -778,10 +931,22 @@ h1 .amp { color: var(--coral); }
       const a = -Math.PI * (0.15 + 0.7 * (i / 8));
       particle(p.x, p.y + 0.15, { size: 6, bg: 'rgba(220,245,255,0.9)', dx: Math.cos(a) * 0.55, dy: Math.sin(a) * 0.6, s1: 0.4, dur: 520 });
     }
-    particle(p.x, p.y + 0.2, { size: 26, border: '2px solid rgba(255,255,255,0.8)', s0: 0.3, s1: 2.4, dur: 650 });
+    particle(p.x, p.y + 0.25, { size: 26, border: '2px solid rgba(255,255,255,0.8)', s0: 0.3, s1: 2.4, dur: 650 });
   }
   function spout(p) {
     for (let i = 0; i < 7; i++) particle(p.x + (Math.random() - 0.5) * 0.15, p.y - 0.3, { size: 5, bg: 'rgba(225,248,255,0.95)', dx: (Math.random() - 0.5) * 0.5, dy: -0.5 - Math.random() * 0.3, s1: 0.5, dur: 650, delay: i * 30 });
+  }
+  function goo(p, n = 8, power = 0.5) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      particle(p.x, p.y, { size: 4 + Math.random() * 6, bg: 'rgba(150,90,200,0.7)', dx: Math.cos(a) * power, dy: Math.sin(a) * power, s0: 1, s1: 0.2, dur: 450 + Math.random() * 250 });
+    }
+    particle(p.x, p.y + 0.1, { size: 20, border: '2px solid rgba(150,90,200,0.7)', s0: 0.4, s1: 2.2, dur: 550 });
+  }
+  function spores(p, n = 12, rise = 0.8) {
+    for (let i = 0; i < n; i++) {
+      particle(p.x + (Math.random() - 0.5) * 0.3, p.y - 0.15, { size: 2.5 + Math.random() * 3.5, bg: 'rgba(150,110,40,0.75)', dx: (Math.random() - 0.5) * 0.9, dy: -rise * (0.4 + Math.random() * 0.7), s0: 1, s1: 1.8, dur: 900 + Math.random() * 600, delay: i * 25, ease: 'cubic-bezier(.2,.6,.4,1)' });
+    }
   }
   function say(i, text) {
     const d = disp(i);
@@ -799,7 +964,16 @@ h1 .amp { color: var(--coral); }
     const nx = -dy / len, ny = dx / len;
     const at = (a, ox = 0, oy = 0, extra = '') => T(f.x + dx * a + ox, f.y + dy * a + oy, extra);
     const K = (list) => list.map(([o, tr]) => ({ offset: o, transform: tr }));
+    const wave = (n, amp, rot, dur, ease = 'ease-in-out') => {
+      const k = [];
+      for (let i = 0; i <= n; i++) {
+        const w = Math.sin((i / n) * Math.PI * 2 * Math.max(1, Math.round(len / 1.5))) * amp;
+        k.push([i / n, at(i / n, nx * w, ny * w, i % n ? `rotate(${w > 0 ? rot : -rot}deg)` : '')]);
+      }
+      return { dur, ease, k: K(k) };
+    };
     switch (style) {
+      // savanna
       case 'hop': return { dur: 380, ease: 'ease-out', k: K([[0, at(0)], [0.45, at(0.5, 0, -0.35, 'scale(1.12)')], [0.8, at(1, 0, 0, 'scale(1.08,0.9)')], [1, at(1)]]) };
       case 'leap': return { dur: 580, ease: 'ease-in-out', k: K([[0, at(0)], [0.15, at(0, 0, 0.05, 'scale(1.1,0.85)')], [0.5, at(0.5, 0, -1.0, 'scale(1.35) rotate(-14deg)')], [0.85, at(1, 0, 0, 'scale(1.1,0.88)')], [1, at(1)]]) };
       case 'stomp': {
@@ -811,6 +985,7 @@ h1 .amp { color: var(--coral); }
       case 'charge': return { dur: 460, ease: 'ease-in', k: K([[0, at(0)], [0.25, at(-0.06, 0, 0, 'rotate(-8deg) scale(1.05)')], [0.85, at(1.05, 0, 0, 'rotate(6deg)')], [1, at(1)]]) };
       case 'dash': return { dur: 340, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0, 0, 0, 'scale(0.9,1.1)')], [0.6, at(0.7, 0, 0, 'scale(1.35,0.8)')], [1, at(1)]]) };
       case 'king': return { dur: 560, ease: 'ease-in-out', k: K([[0, at(0)], [0.25, at(0.35, 0, -0.2, 'scale(1.1)')], [0.5, at(0.55)], [0.75, at(0.85, 0, -0.18, 'scale(1.1)')], [1, at(1)]]) };
+      // ocean
       case 'glide': return { dur: 820, ease: 'ease-in-out', k: K([[0, at(0)], [0.5, at(0.5, 0, -0.08, 'rotate(4deg) scale(1.06)')], [1, at(1)]]) };
       case 'lunge': return { dur: 400, ease: 'cubic-bezier(.5,0,.3,1)', k: K([[0, at(0)], [0.28, at(-0.08, 0, 0, 'scale(0.92)')], [0.8, at(1.08, 0, 0, 'scale(1.2) rotate(-6deg)')], [1, at(1)]]) };
       case 'crawl': return { dur: 520 + len * 180, ease: 'ease-in-out', k: K([[0, at(0)], [0.25, at(0.25, 0, -0.04, 'rotate(-4deg)')], [0.5, at(0.5)], [0.75, at(0.75, 0, -0.04, 'rotate(4deg)')], [1, at(1)]]) };
@@ -819,12 +994,27 @@ h1 .amp { color: var(--coral); }
         for (let i = 0; i <= 6; i++) k.push([i / 6, at(i / 6, 0, 0, i === 0 || i === 6 ? '' : `rotate(${i % 2 ? 14 : -14}deg)`)]);
         return { dur: 380 + len * 110, ease: 'linear', k: K(k) };
       }
-      case 'swim': {
-        const k = [];
-        for (let i = 0; i <= 4; i++) { const w = Math.sin((i / 4) * Math.PI * 2) * 0.12; k.push([i / 4, at(i / 4, nx * w, ny * w, i % 4 ? `rotate(${w > 0 ? 10 : -10}deg)` : '')]); }
-        return { dur: 480, ease: 'ease-in-out', k: K(k) };
-      }
+      case 'swim': return wave(4, 0.12, 10, 480);
       case 'dive': return { dur: 640, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.05, 0, 0.08, 'scale(0.9)')], [0.5, at(0.5, 0, -1.15, 'scale(1.35) rotate(-28deg)')], [0.82, at(1, 0, 0.05, 'scale(0.95) rotate(20deg)')], [1, at(1)]]) };
+      // bacteria
+      case 'roll': return { dur: 460, ease: 'ease-in-out', k: K([[0, at(0)], [0.5, at(0.5, 0, 0, `rotate(${dx >= 0 ? 180 : -180}deg)`)], [1, at(1, 0, 0, `rotate(${dx >= 0 ? 360 : -360}deg)`)]]) };
+      case 'slide': return { dur: 360 + len * 90, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.05, 0, 0, 'scale(0.9,1.12)')], [0.6, at(0.65, 0, 0, 'scale(1.08,0.94)')], [1, at(1)]]) };
+      case 'corkscrew': return wave(10, 0.16, 22, 420 + len * 120, 'linear');
+      case 'dart': {
+        const k = [[0, at(0)], [0.15, at(-0.05, 0, 0, 'scale(0.85)')]];
+        for (let i = 1; i <= 4; i++) k.push([0.15 + i * 0.18, at(i / 4, nx * (i % 2 ? 0.06 : -0.06), ny * (i % 2 ? 0.06 : -0.06), `rotate(${i % 2 ? 9 : -9}deg)`)]);
+        k[k.length - 1] = [0.87, at(1.04)]; k.push([1, at(1)]);
+        return { dur: 360, ease: 'ease-out', k: K(k) };
+      }
+      case 'swarm': return { dur: 600, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.1, 0, -0.2, 'scale(1.1,0.9) rotate(10deg)')], [0.5, at(0.5, 0, -0.85, 'scale(1.3) rotate(-12deg)')], [0.75, at(0.85, 0, -0.25, 'rotate(10deg)')], [1, at(1)]]) };
+      case 'wobble': return { dur: 620, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.2, 0, 0, 'scale(1.15,0.85)')], [0.45, at(0.5, 0, -0.12, 'scale(0.9,1.12)')], [0.7, at(0.8, 0, 0, 'scale(1.12,0.88)')], [1, at(1)]]) };
+      // fungi
+      case 'sprout': return { dur: 560, ease: 'ease-in-out', k: K([[0, at(0)], [0.22, at(0, 0, 0.05, 'scale(1.1,0.45)')], [0.55, at(0.6, 0, -0.3, 'scale(0.9,1.1)')], [0.82, at(1, 0, 0.05, 'scale(1.1,0.5)')], [1, at(1)]]) };
+      case 'sway': return { dur: 440 + len * 120, ease: 'ease-in-out', k: K([[0, at(0)], [0.3, at(0.3, 0, -0.06, 'rotate(-12deg)')], [0.65, at(0.7, 0, -0.06, 'rotate(12deg)')], [1, at(1)]]) };
+      case 'heavy': return { dur: 560 + len * 170, ease: 'ease-in-out', k: K([[0, at(0)], [0.15, at(0, 0, 0, 'rotate(-5deg)')], [0.85, at(1, 0, 0, 'rotate(4deg)')], [1, at(1)]]) };
+      case 'puff': return { dur: 680, ease: 'linear', k: K([[0, at(0)], [0.1, at(0, 0, 0.04, 'scale(1.15,0.8)')], [0.35, at(0.45, 0, -0.8)], [0.6, at(0.8, 0, 0, 'scale(1.15,0.8)')], [0.78, at(0.92, 0, -0.25)], [0.92, at(1, 0, 0, 'scale(1.1,0.9)')], [1, at(1)]]) };
+      case 'spin': return { dur: 520, ease: 'ease-in-out', k: K([[0, at(0)], [0.5, at(0.5, 0, -0.4, 'rotate(180deg) scale(1.15)')], [1, at(1, 0, 0, 'rotate(360deg)')]]) };
+      case 'waddle': return { dur: 640, ease: 'ease-in-out', k: K([[0, at(0)], [0.25, at(0.25, 0, -0.05, 'rotate(-9deg)')], [0.5, at(0.5)], [0.75, at(0.75, 0, -0.05, 'rotate(9deg)')], [1, at(1)]]) };
       default: return { dur: 300, ease: 'ease-in-out', k: K([[0, at(0)], [1, at(1)]]) };
     }
   }
@@ -836,40 +1026,43 @@ h1 .amp { color: var(--coral); }
       if (t.x !== f.x) el.querySelector('.face').classList.toggle('flip', t.x > f.x);
       el.classList.add('moving');
       const a = el.animate(fr.k, { duration: dur, easing: fr.ease, fill: 'forwards' });
-      const done = () => { el.style.transform = T(t.x, t.y); a.cancel(); el.classList.remove('moving'); res(dur); };
-      a.onfinish = done;
-      a.oncancel = null;
+      a.onfinish = () => { el.style.transform = T(t.x, t.y); a.cancel(); el.classList.remove('moving'); res(dur); };
     });
   }
 
-  function landFx(style, t, c) {
+  function landFx(style, t, army) {
     if (reduce) return;
-    if (style === 'stomp') { boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake'); dust(t, 9, true); }
-    else if (style === 'charge' || style === 'leap' || style === 'dash') dust(t, 7);
-    else if (style === 'dive') splash(t);
-    else if (style === 'glide') spout(t);
-    else if (c === 'b') bubbles(t, 3, 0.5);
-    else dust(t, 4);
+    if (style === 'stomp' || style === 'heavy') { boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake'); }
+    if (style === 'dive') return splash(t);
+    if (style === 'glide') return spout(t);
+    if (style === 'puff') return spores(t, 16, 1);
+    ({
+      dust: () => dust(t, style === 'stomp' ? 10 : style === 'charge' || style === 'leap' || style === 'dash' ? 7 : 4, style === 'stomp'),
+      ripple: () => bubbles(t, 3, 0.5),
+      goo: () => goo(t, 4, 0.3),
+      spores: () => spores(t, 6, 0.5),
+    })[ARMIES[army].land]();
   }
 
   function kill(victim, sqi) {
     const el = els.get(victim.id);
     if (!el) return;
     const d = disp(sqi);
-    el.classList.add(victim.c === 'w' ? 'die-land' : 'die-sea');
-    if (!reduce) victim.c === 'w' ? dust(d, 10, true) : bubbles(d, 9, 1.1);
-    SFX.capture(victim.c);
+    const army = armyOf(victim.c), kind = ARMIES[army].die;
+    el.classList.add('dying', 'die-' + kind);
+    if (!reduce) ({ dust: () => dust(d, 10, true), sink: () => bubbles(d, 9, 1.1), lysis: () => goo(d, 12, 0.7), spores: () => spores(d, 18, 1) })[kind]();
+    SFX.capture(army);
     els.delete(victim.id);
-    setTimeout(() => el.remove(), 800);
+    setTimeout(() => el.remove(), 850);
   }
 
   function describe(s, m) {
-    const p = s.b[m.from], sp = SP[p.c][p.t];
-    if (m.castle) return `Рокировка: ${sp.n} и ${SP[p.c].r.n} ${m.castle === 'K' ? '(короткая)' : '(длинная)'}`;
+    const p = s.b[m.from], sp = A(p.c)[p.t];
+    if (m.castle) return `Рокировка: ${sp.n} и ${A(p.c).r.n} ${m.castle === 'K' ? '(короткая)' : '(длинная)'}`;
     const victim = m.ep ? s.b[m.to + (p.c === 'w' ? 8 : -8)] : s.b[m.to];
     let txt = `${sp.n} ${sqName(m.from)} ${victim ? '✕' : '→'} ${sqName(m.to)}`;
-    if (victim) txt += ` · съедает: ${SP[victim.c][victim.t].n}`;
-    if (m.promo) txt += ` · становится: ${SP[p.c][m.promo].n}`;
+    if (victim) txt += ` · съедает: ${A(victim.c)[victim.t].n}`;
+    if (m.promo) txt += ` · превращается: ${A(p.c)[m.promo].n}`;
     return txt;
   }
 
@@ -878,15 +1071,16 @@ h1 .amp { color: var(--coral); }
     sel = -1; selMoves = [];
     const before = S, after = make(S, m);
     const p = before.b[m.from];
-    const sp = SP[p.c][p.t];
+    const army = armyOf(p.c);
+    const sp = ARMIES[army][p.t];
     G.log.push(describe(before, m));
     paintSquares();
     $('btn-undo').disabled = true;
 
-    const victim = m.ep ? before.b[m.to + (p.c === 'w' ? 8 : -8)] : before.b[m.to];
     const vsq = m.ep ? m.to + (p.c === 'w' ? 8 : -8) : m.to;
+    const victim = before.b[vsq];
     const el = els.get(p.id);
-    SFX.move(p.c);
+    SFX.move(army);
     const fr = frames(sp.mv, disp(m.from), disp(m.to));
     if (victim) setTimeout(() => kill(victim, vsq), (reduce ? 160 : fr.dur) * 0.72);
     const jobs = [play(el, sp.mv, disp(m.from), disp(m.to))];
@@ -894,10 +1088,10 @@ h1 .amp { color: var(--coral); }
       const row = m.from - 4;
       const rf = m.castle === 'K' ? row + 7 : row, rt = m.castle === 'K' ? row + 5 : row + 3;
       const rook = before.b[rf];
-      jobs.push(new Promise((r) => setTimeout(r, 160)).then(() => play(els.get(rook.id), SP[p.c].r.mv, disp(rf), disp(rt))));
+      jobs.push(new Promise((r) => setTimeout(r, 160)).then(() => play(els.get(rook.id), ARMIES[army].r.mv, disp(rf), disp(rt))));
     }
     await Promise.all(jobs);
-    landFx(sp.mv, disp(m.to), p.c);
+    landFx(sp.mv, disp(m.to), army);
 
     G.hist.push(after);
     G.lastMove = G.lastMove || {};
@@ -905,12 +1099,11 @@ h1 .amp { color: var(--coral); }
     S = after;
     moves = legal(S);
     checkEnd();
-    if (m.promo && !reduce) { const d = disp(m.to); p.c === 'w' ? dust(d, 12, true) : bubbles(d, 10, 1); }
+    if (m.promo && !reduce) { const d = disp(m.to); ({ dust: () => dust(d, 12, true), sink: () => bubbles(d, 10, 1), lysis: () => goo(d, 10, 0.6), spores: () => spores(d, 16, 1) })[ARMIES[army].die](); }
     render();
     if (!G.over && inCheck(S)) {
-      const k = kingSq(S.b, S.turn);
-      SFX.check(S.turn);
-      say(k, SP[S.turn].k.say);
+      SFX.check(armyOf(S.turn));
+      say(kingSq(S.b, S.turn), A(S.turn).k.say);
     }
     save();
     await new Promise((r) => setTimeout(r, victim ? 180 : 40));
@@ -923,14 +1116,10 @@ h1 .amp { color: var(--coral); }
   function checkEnd() {
     if (!moves.length) {
       if (inCheck(S)) {
-        const win = other(S.turn), lose = S.turn;
-        G.over = {
-          title: `Мат! Победа ${SP[win].gen}`,
-          text: lose === 'b' ? 'Кит окружён со всех сторон, и океан сдаётся.' : 'Лев загнан в угол, и саванна признаёт поражение.',
-          winner: win,
-        };
-      } else G.over = { title: 'Пат — ничья', text: `${SP[S.turn].k.n} не под ударом, но ходить больше некуда.` };
-    } else if (S.half >= 100) G.over = { title: 'Ничья', text: '50 ходов подряд никого не съели и мартышки с рыбками не двигались.' };
+        const win = other(S.turn);
+        G.over = { title: `Мат! Победа ${A(win).gen}`, text: A(S.turn).mated, winner: win };
+      } else G.over = { title: 'Пат — ничья', text: `${A(S.turn).k.n} не под ударом, но ходить больше некуда.` };
+    } else if (S.half >= 100) G.over = { title: 'Ничья', text: '50 ходов подряд никого не съели и пешки не двигались.' };
     else if (insufficient(S.b)) G.over = { title: 'Ничья', text: 'Осталось слишком мало фигур, чтобы поставить мат.' };
   }
 
@@ -949,8 +1138,7 @@ h1 .amp { color: var(--coral); }
   // ---------------- input ----------------
   squaresEl.addEventListener('click', (e) => {
     const d = e.target.closest('.sq');
-    if (!d) return;
-    onSquare(+d.dataset.sq);
+    if (d) onSquare(+d.dataset.sq);
   });
 
   function onSquare(i) {
@@ -968,10 +1156,9 @@ h1 .amp { color: var(--coral); }
     if (p && p.c === S.turn && sel !== i) {
       sel = i;
       selMoves = moves.filter((m) => m.from === i);
-      SFX.pick(p.c);
+      SFX.pick(armyOf(p.c));
       paintSquares();
-      if (!selMoves.length) paintStatus(`${SP[p.c][p.t].n} сейчас не может ходить`);
-      else paintStatus();
+      paintStatus(selMoves.length ? undefined : `${A(p.c)[p.t].n} сейчас не может ходить`);
       return;
     }
     sel = -1; selMoves = [];
@@ -981,13 +1168,13 @@ h1 .amp { color: var(--coral); }
 
   function askPromo(c) {
     return new Promise((res) => {
-      $('promo-title').textContent = `${SP[c].p.n} у края доски. Кем стать?`;
+      $('promo-title').textContent = `${A(c).p.n} у края доски. Кем стать?`;
       const grid = $('promo-grid');
       grid.innerHTML = '';
       for (const t of ['q', 'r', 'b', 'n']) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.innerHTML = `<span class="em">${SP[c][t].e}</span>${SP[c][t].n}`;
+        b.innerHTML = `${art(armyOf(c), t)}${A(c)[t].n}`;
         b.addEventListener('click', () => { $('m-promo').hidden = true; res(t); });
         grid.appendChild(b);
       }
@@ -1000,7 +1187,6 @@ h1 .amp { color: var(--coral); }
     if (busy || !G || G.hist.length < 2) return;
     let n = 1;
     if (G.mode === 'ai') {
-      // step back to the human's turn
       n = 0;
       let h = G.hist.length;
       do { h--; n++; } while (h > 0 && G.hist[h - 1].turn !== G.side);
@@ -1016,31 +1202,50 @@ h1 .amp { color: var(--coral); }
   });
 
   // ---------------- menus ----------------
-  function legendHTML(full) {
-    return ['w', 'b'].map((c) => `
-      <div><h3>${SP[c].crest} ${SP[c].name} · ${c === 'w' ? 'белые' : 'чёрные'}</h3><ul>
-      ${ORDER.map((t) => `<li><span class="em">${SP[c][t].e}</span><span><b>${SP[c][t].n}</b><small>${ROLE[t]}</small>${full ? `<span class="why">${SP[c][t].why}</span>` : ''}</span></li>`).join('')}
-      </ul></div>`).join('');
+  function legendHTML(ids, full) {
+    return ids.map((id) => {
+      const a = ARMIES[id];
+      return `<div><h3>${a.name}</h3><span class="kingdom">${a.kingdom}</span><ul>
+      ${ORDER.map((t) => `<li><span class="em">${art(id, t)}</span><span><b>${a[t].n}</b><small>${ROLE[t]}</small>${full ? `<span class="why">${a[t].why}</span>` : ''}</span></li>`).join('')}
+      </ul></div>`;
+    }).join('');
   }
-  $('legend-short').innerHTML = legendHTML(false);
-  $('legend-full').innerHTML = legendHTML(true);
+  $('legend-full').innerHTML = legendHTML(ARMY_IDS, true);
 
-  function bindSeg(id, key, cast) {
-    const seg = $(id);
-    const paint = () => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(cast(b.dataset.v) === opts[key])));
+  function buildArmySeg(c) {
+    const seg = $('seg-' + c);
+    seg.innerHTML = ARMY_IDS.map((id) => `<button type="button" data-v="${id}">${art(id, 'k')}<span>${ARMIES[id].name}</span></button>`).join('');
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
-      opts[key] = cast(b.dataset.v); paint(); paintMenu();
+      const v = b.dataset.v;
+      if (opts[other(c)] === v) opts[other(c)] = opts[c];
+      opts[c] = v;
+      paintMenu();
     });
-    paint();
   }
-  function paintMenu() {
-    $('f-side').hidden = opts.mode !== 'ai';
-    $('f-level').hidden = opts.mode !== 'ai';
+  buildArmySeg('w');
+  buildArmySeg('b');
+
+  function bindSeg(id, key, cast) {
+    $(id).addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      opts[key] = cast(b.dataset.v); paintMenu();
+    });
   }
   bindSeg('seg-mode', 'mode', String);
   bindSeg('seg-side', 'side', String);
   bindSeg('seg-level', 'level', Number);
+
+  function paintMenu() {
+    const pressed = (seg, val) => $(seg).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(val))));
+    pressed('seg-w', opts.w); pressed('seg-b', opts.b);
+    pressed('seg-mode', opts.mode); pressed('seg-side', opts.side); pressed('seg-level', opts.level);
+    $('seg-side').querySelector('[data-v="w"]').textContent = `Белыми · ${ARMIES[opts.w].name}`;
+    $('seg-side').querySelector('[data-v="b"]').textContent = `Чёрными · ${ARMIES[opts.b].name}`;
+    $('legend-short').innerHTML = legendHTML([opts.w, opts.b], false);
+    $('f-side').hidden = opts.mode !== 'ai';
+    $('f-level').hidden = opts.mode !== 'ai';
+  }
 
   function openMenu() {
     const saved = G && !G.over && G.hist.length > 1;
@@ -1050,29 +1255,26 @@ h1 .amp { color: var(--coral); }
     $('m-menu').hidden = false;
   }
 
-  function startGame() {
-    ac();
-    G = { mode: opts.mode, side: opts.side, level: opts.level, hist: [initState()], log: [], over: null, lastMove: {} };
-    store.set('zoochess.opts', JSON.stringify(opts));
-    S = G.hist[0];
-    moves = legal(S);
-    sel = -1; selMoves = [];
-    els.forEach((el) => el.remove()); els.clear();
-    buildSquares();
-    $('m-menu').hidden = true;
-    render();
-    save();
-    setTimeout(maybeAI, 300);
+  function freshGame() {
+    return { mode: opts.mode, side: opts.side, level: opts.level, armies: { w: opts.w, b: opts.b }, hist: [initState()], log: [], over: null, lastMove: {} };
   }
-
-  function resumeGame(g) {
+  function boot(g) {
     G = g;
     G.lastMove = G.lastMove || {};
     S = G.hist[G.hist.length - 1];
     moves = legal(S);
+    sel = -1; selMoves = [];
     els.forEach((el) => el.remove()); els.clear();
     buildSquares();
     render();
+  }
+  function startGame() {
+    ac();
+    store.set('zoochess.opts', JSON.stringify(opts));
+    boot(freshGame());
+    $('m-menu').hidden = true;
+    save();
+    setTimeout(maybeAI, 300);
   }
 
   function showEnd() {
@@ -1090,34 +1292,31 @@ h1 .amp { color: var(--coral); }
   $('btn-look').addEventListener('click', () => { $('m-end').hidden = true; });
   $('btn-legend').addEventListener('click', () => { $('m-legend').hidden = false; $('btn-legend-close').focus(); });
   $('btn-legend-close').addEventListener('click', () => { $('m-legend').hidden = true; });
-  $('btn-sound').addEventListener('click', () => { setMuted(!muted); if (!muted) SFX.pick('b'); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { $('m-legend').hidden = true; }
-  });
+  $('btn-sound').addEventListener('click', () => { setMuted(!muted); if (!muted) SFX.pick('ocean'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('m-legend').hidden = true; });
 
-  // cell size for emoji scaling
   const ro = new ResizeObserver(() => boardEl.style.setProperty('--cell', boardEl.clientWidth / 8 + 'px'));
   ro.observe(boardEl);
 
-  // ambient life: bubbles from the sea, an occasional whale spout
+  // ambient life: bubbles and whale spouts at sea, spores in the forest, little splits in the colony
   setInterval(() => {
     if (reduce || !S || busy || document.hidden) return;
-    const sea = [];
-    S.b.forEach((p, i) => { if (p && p.c === 'b') sea.push([p, i]); });
-    if (!sea.length) return;
-    const [p, i] = sea[Math.floor(Math.random() * sea.length)];
-    if (p.t === 'k' && Math.random() < 0.5) spout(disp(i)); else bubbles(disp(i), 2, 0.6);
-  }, 2200);
+    const c = Math.random() < 0.5 ? 'w' : 'b';
+    const army = armyOf(c);
+    const mine = [];
+    S.b.forEach((p, i) => { if (p && p.c === c) mine.push([p, i]); });
+    if (!mine.length) return;
+    const [p, i] = mine[Math.floor(Math.random() * mine.length)];
+    const d = disp(i);
+    if (army === 'ocean') (p.t === 'k' && Math.random() < 0.5 ? spout(d) : bubbles(d, 2, 0.6));
+    else if (army === 'fungi') spores(d, p.t === 'n' ? 10 : 4, 0.6);
+    else if (army === 'bacteria') goo(d, 3, 0.25);
+  }, 1800);
 
-  // ---------------- boot ----------------
+  // ---------------- start ----------------
   try { const o = JSON.parse(store.get('zoochess.opts') || 'null'); if (o) Object.assign(opts, o); } catch (e) {}
-  ['seg-mode', 'seg-side', 'seg-level'].forEach((id) => {
-    const key = { 'seg-mode': 'mode', 'seg-side': 'side', 'seg-level': 'level' }[id];
-    $(id).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(opts[key]))));
-  });
-  const saved = loadSaved();
-  if (saved) resumeGame(saved);
-  else { G = { mode: opts.mode, side: opts.side, level: opts.level, hist: [initState()], log: [], over: null, lastMove: {} }; S = G.hist[0]; moves = legal(S); buildSquares(); render(); }
+  if (!ARMIES[opts.w] || !ARMIES[opts.b] || opts.w === opts.b) { opts.w = 'savanna'; opts.b = 'ocean'; }
+  boot(loadSaved() || freshGame());
   openMenu();
 
   window.__zoo = { legal, make, initState, inCheck, pickMove, perft: function perft(s, d) { if (!d) return 1; let n = 0; for (const m of legal(s)) n += perft(make(s, m), d - 1); return n; } };

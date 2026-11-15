@@ -1,0 +1,18 @@
+{
+  "name": "Шахматы царств",
+  "short_name": "Царства",
+  "description": "Шахматы с живыми фигурами: саванна, океан, бактерии, грибы и растения.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#081c22",
+  "theme_color": "#0f3138",
+  "categories": ["games", "board"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

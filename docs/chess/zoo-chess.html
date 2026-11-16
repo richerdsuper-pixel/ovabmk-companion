@@ -298,6 +298,8 @@ h1 .amp { color: var(--coral); }
 /* settings */
 .set { display: grid; gap: 14px; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 800; }
+.field .set-row > span { font-size: 12px; font-weight: 800; color: var(--ink-dim); letter-spacing: 0.06em; text-transform: uppercase; }
+.field .note { margin-top: 0; }
 .set-row output { font-variant-numeric: tabular-nums; color: var(--ink-dim); font-weight: 600; }
 .vol { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
 .vol svg { width: 22px; height: 22px; }
@@ -432,12 +434,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
         <button type="button" data-v="b">Чёрными</button>
       </div>
     </div>
-    <div class="field" id="f-level"><span>Сила компьютера</span>
-      <div class="seg" id="seg-level">
-        <button type="button" data-v="1">Детёныш</button>
-        <button type="button" data-v="2">Охотник</button>
-        <button type="button" data-v="3">Вожак</button>
-      </div>
+    <div class="field" id="f-level">
+      <label class="set-row" for="set-level"><span>Сила компьютера</span><output id="level-out" for="set-level"></output></label>
+      <input type="range" id="set-level" min="1" max="10" step="1" value="2">
+      <p class="note" id="level-note"></p>
     </div>
     <div class="row2">
       <button class="btn" id="btn-menu-close" type="button">Назад</button>
@@ -1078,6 +1078,92 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; }).catch(() => {});
   }
 
+  // ---------------- Stockfish (engine/stockfish-19-lite-single.js, GPL-3.0) ----------------
+  const LEVELS = [
+    { n: 'Птенец', skill: 0, go: 'depth 1', d: 'Только учится: часто зевает фигуры.' },
+    { n: 'Детёныш', skill: 1, go: 'depth 2', d: 'Видит ход вперёд, ошибается.' },
+    { n: 'Ученик', skill: 3, go: 'depth 3', d: 'Знает, как ходят фигуры, и иногда бьёт.' },
+    { n: 'Охотник', skill: 5, go: 'depth 4', d: 'Ловит зевки, но сам не строит планов.' },
+    { n: 'Следопыт', skill: 8, go: 'depth 5', d: 'Крепкий любитель.' },
+    { n: 'Воин', skill: 10, go: 'depth 6', d: 'Сильный клубный игрок.' },
+    { n: 'Вожак', skill: 13, go: 'depth 8', d: 'Кандидат в мастера.' },
+    { n: 'Мастер', skill: 16, go: 'depth 10', d: 'Почти не ошибается.' },
+    { n: 'Гроссмейстер', skill: 18, go: 'depth 12', d: 'Играет на уровне гроссмейстера.' },
+    { n: 'Чемпион', skill: 20, go: 'movetime 1200', d: 'Полная сила Stockfish. Победить почти невозможно.' },
+  ];
+  const SF = (() => {
+    let w = null, ready = null, listeners = [], queue = Promise.resolve();
+    const api = { ok: false };
+    api.load = () => {
+      if (ready) return ready;
+      ready = new Promise((res, rej) => {
+        let worker;
+        try { worker = new Worker('engine/stockfish-19-lite-single.js'); } catch (e) { return rej(e); }
+        const t = setTimeout(() => rej(new Error('Stockfish: нет ответа')), 20000);
+        worker.onerror = (e) => { clearTimeout(t); rej(e); };
+        worker.onmessage = (e) => {
+          const line = String(e.data);
+          if (line === 'uciok') { clearTimeout(t); w = worker; api.ok = true; res(); }
+          listeners.forEach((f) => f(line));
+        };
+        worker.postMessage('uci');
+      }).catch((e) => { ready = null; api.ok = false; throw e; });
+      return ready;
+    };
+    api.search = (fen, { skill = 20, go = 'depth 10', searchmoves = '' } = {}) => {
+      const job = () => new Promise((res) => {
+        let score = null;
+        const f = (line) => {
+          if (line.startsWith('info') && line.includes(' score ') && !line.includes('bound')) {
+            const m = /score (cp|mate) (-?\d+)/.exec(line);
+            if (m) score = m[1] === 'cp' ? +m[2] : (+m[2] > 0 ? 100000 - +m[2] : -100000 - +m[2]);
+          }
+          if (line.startsWith('bestmove')) { listeners = listeners.filter((x) => x !== f); res({ move: line.split(' ')[1], score }); }
+        };
+        listeners.push(f);
+        w.postMessage('setoption name Skill Level value ' + skill);
+        w.postMessage('position fen ' + fen);
+        w.postMessage('go ' + go + (searchmoves ? ' searchmoves ' + searchmoves : ''));
+      });
+      queue = queue.catch(() => {}).then(() => api.load()).then(job);
+      return queue;
+    };
+    return api;
+  })();
+  const PIECE_FEN = { k: 'k', q: 'q', r: 'r', b: 'b', n: 'n', p: 'p' };
+  function fen(s, full = 1) {
+    const rows = [];
+    for (let r = 0; r < 8; r++) {
+      let row = '', empty = 0;
+      for (let c = 0; c < 8; c++) {
+        const p = s.b[r * 8 + c];
+        if (!p) { empty++; continue; }
+        if (empty) { row += empty; empty = 0; }
+        row += p.c === 'w' ? PIECE_FEN[p.t].toUpperCase() : PIECE_FEN[p.t];
+      }
+      if (empty) row += empty;
+      rows.push(row);
+    }
+    const cr = (s.cr.wK ? 'K' : '') + (s.cr.wQ ? 'Q' : '') + (s.cr.bK ? 'k' : '') + (s.cr.bQ ? 'q' : '');
+    return `${rows.join('/')} ${s.turn} ${cr || '-'} ${s.ep >= 0 ? sqName(s.ep) : '-'} ${s.half} ${full}`;
+  }
+  const sqIdx = (a) => (8 - +a[1]) * 8 + FILES.indexOf(a[0]);
+  const moveUci = (m) => sqName(m.from) + sqName(m.to) + (m.promo || '');
+  const uciMove = (s, u) => (u && u.length >= 4 ? legal(s).find((m) => m.from === sqIdx(u.slice(0, 2)) && m.to === sqIdx(u.slice(2, 4)) && (m.promo || '') === (u[4] || '')) : null);
+  async function botMove(s, level, full) {
+    const L = LEVELS[level - 1];
+    try {
+      const r = await SF.search(fen(s, full), { skill: L.skill, go: L.go });
+      const m = uciMove(s, r.move);
+      if (m) return m;
+    } catch (e) {}
+    return pickMove(s, level <= 3 ? 1 : level <= 7 ? 2 : 3);
+  }
+  async function bestMove(s, full) {
+    try { const r = await SF.search(fen(s, full), { skill: 20, go: 'depth 12' }); const m = uciMove(s, r.move); if (m) return m; } catch (e) {}
+    return pickMove(s, 3);
+  }
+
   // ---------------- game state ----------------
   const SAVE_KEY = 'zoochess.v3';
   let G = null;          // { mode, side, level, armies:{w,b}, hist:[state], log:[text], over, lastMove, counted }
@@ -1196,7 +1282,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   function paintBars() {
     const bot = bottomColor(), top = other(bot);
-    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : (c === G.side ? 'вы' : 'компьютер · ' + ['', 'детёныш', 'охотник', 'вожак'][G.level]) + (c === 'w' ? ' · белые' : ' · чёрные'));
+    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : (c === G.side ? 'вы' : `компьютер · ${LEVELS[G.level - 1].n} (${G.level})`) + (c === 'w' ? ' · белые' : ' · чёрные'));
     [['top', top], ['bot', bot]].forEach(([pos, c]) => {
       const crest = $('crest-' + pos);
       crest.innerHTML = art(armyOf(c), 'k');
@@ -1546,10 +1632,13 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     b.textContent = `💡 Подсказка · ${left}`;
     b.disabled = busy || !left || !isHumanTurn();
   }
-  $('btn-hint').addEventListener('click', () => {
+  $('btn-hint').addEventListener('click', async () => {
     if (busy || !G || G.mode !== 'ai' || !isHumanTurn() || !G.hints) return;
-    const m = pickMove(S, 3);
-    if (!m) return;
+    busy = true; paintHint(); paintStatus('Думаю над подсказкой…');
+    const g0 = G, n0 = G.hist.length;
+    const m = await bestMove(S, Math.floor(G.hist.length / 2) + 1);
+    busy = false;
+    if (G !== g0 || G.hist.length !== n0 || !m) { paintStatus(); paintHint(); return; }
     G.hints--; save();
     sel = m.from; selMoves = moves.filter((x) => x.from === m.from);
     paintSquares();
@@ -1564,23 +1653,40 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     $('m-end').hidden = true; $('m-analysis').hidden = false;
     $('an-title').textContent = G.mode === 'ai' ? `Ваши ходы: ${A(G.side).name}` : 'Все ходы';
     $('an-sum').innerHTML = ''; $('an-list').innerHTML = '<li><span class="n">…</span><span>Считаю…</span></li>';
-    const items = []; let i = 0;
-    const step = () => {
-      if (i >= G.mv.length) return renderAnalysis(items);
+    const items = [], g0 = G, total = G.mv.length;
+    const useSF = SF.ok;
+    const step = async (i) => {
+      if (G !== g0 || $('m-analysis').hidden) return;
+      if (i >= total) return renderAnalysis(items);
       const s = G.hist[i], m = G.mv[i];
       if (G.mode === 'duo' || s.turn === G.side) {
-        let best = null, bestV = -Infinity, played = -Infinity;
-        for (const x of legal(s)) {
-          const v = -search(make(s, x), 2, -Infinity, Infinity);
-          if (v > bestV) { bestV = v; best = x; }
-          if (x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null)) played = v;
+        $('an-list').firstElementChild.lastElementChild.textContent = `Считаю… ход ${i + 1} из ${total}`;
+        let best = null, loss = 0;
+        if (useSF) {
+          try {
+            const f = fen(s, Math.floor(i / 2) + 1);
+            const r1 = await SF.search(f, { skill: 20, go: 'depth 10' });
+            best = uciMove(s, r1.move);
+            if (best && !(best.from === m.from && best.to === m.to && (best.promo || '') === (m.promo || ''))) {
+              const r2 = await SF.search(f, { skill: 20, go: 'depth 10', searchmoves: moveUci(m) });
+              loss = Math.max(0, (r1.score ?? 0) - (r2.score ?? 0));
+            }
+          } catch (e) { best = null; }
         }
-        const loss = bestV - played;
+        if (!best) {
+          let bestV = -Infinity, played = -Infinity;
+          for (const x of legal(s)) {
+            const v = -search(make(s, x), 2, -Infinity, Infinity);
+            if (v > bestV) { bestV = v; best = x; }
+            if (x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null)) played = v;
+          }
+          loss = bestV - played;
+        }
         items.push({ n: Math.floor(i / 2) + 1, dots: i % 2 ? '…' : '.', text: G.log[i], loss, better: loss >= 40 && best ? describe(s, best) : null });
       }
-      i++; setTimeout(step, 0);
+      setTimeout(() => step(i + 1), 0);
     };
-    setTimeout(step, 30);
+    setTimeout(() => step(0), 30);
   }
   function renderAnalysis(items) {
     const cls = (l) => (l < 10 ? ['best', 'лучший'] : l < 40 ? ['', 'хорошо'] : l < 100 ? ['inacc', 'неточность'] : l < 300 ? ['mist', 'ошибка'] : ['blund', 'зевок']);
@@ -1600,11 +1706,12 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     busy = true;
     paintStatus();
     paintBars();
-    setTimeout(() => {
-      const m = pickMove(S, G.level);
+    const g0 = G, n0 = G.hist.length;
+    Promise.all([botMove(S, G.level, Math.floor(G.hist.length / 2) + 1), wait(380)]).then(([m]) => {
+      if (G !== g0 || G.hist.length !== n0 || G.over) return;
       busy = false;
       if (m) doMove(m);
-    }, 420);
+    });
   }
 
   // ---------------- input ----------------
@@ -1758,13 +1865,16 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   }
   bindSeg('seg-mode', 'mode', String);
   bindSeg('seg-side', 'side', String);
-  bindSeg('seg-level', 'level', Number);
   bindSeg('seg-clock', 'clock', Number);
+  $('set-level').addEventListener('input', (e) => { opts.level = +e.target.value; paintMenu(); });
 
   function paintMenu() {
     const pressed = (seg, val) => $(seg).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(val))));
     pressed('seg-w', opts.w); pressed('seg-b', opts.b);
-    pressed('seg-mode', opts.mode); pressed('seg-side', opts.side); pressed('seg-level', opts.level); pressed('seg-clock', opts.clock);
+    pressed('seg-mode', opts.mode); pressed('seg-side', opts.side); pressed('seg-clock', opts.clock);
+    $('set-level').value = opts.level;
+    $('level-out').textContent = `${opts.level} · ${LEVELS[opts.level - 1].n}`;
+    $('level-note').textContent = LEVELS[opts.level - 1].d;
     $('seg-side').querySelector('[data-v="w"]').textContent = `Белыми · ${ARMIES[opts.w].name}`;
     $('seg-side').querySelector('[data-v="b"]').textContent = `Чёрными · ${ARMIES[opts.b].name}`;
     $('f-side').hidden = opts.mode !== 'ai';
@@ -1866,10 +1976,12 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   // ---------------- start ----------------
   try { const o = JSON.parse(store.get('zoochess.opts') || 'null'); if (o) Object.assign(opts, o); } catch (e) {}
   if (!ARMIES[opts.w] || !ARMIES[opts.b] || opts.w === opts.b) { opts.w = 'savanna'; opts.b = 'ocean'; }
+  opts.level = Math.min(10, Math.max(1, +opts.level || 2));
+  SF.load().catch(() => {});
   boot(loadSaved() || freshGame());
   paintSettings();
   showHome();
 
-  window.__zoo = { legal, make, initState, inCheck, pickMove, dbg: () => ({ G, S }), perft: function perft(s, d) { if (!d) return 1; let n = 0; for (const m of legal(s)) n += perft(make(s, m), d - 1); return n; } };
+  window.__zoo = { legal, make, initState, inCheck, pickMove, fen, SF, dbg: () => ({ G, S }), perft: function perft(s, d) { if (!d) return 1; let n = 0; for (const m of legal(s)) n += perft(make(s, m), d - 1); return n; } };
 })();
 </script>

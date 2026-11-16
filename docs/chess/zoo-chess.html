@@ -98,6 +98,11 @@ h1 .amp { color: var(--coral); }
 .team-name b { font-weight: 800; }
 .team-name span { font-size: 12px; color: var(--ink-dim); }
 .bar.turn .team-name b::after { content: " · ходит"; color: var(--coral); font-weight: 600; }
+:root[data-lang="uz"] .bar.turn .team-name b::after { content: " · yuradi"; }
+:root[data-lang="en"] .bar.turn .team-name b::after { content: " · to move"; }
+:root[data-lang="uz"] .logo-main { font-size: clamp(30px, 9.6vw, 50px); }
+:root[data-lang="en"] .logo-main { font-size: clamp(36px, 12vw, 60px); }
+.home { overflow-x: hidden; }
 .tray { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; min-width: 0; max-width: 56%; }
 .tray > span { margin-left: -5px; display: inline-grid; place-items: center; width: 22px; height: 22px; }
 .tray .art { width: 22px; height: 22px; }
@@ -118,6 +123,15 @@ h1 .amp { color: var(--coral); }
   user-select: none; -webkit-user-select: none;
 }
 .board.shake { animation: shake 0.35s ease-out; }
+.board[data-theme="wood"] .sq.dark { background: rgba(92, 50, 14, 0.42); }
+.board[data-theme="marble"] .sq.dark { background: rgba(60, 66, 84, 0.42); }
+.board[data-theme="neon"] { box-shadow: 0 0 0 3px rgba(0, 255, 230, 0.45), 0 0 34px rgba(0, 255, 230, 0.35); }
+.board[data-theme="neon"] .sq.dark { background: rgba(0, 0, 0, 0.5); }
+.board[data-theme="neon"] .coord { color: rgba(140, 255, 240, 0.7); }
+.board[data-theme="neon"] .sq.dot::after { background: rgba(0, 255, 230, 0.6); }
+.cl { fill: #f7f2e8; stroke: #2a2420; stroke-width: 2.5px; paint-order: stroke; font-size: 84px; font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "DejaVu Sans", "Apple Symbols", serif; }
+.side-b .cl { fill: #2b2b2b; stroke: #e8e2d8; }
+[class*="i-classic-"] .idle { animation: none; }
 @keyframes shake { 20% { transform: translateY(3px); } 40% { transform: translateY(-2px); } 60% { transform: translateY(1px); } }
 .squares { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); }
 .sq { position: relative; cursor: pointer; }
@@ -290,8 +304,8 @@ h1 .amp { color: var(--coral); }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--bg); }
 .seg button { border: 0; background: transparent; border-radius: 10px; padding: 10px 4px; font-weight: 700; cursor: pointer; min-width: 0; }
 .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); color: var(--coral); }
-.seg.armies button { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; padding: 8px 0; }
-.seg.armies .art { width: 34px; height: 34px; }
+.seg.armies button { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9.5px; padding: 8px 0; }
+.seg.armies .art { width: 30px; height: 30px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 14px; }
@@ -508,6 +522,12 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       <p class="note" id="notif-note"></p>
       <button class="link-btn" id="notif-allow" type="button" hidden>Разрешить уведомления на этом устройстве</button>
       <button class="switch" id="set-hints" type="button" role="switch" aria-checked="true"><span>Подсказки ходов</span><span class="sw-track"></span></button>
+      <div class="field"><span>Язык</span>
+        <div class="seg" id="seg-lang"><button type="button" data-v="ru">Русский</button><button type="button" data-v="uz">O‘zbekcha</button><button type="button" data-v="en">English</button></div>
+      </div>
+      <div class="field"><span>Доска</span>
+        <div class="seg" id="seg-theme"><button type="button" data-v="worlds">Миры</button><button type="button" data-v="wood">Дерево</button><button type="button" data-v="marble">Мрамор</button><button type="button" data-v="neon">Неон</button></div>
+      </div>
       <button class="link-btn" id="stats-reset" type="button">Сбросить счёт побед</button>
     </div>
     <button class="btn primary" id="btn-settings-close" type="button">Готово</button>
@@ -573,6 +593,28 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   };
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------------- languages: ru is the source, uz and en are looked up by the Russian string ----------------
+  const I18N = {"uz":{"Шахматы царств":"Saltanatlar shaxmati","↶ Отменить":"↶ Bekor","💡 Подсказка":"💡 Maslahat","Новая":"Yangi","Шахматы":"Shaxmat","царств":"Saltanatlar","Пять живых армий. Правила настоящих шахмат.":"Beshta jonli qo‘shin. Haqiqiy shaxmat qoidalari.","Играть":"O‘ynash","Продолжить партию":"Partiyani davom ettirish","Армии":"Qo‘shinlar","Как играть":"Qanday o‘ynaladi","Настройки":"Sozlamalar","Задача дня":"Kun masalasi","Обучение":"O‘rganish","Достижения":"Yutuqlar","Новая партия":"Yangi partiya","Кто с кем сражается?":"Kim kim bilan jang qiladi?","Белые":"Oqlar","Чёрные":"Qoralar","Соперник":"Raqib","Компьютер":"Kompyuter","Вдвоём":"Ikki kishi","Часы на партию":"Partiya vaqti","1 мин":"1 daq","Вы играете":"Siz o‘ynaysiz","Белыми":"Oqlar bilan","Чёрными":"Qoralar bilan","Сила компьютера":"Kompyuter kuchi","Назад":"Orqaga","Начать":"Boshlash","Кто есть кто":"Kim kim","Понятно":"Tushunarli","Поставьте мат чужому королю":"Raqib shohiga mat qo‘ying","Нажмите на свою фигуру — точки покажут, куда она может пойти. Красное кольцо значит, что там можно съесть соперника.":"O‘z donangizni bosing — nuqtalar qayerga yurishi mumkinligini ko‘rsatadi. Qizil halqa — u yerda raqib donasini olish mumkin.","Король":"Shoh","(с золотой короной) ходит на одну клетку в любую сторону. Его нельзя оставлять под ударом.":"(oltin tojli) istalgan tomonga bir katak yuradi. Uni xavf ostida qoldirib bo‘lmaydi.","Ферзь":"Farzin","(с диадемой) ходит прямо и наискосок на любое расстояние.":"(diademali) to‘g‘ri va diagonal bo‘ylab istalgan masofaga yuradi.","Ладья":"Rux","ходит только прямо,":"faqat to‘g‘ri yuradi,","слон":"fil","— только наискосок.":"— faqat diagonal bo‘ylab.","Конь":"Ot","ходит буквой «Г» и перепрыгивает через фигуры.":"«G» harfi shaklida yuradi va donalar ustidan sakraydi.","Пешка":"Piyoda","идёт вперёд на клетку (с первого места — на две), а ест наискосок. Дойдя до края, превращается в любую фигуру.":"bir katak oldinga yuradi (birinchi yurishda ikkita), diagonal bo‘ylab oladi. Chetga yetgach istalgan donaga aylanadi.","Шах":"Shoh (kisht)","— король под ударом, его надо спасать.":"— shoh xavf ostida, uni qutqarish kerak.","Мат":"Mat","— спасти нельзя, партия окончена.":"— qutqarib bo‘lmaydi, partiya tugadi.","Ничья":"Durang",": пат, троекратное повторение позиции, 50 ходов без взятий и ходов пешек, нехватка фигур для мата.":": pat, holatning uch marta takrorlanishi, olishsiz va piyoda yurishisiz 50 yurish, mat uchun donalar yetishmasligi.","Фигуру можно перетащить пальцем или нажать на неё, а потом на нужную клетку. Против компьютера есть 3 подсказки на партию.":"Donani barmoq bilan sudrab yoki avval donani, so‘ng katakni bosib yurish mumkin. Kompyuterga qarshi partiyada 3 ta maslahat bor.","Звук и уведомления":"Ovoz va bildirishnomalar","Громкость":"Ovoz balandligi","Вибрация":"Tebranish","Уведомления":"Bildirishnomalar","Разрешить уведомления на этом устройстве":"Bu qurilmada bildirishnomalarga ruxsat berish","Подсказки ходов":"Yurish ko‘rsatkichlari","Сбросить счёт побед":"Hisobni tozalash","Готово":"Tayyor","Как ходят фигуры":"Donalar qanday yuradi","Девять коротких уроков для тех, кто только начинает. Собирай звёзды и учись.":"Yangi boshlovchilar uchun to‘qqizta qisqa dars. Yulduzlarni yig‘ib o‘rgan.","Закрыть":"Yopish","Разбор партии":"Partiya tahlili","Ваши ходы":"Sizning yurishlaringiz","Превращение":"Aylanish","Кем стать?":"Kimga aylanadi?","Партия окончена":"Partiya tugadi","К доске":"Taxtaga","Разбор":"Tahlil","Ещё партию":"Yana partiya","Главный экран":"Bosh ekran","Армии: кто есть кто":"Qo‘shinlar: kim kim","Громкость и настройки":"Ovoz va sozlamalar","Съеденные фигуры":"Olingan donalar","Язык":"Til","Доска":"Taxta","Миры":"Olamlar","Дерево":"Yog‘och","Мрамор":"Marmar","Неон":"Neon","Саванна":"Savanna","саванны":"Savanna","Царство животных · суша":"Hayvonlar olami · quruqlik","Лев загнан в угол, и саванна признаёт поражение.":"Sher burchakka qisildi, savanna mag‘lubiyatni tan oldi.","Лев":"Sher","Р-р-р!":"R-r-r!","Царь зверей. Шагает на одну клетку в любую сторону.":"Hayvonlar shohi. Istalgan tomonga bir katak yuradi.","Леопард":"Leopard","Самый ловкий хищник: бежит в любую сторону на любое расстояние.":"Eng chaqqon yirtqich: istalgan tomonga istalgan masofaga yuguradi.","Носорог":"Karkidon","Несётся напролом, но только по прямой.":"To‘g‘ri yo‘l bilan bostirib boradi.","Слон":"Fil","Фигура и так зовётся «слон». Шагает по диагонали, земля дрожит.":"Bu dona asli «fil» deb ataladi. Diagonal bo‘ylab yuradi, yer titraydi.","Зебра":"Zebra","Полосатая лошадь: скачет буквой «Г» и перепрыгивает через кого угодно.":"Yo‘l-yo‘l ot: «G» harfi shaklida sakraydi va hamma ustidan o‘tadi.","Мартышка":"Maymun","Их много. Бегут вперёд, а дойдя до края, становятся кем захотят.":"Ular ko‘p. Oldinga yuguradi, chetga yetgach istagan donaga aylanadi.","Океан":"Okean","океана":"Okean","Царство животных · море":"Hayvonlar olami · dengiz","Кит окружён со всех сторон, и океан сдаётся.":"Kit har tomondan o‘rab olindi, okean taslim bo‘ldi.","Кит":"Kit","У-у-у!":"U-u-u!","Самый большой и неторопливый житель моря. Плывёт на одну клетку.":"Dengizning eng katta va sekin aholisi. Bir katak suzadi.","Акула":"Akula","Гроза океана: плывёт в любую сторону на любое расстояние.":"Okean dahshati: istalgan tomonga istalgan masofaga suzadi.","Черепаха":"Toshbaqa","Панцирь-крепость. Гребёт ластами только прямо.":"Qalqon-qal’a. Faqat to‘g‘ri suzadi.","Краб":"Qisqichbaqa","Семенит боком, то есть наискосок — по диагонали.":"Yonlamasiga, ya’ni diagonal bo‘ylab yuradi.","Дельфин":"Delfin","Выпрыгивает из воды и перелетает через фигуры буквой «Г».":"Suvdan sakrab chiqib, donalar ustidan «G» shaklida o‘tadi.","Рыбка":"Baliqcha","Стайка рыб-клоунов. Доплыв до края, вырастает в кого угодно.":"Masxaraboz baliqlar to‘dasi. Chetga yetgach istalgan donaga aylanadi.","Бактерии":"Bakteriyalar","бактерий":"Bakteriyalar","Царство бактерий":"Bakteriyalar olami","Стафилококк окружён, и колония больше не может делиться.":"Stafilokokk o‘rab olindi, koloniya endi bo‘lina olmaydi.","Стафилококк":"Stafilokokk","Ай, антибиотик!":"Voy, antibiotik!","Золотистый стафилококк: гроздь шариков. Ползёт на одну клетку.":"Tilla stafilokokk: sharchalar shingili. Bir katak sudraladi.","Вибрион":"Vibrion","Холерный вибрион — самый быстрый пловец: жгутик несёт его куда угодно.":"Vabo vibrioni — eng tez suzuvchi: xivchin uni istalgan joyga olib boradi.","Бацилла":"Batsilla","Прямая палочка — и скользит только прямо.":"To‘g‘ri tayoqcha — faqat to‘g‘ri sirpanadi.","Спирилла":"Spirilla","Спираль ввинчивается наискосок — по диагонали.":"Spiral diagonal bo‘ylab buralib kiradi.","Протей":"Protey","Покрыт жгутиками, роится и перескакивает буквой «Г».":"Xivchinlar bilan qoplangan, to‘dalanib «G» shaklida sakraydi.","Кокк":"Kokk","Маленький шарик. Катится вперёд, а у края становится кем угодно.":"Kichkina sharcha. Oldinga dumalaydi, chetda istalgan donaga aylanadi.","Грибы":"Qo‘ziqorinlar","грибов":"Qo‘ziqorinlar","Царство грибов":"Qo‘ziqorinlar olami","Белый гриб окружён, и грибница сдаётся.":"Oq qo‘ziqorin o‘rab olindi, mitseliy taslim bo‘ldi.","Белый гриб":"Oq qo‘ziqorin","Спасите споры!":"Sporalarni saqlang!","Боровик — «царь грибов». Уходит под землю и вырастает на соседней клетке.":"Oq qo‘ziqorin — «qo‘ziqorinlar shohi». Yer ostiga kirib, qo‘shni katakda o‘sib chiqadi.","Мухомор":"Muxomor","Самый опасный гриб леса: грибница тянется в любую сторону на любое расстояние.":"O‘rmonning eng xavfli qo‘ziqorini: mitseliy istalgan tomonga istalgan masofaga cho‘ziladi.","Трутовик":"Trutovik","Растёт на пне, как крепость с балконами. Прорастает только по прямой.":"To‘nkada balkonli qal’adek o‘sadi. Faqat to‘g‘ri unib chiqadi.","Лисичка":"Tulkicha","Хитрая, как лиса: прорастает наискосок.":"Tulkidek ayyor: diagonal bo‘ylab unib chiqadi.","Дождевик":"Yomg‘irqorin","Грибница проходит под чужими фигурами буквой «Г», а сверху — облако спор.":"Mitseliy begona donalar ostidan «G» shaklida o‘tadi, tepada esa spora buluti.","Опята":"Opyonkalar","Растут гурьбой. Дойдя до края, вырастают в кого угодно.":"To‘da bo‘lib o‘sadi. Chetga yetgach istalgan donaga aylanadi.","Растения":"O‘simliklar","растений":"O‘simliklar","Царство растений":"O‘simliklar olami","Дуб окружён, и лес склоняет ветви.":"Eman o‘rab olindi, o‘rmon shoxlarini egdi.","Дуб":"Eman","Не рубите!":"Kesmang!","Царь деревьев. Тяжело переступает корнями на одну клетку.":"Daraxtlar shohi. Ildizlari bilan og‘ir qadam tashlab bir katak yuradi.","Роза":"Atirgul","Королева цветов: идёт куда угодно, роняя лепестки, и колется.":"Gullar malikasi: istalgan joyga boradi, gulbarglarini to‘kadi va tikanlaydi.","Кактус":"Kaktus","Прямой, как столб, и ходит только прямо.":"Ustundek tik, faqat to‘g‘ri yuradi.","Подсолнух":"Kungaboqar","Поворачивается за солнцем и шагает наискосок.":"Quyoshga qarab buriladi va diagonal bo‘ylab yuradi.","Одуванчик":"Momaqaymoq","Летит по ветру буквой «Г» над чужими фигурами.":"Shamolda «G» shaklida begona donalar ustidan uchadi.","Росток":"Nihol","Маленький росток семенит корешками. У края вырастает в кого угодно.":"Kichkina nihol ildizchalari bilan yuradi. Chetda istalgan donaga aylanadi.","Птенец":"Jo‘ja","Только учится: часто зевает фигуры.":"Endi o‘rganmoqda: donalarni tez-tez boy beradi.","Детёныш":"Bolakay","Видит ход вперёд, ошибается.":"Bir yurish oldinni ko‘radi, xato qiladi.","Ученик":"Shogird","Знает, как ходят фигуры, и иногда бьёт.":"Donalar qanday yurishini biladi, ba’zan oladi.","Охотник":"Ovchi","Ловит зевки, но сам не строит планов.":"Xatolarni ushlaydi, lekin reja tuzmaydi.","Следопыт":"Izquvar","Крепкий любитель.":"Kuchli havaskor.","Воин":"Jangchi","Сильный клубный игрок.":"Kuchli klub o‘yinchisi.","Вожак":"Yo‘lboshchi","Кандидат в мастера.":"Sport ustasiga nomzod.","Мастер":"Usta","Почти не ошибается.":"Deyarli xato qilmaydi.","Гроссмейстер":"Grossmeyster","Играет на уровне гроссмейстера.":"Grossmeyster darajasida o‘ynaydi.","Чемпион":"Chempion","Полная сила Stockfish. Победить почти невозможно.":"Stockfish to‘liq kuchi. Yutish deyarli mumkin emas.","Урок {n}: {t}":"{n}-dars: {t}","Задача: мат в {n}":"Masala: {n} yurishda mat","белые · ходят первыми":"oqlar · birinchi yuradi","чёрные":"qoralar","вы · найдите мат":"siz · matni toping","соперник":"raqib","вы":"siz","учебный соперник":"o‘quv raqibi","компьютер · {l} ({n})":"kompyuter · {l} ({n})"," · белые":" · oqlar"," · чёрные":" · qoralar","Мат в 1 ход":"1 yurishda mat","Мат в {n} хода":"{n} yurishda mat","Соперник отвечает…":"Raqib javob bermoqda…","Найдите ход, после которого королю соперника не спастись":"Raqib shohi qutula olmaydigan yurishni toping","Шах! {k} под ударом":"Kisht! {k} xavf ostida","Ваш ход":"Sizning yurishingiz","{a}: думают…":"{a}: o‘ylamoqda…","Ход: {a}":"Yurish: {a}","Выберите фигуру, чтобы увидеть её ходы":"Yurishlarini ko‘rish uchun donani tanlang","Рокировка: {k} и {r} {s}":"Rokirovka: {k} va {r} {s}","(короткая)":"(qisqa)","(длинная)":"(uzun)"," · съедает: {v}":" · oladi: {v}"," · превращается: {p}":" · aylanadi: {p}","Не то. Ищите мат!":"Unday emas. Matni izlang!","Шах вашему королю!":"Shohingizga kisht!","Мат! Победа {g}":"Mat! {g} g‘alaba qozondi","Пат — ничья":"Pat — durang","{k} не под ударом, но ходить больше некуда.":"{k} xavf ostida emas, lekin yuradigan joy yo‘q.","50 ходов подряд никого не съели и пешки не двигались.":"Ketma-ket 50 yurish davomida olish va piyoda yurishi bo‘lmadi.","Осталось слишком мало фигур, чтобы поставить мат.":"Mat qo‘yish uchun donalar juda kam qoldi.","Одна и та же позиция повторилась три раза.":"Bir xil holat uch marta takrorlandi.","Задача решена!":"Masala yechildi!","Получилось с {n}-й попытки.":"{n}-urinishda chiqdi.","С первой попытки, без ошибок!":"Birinchi urinishdayoq, xatosiz!","Задача не решена":"Masala yechilmadi","Попробуйте ещё раз.":"Yana urinib ko‘ring.","Время вышло! Победа {g}":"Vaqt tugadi! {g} g‘alaba qozondi","У {g} кончилось время на часах.":"{g} soatida vaqt tugadi.","💡 Показать ход":"💡 Yurishni ko‘rsat","💡 Подсказка · {n}":"💡 Maslahat · {n}","Подсказка: {m}":"Maslahat: {m}","Думаю над подсказкой…":"Maslahat ustida o‘ylayapman…","Ваши ходы: {a}":"Sizning yurishlaringiz: {a}","Все ходы":"Barcha yurishlar","Считаю…":"Hisoblayapman…","Считаю… ход {i} из {n}":"Hisoblayapman… {i}/{n} yurish","лучший":"eng yaxshi","хорошо":"yaxshi","неточность":"noaniqlik","ошибка":"xato","зевок":"qo‘pol xato","лучших":"eng yaxshi","неточн.":"noaniq.","ошибок":"xato","зевков":"qo‘pol xato","Лучше было: {m}":"Yaxshiroq edi: {m}","Ходов пока нет.":"Hali yurishlar yo‘q.","{p} сейчас не может ходить":"{p} hozir yura olmaydi","{p} у края доски. Кем стать?":"{p} taxta chetida. Kimga aylanadi?","побед":"g‘alaba","поражений":"mag‘lubiyat","ничьих":"durang","🔥 {n} {d} подряд":"🔥 Ketma-ket {n} {d}"," · решите задачу дня, чтобы не прервать серию":" · seriyani uzmaslik uchun kun masalasini yeching","Решайте задачу дня каждый день и копите серию 🔥":"Har kuni kun masalasini yeching va seriya to‘plang 🔥","Белыми · {a}":"Oqlar · {a}","Чёрными · {a}":"Qoralar · {a}","Задача":"Masala","Вы победили":"Siz yutdingiz","Компьютер победил":"Kompyuter yutdi","Следующий урок":"Keyingi dars","К урокам":"Darslarga","Ещё задача":"Yana masala","выкл.":"o‘chiq","Подсказки вроде «Шах!» не показываются.":"«Kisht!» kabi xabarlar ko‘rsatilmaydi.","Сообщения появляются в игре. Если игра свёрнута, придёт уведомление, когда соперник походил.":"Xabarlar o‘yinda ko‘rinadi. O‘yin yig‘ilgan bo‘lsa, raqib yurganda bildirishnoma keladi.","Сообщения появляются в игре. Можно разрешить и уведомления телефона, когда игра свёрнута.":"Xabarlar o‘yinda ko‘rinadi. O‘yin yig‘ilganda telefon bildirishnomalariga ham ruxsat berish mumkin.","Сообщения появляются в игре. Уведомления телефона здесь недоступны.":"Xabarlar o‘yinda ko‘rinadi. Telefon bildirishnomalari bu yerda mavjud emas.","Счёт сброшен":"Hisob tozalandi","Партия сохранена":"Partiya saqlandi","Первая партия":"Birinchi partiya","Доиграть партию до конца":"Partiyani oxirigacha o‘ynash","Первая победа":"Birinchi g‘alaba","Победить компьютер":"Kompyuterni yutish","Сильнее Следопыта":"Izquvardan kuchli","Победить компьютер 5-го уровня или выше":"5 yoki undan yuqori darajadagi kompyuterni yutish","Победа над Чемпионом":"Chempion ustidan g‘alaba","Победить компьютер 10-го уровня":"10-darajadagi kompyuterni yutish","Первая задача":"Birinchi masala","Решить задачу дня":"Kun masalasini yechish","Десять задач":"O‘nta masala","Решить 10 задач":"10 ta masala yechish","Три дня подряд":"Ketma-ket uch kun","Решать задачу дня 3 дня подряд":"Kun masalasini ketma-ket 3 kun yechish","Неделя подряд":"Ketma-ket bir hafta","Решать задачу дня 7 дней подряд":"Kun masalasini ketma-ket 7 kun yechish","Выпускник":"Bitiruvchi","Пройти все уроки":"Barcha darslarni o‘tish","Пять царств":"Beshta saltanat","Сыграть каждой из пяти армий":"Beshta qo‘shinning har biri bilan o‘ynash","Довести пешку до края доски":"Piyodani taxta chetiga yetkazish","Крепость":"Qal’a","Сделать рокировку":"Rokirovka qilish","На флажке":"Bayroqchada","Победить по времени":"Vaqt bo‘yicha yutish","{e} Достижение: {n}":"{e} Yutuq: {n}","{n} из {m}":"{m} tadan {n}","Ходит {a}":"{a} yuradi","Ладья ходит прямо: вверх, вниз, влево и вправо, на сколько угодно клеток. Собери все звёзды.":"Rux to‘g‘ri yuradi: yuqoriga, pastga, chapga va o‘ngga, istalgancha katak. Barcha yulduzlarni yig‘.","Слон ходит наискосок и всегда остаётся на клетках своего цвета. Собери все звёзды.":"Fil diagonal bo‘ylab yuradi va doim o‘z rangidagi kataklarda qoladi. Barcha yulduzlarni yig‘.","Ферзь — самая сильная фигура: ходит и прямо, и наискосок. Собери все звёзды.":"Farzin — eng kuchli dona: to‘g‘ri ham, diagonal ham yuradi. Barcha yulduzlarni yig‘.","Конь ходит буквой «Г»: две клетки прямо и одна вбок. Он единственный умеет перепрыгивать через фигуры. Собери все звёзды.":"Ot «G» harfi shaklida yuradi: ikki katak to‘g‘ri, bir katak yonga. Faqat u donalar ustidan sakray oladi. Barcha yulduzlarni yig‘.","Король ходит на одну клетку в любую сторону. Он самый важный: его нельзя потерять. Собери все звёзды.":"Shoh istalgan tomonga bir katak yuradi. U eng muhimi: uni yo‘qotib bo‘lmaydi. Barcha yulduzlarni yig‘.","Пешка идёт вперёд на одну клетку (с первого места можно на две), а бьёт наискосок. Дойди до края — и пешка превратится в сильную фигуру!":"Piyoda bir katak oldinga yuradi (birinchi yurishda ikkita), diagonal bo‘ylab oladi. Chetga yet — piyoda kuchli donaga aylanadi!","Шах — это нападение на короля. Поставь шах чёрному королю: сходи так, чтобы одна из твоих фигур напала на него.":"Kisht — shohga hujum. Qora shohga kisht ber: donalaringdan biri unga hujum qiladigan yurish qil.","Мат — это шах, от которого нельзя спастись. Чёрный король прижат к краю. Поставь мат одним ходом ладьёй.":"Mat — qutulib bo‘lmaydigan kisht. Qora shoh chetga qisilgan. Rux bilan bir yurishda mat qo‘y.","Рокировка":"Rokirovka","Рокировка прячет короля: король идёт на две клетки к ладье, а ладья перепрыгивает через него. Сделай рокировку: сходи королём на две клетки вправо.":"Rokirovka shohni yashiradi: shoh rux tomon ikki katak yuradi, rux esa uning ustidan sakraydi. Rokirovka qil: shoh bilan o‘ngga ikki katak yur.","Урок пройден: {n}!":"Dars o‘tildi: {n}!","Дальше: {n}.":"Keyingisi: {n}.","Все уроки пройдены. Теперь попробуй задачу дня!":"Barcha darslar o‘tildi. Endi kun masalasini sinab ko‘r!","Не то. Попробуй ещё раз":"Unday emas. Yana urinib ko‘r"," · как ходит":" · qanday yuradi","правило":"qoida","Классика":"Klassika","Классические фигуры":"Klassik donalar","Король сдаётся.":"Shoh taslim bo‘ldi.","Классическая фигура. Ходит как положено.":"Klassik dona. Qoidadagidek yuradi.","Классический король.":"Klassik shoh.","день":"kun","дня":"kun","дней":"kun"},"en":{"Шахматы царств":"Kingdoms Chess","↶ Отменить":"↶ Undo","💡 Подсказка":"💡 Hint","Новая":"New","Шахматы":"Chess of","царств":"Kingdoms","Пять живых армий. Правила настоящих шахмат.":"Five living armies. Real chess rules.","Играть":"Play","Продолжить партию":"Continue game","Армии":"Armies","Как играть":"How to play","Настройки":"Settings","Задача дня":"Daily puzzle","Обучение":"Learn","Достижения":"Achievements","Новая партия":"New game","Кто с кем сражается?":"Who fights whom?","Белые":"White","Чёрные":"Black","Соперник":"Opponent","Компьютер":"Computer","Вдвоём":"Two players","Часы на партию":"Game clock","1 мин":"1 min","Вы играете":"You play","Белыми":"White","Чёрными":"Black","Сила компьютера":"Computer strength","Назад":"Back","Начать":"Start","Кто есть кто":"Who is who","Понятно":"Got it","Поставьте мат чужому королю":"Checkmate the enemy king","Нажмите на свою фигуру — точки покажут, куда она может пойти. Красное кольцо значит, что там можно съесть соперника.":"Tap your piece — dots show where it can go. A red ring means you can capture there.","Король":"King","(с золотой короной) ходит на одну клетку в любую сторону. Его нельзя оставлять под ударом.":"(with the gold crown) moves one square in any direction. It must never be left under attack.","Ферзь":"Queen","(с диадемой) ходит прямо и наискосок на любое расстояние.":"(with the tiara) moves straight or diagonally any distance.","Ладья":"Rook","ходит только прямо,":"moves only in straight lines,","слон":"bishop","— только наискосок.":"— only diagonally.","Конь":"Knight","ходит буквой «Г» и перепрыгивает через фигуры.":"moves in an L-shape and jumps over pieces.","Пешка":"Pawn","идёт вперёд на клетку (с первого места — на две), а ест наискосок. Дойдя до края, превращается в любую фигуру.":"moves one square forward (two from its start) and captures diagonally. Reaching the last rank, it becomes any piece.","Шах":"Check","— король под ударом, его надо спасать.":"— the king is attacked and must be saved.","Мат":"Checkmate","— спасти нельзя, партия окончена.":"— no escape, the game is over.","Ничья":"Draw",": пат, троекратное повторение позиции, 50 ходов без взятий и ходов пешек, нехватка фигур для мата.":": stalemate, threefold repetition, 50 moves without captures or pawn moves, not enough material to mate.","Фигуру можно перетащить пальцем или нажать на неё, а потом на нужную клетку. Против компьютера есть 3 подсказки на партию.":"Drag a piece with your finger or tap it and then the target square. Against the computer you get 3 hints per game.","Звук и уведомления":"Sound and notifications","Громкость":"Volume","Вибрация":"Vibration","Уведомления":"Notifications","Разрешить уведомления на этом устройстве":"Allow notifications on this device","Подсказки ходов":"Move hints","Сбросить счёт побед":"Reset score","Готово":"Done","Как ходят фигуры":"How the pieces move","Девять коротких уроков для тех, кто только начинает. Собирай звёзды и учись.":"Nine short lessons for beginners. Collect stars and learn.","Закрыть":"Close","Разбор партии":"Game review","Ваши ходы":"Your moves","Превращение":"Promotion","Кем стать?":"Become what?","Партия окончена":"Game over","К доске":"To the board","Разбор":"Review","Ещё партию":"Play again","Главный экран":"Home","Армии: кто есть кто":"Armies: who is who","Громкость и настройки":"Volume and settings","Съеденные фигуры":"Captured pieces","Язык":"Language","Доска":"Board","Миры":"Worlds","Дерево":"Wood","Мрамор":"Marble","Неон":"Neon","Саванна":"Savanna","саванны":"Savanna","Царство животных · суша":"Animal kingdom · land","Лев загнан в угол, и саванна признаёт поражение.":"The lion is cornered and the savanna admits defeat.","Лев":"Lion","Р-р-р!":"Roar!","Царь зверей. Шагает на одну клетку в любую сторону.":"King of beasts. Steps one square in any direction.","Леопард":"Leopard","Самый ловкий хищник: бежит в любую сторону на любое расстояние.":"The nimblest hunter: runs any direction, any distance.","Носорог":"Rhino","Несётся напролом, но только по прямой.":"Charges straight ahead, but only in straight lines.","Слон":"Elephant","Фигура и так зовётся «слон». Шагает по диагонали, земля дрожит.":"The piece is called an elephant in Russian. Walks diagonally and the ground shakes.","Зебра":"Zebra","Полосатая лошадь: скачет буквой «Г» и перепрыгивает через кого угодно.":"A striped horse: jumps in an L-shape over anyone.","Мартышка":"Monkey","Их много. Бегут вперёд, а дойдя до края, становятся кем захотят.":"There are many of them. They run forward and become anything at the far edge.","Океан":"Ocean","океана":"Ocean","Царство животных · море":"Animal kingdom · sea","Кит окружён со всех сторон, и океан сдаётся.":"The whale is surrounded and the ocean surrenders.","Кит":"Whale","У-у-у!":"Whoo!","Самый большой и неторопливый житель моря. Плывёт на одну клетку.":"The biggest, slowest creature of the sea. Swims one square.","Акула":"Shark","Гроза океана: плывёт в любую сторону на любое расстояние.":"Terror of the ocean: swims any direction, any distance.","Черепаха":"Turtle","Панцирь-крепость. Гребёт ластами только прямо.":"A fortress shell. Paddles only in straight lines.","Краб":"Crab","Семенит боком, то есть наискосок — по диагонали.":"Scuttles sideways, that is diagonally.","Дельфин":"Dolphin","Выпрыгивает из воды и перелетает через фигуры буквой «Г».":"Leaps out of the water over pieces in an L-shape.","Рыбка":"Fish","Стайка рыб-клоунов. Доплыв до края, вырастает в кого угодно.":"A school of clownfish. At the far edge it grows into anything.","Бактерии":"Bacteria","бактерий":"Bacteria","Царство бактерий":"Bacteria kingdom","Стафилококк окружён, и колония больше не может делиться.":"The staphylococcus is surrounded and the colony can no longer divide.","Стафилококк":"Staphylococcus","Ай, антибиотик!":"Ouch, antibiotics!","Золотистый стафилококк: гроздь шариков. Ползёт на одну клетку.":"Golden staph: a cluster of spheres. Crawls one square.","Вибрион":"Vibrio","Холерный вибрион — самый быстрый пловец: жгутик несёт его куда угодно.":"Cholera vibrio is the fastest swimmer: its flagellum carries it anywhere.","Бацилла":"Bacillus","Прямая палочка — и скользит только прямо.":"A straight rod that slides only in straight lines.","Спирилла":"Spirillum","Спираль ввинчивается наискосок — по диагонали.":"A spiral that screws in diagonally.","Протей":"Proteus","Покрыт жгутиками, роится и перескакивает буквой «Г».":"Covered in flagella, it swarms and hops in an L-shape.","Кокк":"Coccus","Маленький шарик. Катится вперёд, а у края становится кем угодно.":"A tiny sphere. Rolls forward and becomes anything at the edge.","Грибы":"Fungi","грибов":"Fungi","Царство грибов":"Fungi kingdom","Белый гриб окружён, и грибница сдаётся.":"The porcini is surrounded and the mycelium surrenders.","Белый гриб":"Porcini","Спасите споры!":"Save the spores!","Боровик — «царь грибов». Уходит под землю и вырастает на соседней клетке.":"The porcini is the king of mushrooms. It sinks underground and grows on the next square.","Мухомор":"Fly agaric","Самый опасный гриб леса: грибница тянется в любую сторону на любое расстояние.":"The most dangerous mushroom: its mycelium reaches any direction, any distance.","Трутовик":"Bracket fungus","Растёт на пне, как крепость с балконами. Прорастает только по прямой.":"Grows on a stump like a fortress with balconies. Sprouts only in straight lines.","Лисичка":"Chanterelle","Хитрая, как лиса: прорастает наискосок.":"Sly as a fox: sprouts diagonally.","Дождевик":"Puffball","Грибница проходит под чужими фигурами буквой «Г», а сверху — облако спор.":"Its mycelium passes under enemy pieces in an L-shape, with a puff of spores above.","Опята":"Honey fungus","Растут гурьбой. Дойдя до края, вырастают в кого угодно.":"They grow in clusters. At the far edge they grow into anything.","Растения":"Plants","растений":"Plants","Царство растений":"Plant kingdom","Дуб окружён, и лес склоняет ветви.":"The oak is surrounded and the forest bows its branches.","Дуб":"Oak","Не рубите!":"Don't chop!","Царь деревьев. Тяжело переступает корнями на одну клетку.":"King of trees. Heavily steps one square on its roots.","Роза":"Rose","Королева цветов: идёт куда угодно, роняя лепестки, и колется.":"Queen of flowers: goes anywhere, dropping petals, and pricks.","Кактус":"Cactus","Прямой, как столб, и ходит только прямо.":"Straight as a post and moves only in straight lines.","Подсолнух":"Sunflower","Поворачивается за солнцем и шагает наискосок.":"Turns to the sun and walks diagonally.","Одуванчик":"Dandelion","Летит по ветру буквой «Г» над чужими фигурами.":"Flies on the wind in an L-shape over enemy pieces.","Росток":"Sprout","Маленький росток семенит корешками. У края вырастает в кого угодно.":"A little sprout scurries on its roots. At the edge it grows into anything.","Птенец":"Hatchling","Только учится: часто зевает фигуры.":"Just learning: often hangs pieces.","Детёныш":"Cub","Видит ход вперёд, ошибается.":"Sees one move ahead, makes mistakes.","Ученик":"Student","Знает, как ходят фигуры, и иногда бьёт.":"Knows how pieces move and sometimes captures.","Охотник":"Hunter","Ловит зевки, но сам не строит планов.":"Punishes blunders but makes no plans.","Следопыт":"Tracker","Крепкий любитель.":"A solid amateur.","Воин":"Warrior","Сильный клубный игрок.":"A strong club player.","Вожак":"Leader","Кандидат в мастера.":"Candidate master.","Мастер":"Master","Почти не ошибается.":"Hardly ever errs.","Гроссмейстер":"Grandmaster","Играет на уровне гроссмейстера.":"Plays at grandmaster level.","Чемпион":"Champion","Полная сила Stockfish. Победить почти невозможно.":"Full Stockfish strength. Nearly impossible to beat.","Урок {n}: {t}":"Lesson {n}: {t}","Задача: мат в {n}":"Puzzle: mate in {n}","белые · ходят первыми":"white · moves first","чёрные":"black","вы · найдите мат":"you · find the mate","соперник":"opponent","вы":"you","учебный соперник":"practice opponent","компьютер · {l} ({n})":"computer · {l} ({n})"," · белые":" · white"," · чёрные":" · black","Мат в 1 ход":"Mate in 1","Мат в {n} хода":"Mate in {n}","Соперник отвечает…":"Opponent is replying…","Найдите ход, после которого королю соперника не спастись":"Find the move after which the enemy king cannot escape","Шах! {k} под ударом":"Check! {k} is under attack","Ваш ход":"Your move","{a}: думают…":"{a} is thinking…","Ход: {a}":"To move: {a}","Выберите фигуру, чтобы увидеть её ходы":"Select a piece to see its moves","Рокировка: {k} и {r} {s}":"Castling: {k} and {r} {s}","(короткая)":"(kingside)","(длинная)":"(queenside)"," · съедает: {v}":" · captures {v}"," · превращается: {p}":" · becomes {p}","Не то. Ищите мат!":"Not that one. Find the mate!","Шах вашему королю!":"Check to your king!","Мат! Победа {g}":"Checkmate! {g} wins","Пат — ничья":"Stalemate — draw","{k} не под ударом, но ходить больше некуда.":"{k} is not in check but has no legal moves.","50 ходов подряд никого не съели и пешки не двигались.":"50 moves without a capture or a pawn move.","Осталось слишком мало фигур, чтобы поставить мат.":"Not enough material left to checkmate.","Одна и та же позиция повторилась три раза.":"The same position occurred three times.","Задача решена!":"Puzzle solved!","Получилось с {n}-й попытки.":"Solved on attempt {n}.","С первой попытки, без ошибок!":"First try, no mistakes!","Задача не решена":"Puzzle not solved","Попробуйте ещё раз.":"Try again.","Время вышло! Победа {g}":"Time's up! {g} wins","У {g} кончилось время на часах.":"{g} ran out of time.","💡 Показать ход":"💡 Show move","💡 Подсказка · {n}":"💡 Hint · {n}","Подсказка: {m}":"Hint: {m}","Думаю над подсказкой…":"Thinking about a hint…","Ваши ходы: {a}":"Your moves: {a}","Все ходы":"All moves","Считаю…":"Calculating…","Считаю… ход {i} из {n}":"Calculating… move {i} of {n}","лучший":"best","хорошо":"good","неточность":"inaccuracy","ошибка":"mistake","зевок":"blunder","лучших":"best","неточн.":"inacc.","ошибок":"mistakes","зевков":"blunders","Лучше было: {m}":"Better was: {m}","Ходов пока нет.":"No moves yet.","{p} сейчас не может ходить":"{p} cannot move right now","{p} у края доски. Кем стать?":"{p} reached the last rank. Become what?","побед":"wins","поражений":"losses","ничьих":"draws","🔥 {n} {d} подряд":"🔥 {n} {d} in a row"," · решите задачу дня, чтобы не прервать серию":" · solve today's puzzle to keep the streak","Решайте задачу дня каждый день и копите серию 🔥":"Solve the daily puzzle every day and build a streak 🔥","Белыми · {a}":"White · {a}","Чёрными · {a}":"Black · {a}","Задача":"Puzzle","Вы победили":"You won","Компьютер победил":"Computer won","Следующий урок":"Next lesson","К урокам":"To lessons","Ещё задача":"Another puzzle","выкл.":"off","Подсказки вроде «Шах!» не показываются.":"Messages like “Check!” are not shown.","Сообщения появляются в игре. Если игра свёрнута, придёт уведомление, когда соперник походил.":"Messages appear in the game. If the game is minimised, you get a notification when the opponent moves.","Сообщения появляются в игре. Можно разрешить и уведомления телефона, когда игра свёрнута.":"Messages appear in the game. You can also allow phone notifications for when the game is minimised.","Сообщения появляются в игре. Уведомления телефона здесь недоступны.":"Messages appear in the game. Phone notifications are not available here.","Счёт сброшен":"Score reset","Партия сохранена":"Game saved","Первая партия":"First game","Доиграть партию до конца":"Finish a game","Первая победа":"First win","Победить компьютер":"Beat the computer","Сильнее Следопыта":"Stronger than the Tracker","Победить компьютер 5-го уровня или выше":"Beat the computer at level 5 or higher","Победа над Чемпионом":"Beat the Champion","Победить компьютер 10-го уровня":"Beat the computer at level 10","Первая задача":"First puzzle","Решить задачу дня":"Solve the daily puzzle","Десять задач":"Ten puzzles","Решить 10 задач":"Solve 10 puzzles","Три дня подряд":"Three days in a row","Решать задачу дня 3 дня подряд":"Solve the daily puzzle 3 days in a row","Неделя подряд":"A week in a row","Решать задачу дня 7 дней подряд":"Solve the daily puzzle 7 days in a row","Выпускник":"Graduate","Пройти все уроки":"Complete all lessons","Пять царств":"Five kingdoms","Сыграть каждой из пяти армий":"Play with each of the five armies","Довести пешку до края доски":"Promote a pawn","Крепость":"Fortress","Сделать рокировку":"Castle","На флажке":"On the flag","Победить по времени":"Win on time","{e} Достижение: {n}":"{e} Achievement: {n}","{n} из {m}":"{n} of {m}","Ходит {a}":"{a} to move","Ладья ходит прямо: вверх, вниз, влево и вправо, на сколько угодно клеток. Собери все звёзды.":"The rook moves in straight lines: up, down, left and right, any number of squares. Collect all the stars.","Слон ходит наискосок и всегда остаётся на клетках своего цвета. Собери все звёзды.":"The bishop moves diagonally and always stays on its own colour. Collect all the stars.","Ферзь — самая сильная фигура: ходит и прямо, и наискосок. Собери все звёзды.":"The queen is the strongest piece: it moves straight and diagonally. Collect all the stars.","Конь ходит буквой «Г»: две клетки прямо и одна вбок. Он единственный умеет перепрыгивать через фигуры. Собери все звёзды.":"The knight moves in an L: two squares straight and one sideways. It alone can jump over pieces. Collect all the stars.","Король ходит на одну клетку в любую сторону. Он самый важный: его нельзя потерять. Собери все звёзды.":"The king moves one square in any direction. It is the most important piece: it must not be lost. Collect all the stars.","Пешка идёт вперёд на одну клетку (с первого места можно на две), а бьёт наискосок. Дойди до края — и пешка превратится в сильную фигуру!":"The pawn moves one square forward (two from its start) and captures diagonally. Reach the edge and it becomes a strong piece!","Шах — это нападение на короля. Поставь шах чёрному королю: сходи так, чтобы одна из твоих фигур напала на него.":"Check is an attack on the king. Give check to the black king: move so one of your pieces attacks it.","Мат — это шах, от которого нельзя спастись. Чёрный король прижат к краю. Поставь мат одним ходом ладьёй.":"Checkmate is a check with no escape. The black king is pinned to the edge. Mate in one with a rook.","Рокировка":"Castling","Рокировка прячет короля: король идёт на две клетки к ладье, а ладья перепрыгивает через него. Сделай рокировку: сходи королём на две клетки вправо.":"Castling hides the king: the king moves two squares toward a rook and the rook jumps over it. Castle: move the king two squares to the right.","Урок пройден: {n}!":"Lesson complete: {n}!","Дальше: {n}.":"Next: {n}.","Все уроки пройдены. Теперь попробуй задачу дня!":"All lessons complete. Now try the daily puzzle!","Не то. Попробуй ещё раз":"Not quite. Try again"," · как ходит":" · how it moves","правило":"rule","Классика":"Classic","Классические фигуры":"Classic pieces","Король сдаётся.":"The king resigns.","Классическая фигура. Ходит как положено.":"A classic piece. Moves as it should.","Классический король.":"The classic king.","день":"day","дня":"days","дней":"days"}};
+  let lang = store.get('zoochess.lang') || ((navigator.language || '').startsWith('uz') ? 'uz' : (navigator.language || '').startsWith('en') ? 'en' : 'ru');
+  if (!I18N[lang] && lang !== 'ru') lang = 'ru';
+  const t = (x) => (lang !== 'ru' && I18N[lang][x]) || x;
+  const tf = (x, v) => t(x).replace(/\{(\w+)\}/g, (_, k) => (v && v[k] != null ? v[k] : ''));
+  const plural = (n, one, few, many) => (lang === 'ru' ? (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many) : lang === 'uz' ? t(one) : n === 1 ? t(one) : t(few));
+  function translateDom() {
+    document.documentElement.lang = lang;
+    document.documentElement.dataset.lang = lang;
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      if (!n.nodeValue.trim() || n.parentNode.closest('script, style')) continue;
+      if (n.__ru === undefined) n.__ru = n.nodeValue;
+      const ru = n.__ru.trim(), tr = t(ru);
+      n.nodeValue = tr === ru ? n.__ru : n.__ru.replace(ru, tr);
+    }
+    document.querySelectorAll('[aria-label]').forEach((el) => { if (!el.dataset.ru) el.dataset.ru = el.getAttribute('aria-label'); el.setAttribute('aria-label', t(el.dataset.ru)); });
+    document.title = t('Шахматы царств');
+  }
 
   // ---------------- drawn creatures ----------------
   // Every figure faces left; legs carry class "leg a|b" so they can step, tails/fins/trunks move on their own.
@@ -806,7 +848,18 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       p: { a: 'sprout', n: 'Росток', mv: 'walk', per: 240, base: 130, tilt: 6, why: 'Маленький росток семенит корешками. У края вырастает в кого угодно.' },
     },
   };
-  const ARMY_IDS = ['savanna', 'ocean', 'bacteria', 'fungi', 'plants'];
+  ARMIES.classic = {
+    name: 'Классика', gen: 'Классика', kingdom: 'Классические фигуры', ground: ['#efe6d6', '#e4d8c2'], crest: '#ece4d6',
+    die: 'dust', land: 'dust', mated: 'Король сдаётся.',
+    k: { a: 'cl_k', n: 'Король', mv: 'move', say: '!', why: 'Классический король.' },
+    q: { a: 'cl_q', n: 'Ферзь', mv: 'move', why: 'Классическая фигура. Ходит как положено.' },
+    r: { a: 'cl_r', n: 'Ладья', mv: 'move', why: 'Классическая фигура. Ходит как положено.' },
+    b: { a: 'cl_b', n: 'Слон', mv: 'move', why: 'Классическая фигура. Ходит как положено.' },
+    n: { a: 'cl_n', n: 'Конь', mv: 'move', why: 'Классическая фигура. Ходит как положено.' },
+    p: { a: 'cl_p', n: 'Пешка', mv: 'move', why: 'Классическая фигура. Ходит как положено.' },
+  };
+  Object.entries({ cl_k: '♚', cl_q: '♛', cl_r: '♜', cl_b: '♝', cl_n: '♞', cl_p: '♟' }).forEach(([k, g]) => { ART[k] = `<text class="cl" x="50" y="86" text-anchor="middle">${g}</text>`; });
+  const ARMY_IDS = ['savanna', 'ocean', 'bacteria', 'fungi', 'plants', 'classic'];
   const ROLE = { k: 'Король', q: 'Ферзь', r: 'Ладья', b: 'Слон', n: 'Конь', p: 'Пешка' };
   const ORDER = ['k', 'q', 'r', 'b', 'n', 'p'];
   const FILES = 'abcdefgh';
@@ -1036,7 +1089,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
 
   // ---------------- settings, sound, vibration, notifications ----------------
-  const settings = { volume: 70, vibro: true, notif: true, hints: true };
+  const settings = { volume: 70, vibro: true, notif: true, hints: true, theme: 'worlds' };
   try { Object.assign(settings, JSON.parse(store.get('zoochess.settings') || '{}')); } catch (e) {}
   const saveSettings = () => store.set('zoochess.settings', JSON.stringify(settings));
   const stats = { w: 0, l: 0, d: 0 };
@@ -1251,11 +1304,14 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       squaresEl.appendChild(d);
     }
     const bot = A(bottomColor()), top = A(other(bottomColor()));
-    boardEl.style.setProperty('--top1', top.ground[0]);
-    boardEl.style.setProperty('--top2', top.ground[1]);
-    boardEl.style.setProperty('--bot2', bot.ground[1]);
-    boardEl.style.setProperty('--bot1', bot.ground[0]);
-    $('title').innerHTML = G.mode === 'lesson' ? `Урок ${G.ls.i + 1}: ${LESSONS[G.ls.i].n}` : G.mode === 'puzzle' ? `Задача: мат в ${G.pz.n}` : `${A('w').name} <span class="amp">и</span> ${A('b').name}`;
+    const TH = { wood: ['#edd3a6', '#e5c793', '#e5c793', '#edd3a6'], marble: ['#f4f2ee', '#e6e3dd', '#e6e3dd', '#f4f2ee'], neon: ['#141a2e', '#1a2246', '#1a2246', '#141a2e'] };
+    const th = TH[settings.theme] || [top.ground[0], top.ground[1], bot.ground[1], bot.ground[0]];
+    boardEl.dataset.theme = TH[settings.theme] ? settings.theme : 'worlds';
+    boardEl.style.setProperty('--top1', th[0]);
+    boardEl.style.setProperty('--top2', th[1]);
+    boardEl.style.setProperty('--bot2', th[2]);
+    boardEl.style.setProperty('--bot1', th[3]);
+    $('title').innerHTML = G.mode === 'lesson' ? tf('Урок {n}: {t}', { n: G.ls.i + 1, t: t(LESSONS[G.ls.i].n) }) : G.mode === 'puzzle' ? tf('Задача: мат в {n}', { n: G.pz.n }) : `${t(A('w').name)} <span class="amp">${lang === 'uz' ? 'va' : lang === 'en' ? '&amp;' : 'и'}</span> ${t(A('b').name)}`;
   }
   const sqEl = (i) => squaresEl.querySelector(`[data-sq="${i}"]`);
 
@@ -1323,12 +1379,12 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   function paintBars() {
     const bot = bottomColor(), top = other(bot);
-    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : G.mode === 'puzzle' ? (c === G.side ? 'вы · найдите мат' : 'соперник') : G.mode === 'lesson' ? (c === 'w' ? 'вы' : 'учебный соперник') : (c === G.side ? 'вы' : `компьютер · ${LEVELS[G.level - 1].n} (${G.level})`) + (c === 'w' ? ' · белые' : ' · чёрные'));
+    const who = (c) => (G.mode === 'duo' ? t(c === 'w' ? 'белые · ходят первыми' : 'чёрные') : G.mode === 'puzzle' ? t(c === G.side ? 'вы · найдите мат' : 'соперник') : G.mode === 'lesson' ? t(c === 'w' ? 'вы' : 'учебный соперник') : (c === G.side ? t('вы') : tf('компьютер · {l} ({n})', { l: t(LEVELS[G.level - 1].n), n: G.level })) + t(c === 'w' ? ' · белые' : ' · чёрные'));
     [['top', top], ['bot', bot]].forEach(([pos, c]) => {
       const crest = $('crest-' + pos);
       crest.innerHTML = art(armyOf(c), 'k');
       crest.style.setProperty('--crest', A(c).crest);
-      $('name-' + pos).textContent = A(c).name;
+      $('name-' + pos).textContent = t(A(c).name);
       $('sub-' + pos).textContent = who(c);
       $('tray-' + pos).innerHTML = G.mode === 'ai' || G.mode === 'duo' ? capturedBy(c).map((h) => `<span>${h}</span>`).join('') : '';
       $('bar-' + pos).classList.toggle('turn', !G.over && S.turn === c);
@@ -1338,21 +1394,22 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     paintHint();
   }
 
+  const mateText = (n) => (n === 1 ? t('Мат в 1 ход') : tf('Мат в {n} хода', { n }));
   function paintStatus(text) {
     const st = $('status');
     st.classList.remove('alert');
     if (text) { st.textContent = text; }
     else if (G.over) { st.textContent = G.over.title; st.classList.add('alert'); }
-    else if (G.mode === 'lesson') { st.textContent = `Урок ${G.ls.i + 1}: ${LESSONS[G.ls.i].n}`; $('lastmove').textContent = LESSONS[G.ls.i].text; return; }
+    else if (G.mode === 'lesson') { st.textContent = tf('Урок {n}: {t}', { n: G.ls.i + 1, t: t(LESSONS[G.ls.i].n) }); $('lastmove').textContent = t(LESSONS[G.ls.i].text); return; }
     else if (G.mode === 'puzzle') {
-      st.textContent = S.turn === G.side ? `Мат в ${G.pz.left === 1 ? '1 ход' : G.pz.left + ' хода'}` : 'Соперник отвечает…';
-      $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : 'Найдите ход, после которого королю соперника не спастись';
+      st.textContent = S.turn === G.side ? mateText(G.pz.left) : t('Соперник отвечает…');
+      $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : t('Найдите ход, после которого королю соперника не спастись');
       return;
     }
-    else if (inCheck(S)) { st.textContent = `Шах! ${A(S.turn).k.n} под ударом`; st.classList.add('alert'); }
-    else if (G.mode === 'ai') st.textContent = S.turn === G.side ? 'Ваш ход' : `${A(S.turn).name}: думают…`;
-    else st.textContent = `Ход: ${A(S.turn).name}`;
-    $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : 'Выберите фигуру, чтобы увидеть её ходы';
+    else if (inCheck(S)) { st.textContent = tf('Шах! {k} под ударом', { k: t(A(S.turn).k.n) }); st.classList.add('alert'); }
+    else if (G.mode === 'ai') st.textContent = S.turn === G.side ? t('Ваш ход') : tf('{a}: думают…', { a: t(A(S.turn).name) });
+    else st.textContent = tf('Ход: {a}', { a: t(A(S.turn).name) });
+    $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : t('Выберите фигуру, чтобы увидеть её ходы');
   }
 
   // ---------------- effects ----------------
@@ -1479,6 +1536,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
         return { dur: 300 + len * 60, ease: 'ease-out', k: K(k) };
       }
       case 'swarm': return { dur: 640, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.1, 0, -0.2, 'scale(1.1,0.9) rotate(10deg)')], [0.5, at(0.5, 0, -0.85, 'scale(1.3) rotate(-12deg)')], [0.75, at(0.85, 0, -0.25, 'rotate(10deg)')], [1, at(1)]]) };
+      case 'move': return { dur: 260 + len * 60, ease: 'ease-in-out', k: K([[0, at(0)], [1, at(1)]]) };
       case 'wobble': return { dur: 680, ease: 'ease-in-out', k: K([[0, at(0)], [0.2, at(0.2, 0, 0, 'scale(1.15,0.85)')], [0.45, at(0.5, 0, 0, 'scale(0.9,1.12)')], [0.7, at(0.8, 0, 0, 'scale(1.12,0.88)')], [1, at(1)]]) };
       default: return { dur: 300, ease: 'ease-in-out', k: K([[0, at(0)], [1, at(1)]]) };
     }
@@ -1562,11 +1620,11 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   function describe(s, m) {
     const p = s.b[m.from], sp = A(p.c)[p.t];
-    if (m.castle) return `Рокировка: ${sp.n} и ${A(p.c).r.n} ${m.castle === 'K' ? '(короткая)' : '(длинная)'}`;
+    if (m.castle) return tf('Рокировка: {k} и {r} {s}', { k: t(sp.n), r: t(A(p.c).r.n), s: t(m.castle === 'K' ? '(короткая)' : '(длинная)') });
     const victim = m.ep ? s.b[m.to + (p.c === 'w' ? 8 : -8)] : s.b[m.to];
-    let txt = `${sp.n} ${sqName(m.from)} ${victim ? '✕' : '→'} ${sqName(m.to)}`;
-    if (victim) txt += ` · съедает: ${A(victim.c)[victim.t].n}`;
-    if (m.promo) txt += ` · превращается: ${A(p.c)[m.promo].n}`;
+    let txt = `${t(sp.n)} ${sqName(m.from)} ${victim ? '✕' : '→'} ${sqName(m.to)}`;
+    if (victim) txt += tf(' · съедает: {v}', { v: t(A(victim.c)[victim.t].n) });
+    if (m.promo) txt += tf(' · превращается: {p}', { p: t(A(p.c)[m.promo].n) });
     return txt;
   }
 
@@ -1574,7 +1632,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (G.mode === 'puzzle' && S.turn === G.side && !G.over) {
       if (!mateIn(S, G.pz.left).some((w) => sameMove(w, m))) {
         G.pz.wrong++; sel = -1; selMoves = [];
-        render(); toast('Не то. Ищите мат!'); buzz(30);
+        render(); toast(t('Не то. Ищите мат!')); buzz(30);
         boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake');
         return;
       }
@@ -1614,20 +1672,20 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (G.mode === 'lesson') lessonAfter(m); else checkEnd();
     if ((G.mode === 'duo' || (G.mode === 'ai' && p.c === G.side)) && m.castle) unlock('castle');
     if ((G.mode === 'duo' || (G.mode === 'ai' && p.c === G.side)) && m.promo) unlock('promo');
-    if (m.promo) { if (!reduce) DEATH[ARMIES[army].die](disp(m.to)); toast(`${ARMIES[army].p.n} → ${ARMIES[army][m.promo].n}`); }
+    if (m.promo) { if (!reduce) DEATH[ARMIES[army].die](disp(m.to)); toast(`${t(ARMIES[army].p.n)} → ${t(ARMIES[army][m.promo].n)}`); }
     render();
     if (!G.over && inCheck(S)) {
       SFX.check(armyOf(S.turn));
       buzz([40, 50, 40]);
-      say(kingSq(S.b, S.turn), A(S.turn).k.say);
-      toast(G.mode === 'ai' && S.turn === G.side ? 'Шах вашему королю!' : `Шах! ${A(S.turn).k.n} под ударом`);
+      say(kingSq(S.b, S.turn), t(A(S.turn).k.say));
+      toast(G.mode === 'ai' && S.turn === G.side ? t('Шах вашему королю!') : tf('Шах! {k} под ударом', { k: t(A(S.turn).k.n) }));
     }
     save();
     await wait(victim ? 180 : 40);
     busy = false;
     paintBars();
-    if (G.over) { sysNotify('Партия окончена', G.over.title); setTimeout(showEnd, 650); return; }
-    if (byAI) sysNotify('Ваш ход', G.log[G.log.length - 1]);
+    if (G.over) { sysNotify(t('Партия окончена'), G.over.title); setTimeout(showEnd, 650); return; }
+    if (byAI) sysNotify(t('Ваш ход'), G.log[G.log.length - 1]);
     maybeAI();
     puzzleReply();
   }
@@ -1636,14 +1694,14 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (!moves.length) {
       if (inCheck(S)) {
         const win = other(S.turn);
-        G.over = { title: `Мат! Победа ${A(win).gen}`, text: A(S.turn).mated, winner: win };
-      } else G.over = { title: 'Пат — ничья', text: `${A(S.turn).k.n} не под ударом, но ходить больше некуда.` };
-    } else if (S.half >= 100) G.over = { title: 'Ничья', text: '50 ходов подряд никого не съели и пешки не двигались.' };
-    else if (insufficient(S.b)) G.over = { title: 'Ничья', text: 'Осталось слишком мало фигур, чтобы поставить мат.' };
-    else if (G.hist.filter((h) => posKey(h) === posKey(S)).length >= 3) G.over = { title: 'Ничья', text: 'Одна и та же позиция повторилась три раза.' };
+        G.over = { title: tf('Мат! Победа {g}', { g: t(A(win).gen) }), text: t(A(S.turn).mated), winner: win };
+      } else G.over = { title: t('Пат — ничья'), text: tf('{k} не под ударом, но ходить больше некуда.', { k: t(A(S.turn).k.n) }) };
+    } else if (S.half >= 100) G.over = { title: t('Ничья'), text: t('50 ходов подряд никого не съели и пешки не двигались.') };
+    else if (insufficient(S.b)) G.over = { title: t('Ничья'), text: t('Осталось слишком мало фигур, чтобы поставить мат.') };
+    else if (G.hist.filter((h) => posKey(h) === posKey(S)).length >= 3) G.over = { title: t('Ничья'), text: t('Одна и та же позиция повторилась три раза.') };
     if (G.mode === 'puzzle' && G.over) {
-      if (G.over.winner === G.side) { G.over = { title: 'Задача решена!', text: G.pz.wrong ? `Получилось с ${G.pz.wrong + 1}-й попытки.` : 'С первой попытки, без ошибок!', winner: G.side, puzzle: true }; puzzleSolved(); }
-      else G.over = { title: 'Задача не решена', text: 'Попробуйте ещё раз.', puzzle: true };
+      if (G.over.winner === G.side) { G.over = { title: t('Задача решена!'), text: G.pz.wrong ? tf('Получилось с {n}-й попытки.', { n: G.pz.wrong + 1 }) : t('С первой попытки, без ошибок!'), winner: G.side, puzzle: true }; puzzleSolved(); }
+      else G.over = { title: t('Задача не решена'), text: t('Попробуйте ещё раз.'), puzzle: true };
     }
     countStats();
   }
@@ -1688,7 +1746,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     paintClocks();
     if (G.clock[S.turn] <= 0 && !busy) {
       const win = other(S.turn);
-      G.over = { title: `Время вышло! Победа ${A(win).gen}`, text: `У ${A(S.turn).gen} кончилось время на часах.`, winner: win, time: true };
+      G.over = { title: tf('Время вышло! Победа {g}', { g: t(A(win).gen) }), text: tf('У {g} кончилось время на часах.', { g: t(A(S.turn).gen) }), winner: win, time: true };
       countStats(); save(); render(); SFX.check(armyOf(S.turn)); showEnd();
     }
   }
@@ -1700,10 +1758,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     const ai = G.mode === 'ai', pz = G.mode === 'puzzle';
     b.hidden = !(ai || pz);
     $('app').querySelector('.actions').classList.toggle('two', !(ai || pz));
-    if (pz) { b.textContent = '💡 Показать ход'; b.disabled = busy || !isHumanTurn(); return; }
+    if (pz) { b.textContent = t('💡 Показать ход'); b.disabled = busy || !isHumanTurn(); return; }
     if (!ai) return;
     const left = G.hints == null ? 0 : G.hints;
-    b.textContent = `💡 Подсказка · ${left}`;
+    b.textContent = tf('💡 Подсказка · {n}', { n: left });
     b.disabled = busy || !left || !isHumanTurn();
   }
   $('btn-hint').addEventListener('click', async () => {
@@ -1713,11 +1771,11 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       if (!m) return;
       sel = m.from; selMoves = moves.filter((x) => x.from === m.from);
       paintSquares(); sqEl(m.from).classList.add('hint'); sqEl(m.to).classList.add('hint');
-      paintStatus('Подсказка: ' + describe(S, m));
+      paintStatus(tf('Подсказка: {m}', { m: describe(S, m) }));
       return;
     }
     if (G.mode !== 'ai' || !G.hints) return;
-    busy = true; paintHint(); paintStatus('Думаю над подсказкой…');
+    busy = true; paintHint(); paintStatus(t('Думаю над подсказкой…'));
     const g0 = G, n0 = G.hist.length;
     const m = await bestMove(S, Math.floor(G.hist.length / 2) + 1);
     busy = false;
@@ -1726,7 +1784,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     sel = m.from; selMoves = moves.filter((x) => x.from === m.from);
     paintSquares();
     sqEl(m.from).classList.add('hint'); sqEl(m.to).classList.add('hint');
-    paintStatus('Подсказка: ' + describe(S, m));
+    paintStatus(tf('Подсказка: {m}', { m: describe(S, m) }));
     paintHint();
   });
 
@@ -1734,8 +1792,8 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   function analyse() {
     if (!G.mv || !G.mv.length) return;
     $('m-end').hidden = true; $('m-analysis').hidden = false;
-    $('an-title').textContent = G.mode === 'ai' ? `Ваши ходы: ${A(G.side).name}` : 'Все ходы';
-    $('an-sum').innerHTML = ''; $('an-list').innerHTML = '<li><span class="n">…</span><span>Считаю…</span></li>';
+    $('an-title').textContent = G.mode === 'ai' ? tf('Ваши ходы: {a}', { a: t(A(G.side).name) }) : t('Все ходы');
+    $('an-sum').innerHTML = ''; $('an-list').innerHTML = `<li><span class="n">…</span><span>${t('Считаю…')}</span></li>`;
     const items = [], g0 = G, total = G.mv.length;
     const useSF = SF.ok;
     const step = async (i) => {
@@ -1743,7 +1801,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       if (i >= total) return renderAnalysis(items);
       const s = G.hist[i], m = G.mv[i];
       if (G.mode === 'duo' || s.turn === G.side) {
-        $('an-list').firstElementChild.lastElementChild.textContent = `Считаю… ход ${i + 1} из ${total}`;
+        $('an-list').firstElementChild.lastElementChild.textContent = tf('Считаю… ход {i} из {n}', { i: i + 1, n: total });
         let best = null, loss = 0;
         if (useSF) {
           try {
@@ -1775,11 +1833,11 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     const cls = (l) => (l < 10 ? ['best', 'лучший'] : l < 40 ? ['', 'хорошо'] : l < 100 ? ['inacc', 'неточность'] : l < 300 ? ['mist', 'ошибка'] : ['blund', 'зевок']);
     const cnt = { best: 0, inacc: 0, mist: 0, blund: 0 };
     items.forEach((it) => { const c = cls(it.loss)[0]; if (c) cnt[c]++; });
-    $('an-sum').innerHTML = `<div><b>${cnt.best}</b>лучших</div><div><b>${cnt.inacc}</b>неточн.</div><div><b>${cnt.mist}</b>ошибок</div><div><b>${cnt.blund}</b>зевков</div>`;
+    $('an-sum').innerHTML = `<div><b>${cnt.best}</b>${t('лучших')}</div><div><b>${cnt.inacc}</b>${t('неточн.')}</div><div><b>${cnt.mist}</b>${t('ошибок')}</div><div><b>${cnt.blund}</b>${t('зевков')}</div>`;
     $('an-list').innerHTML = items.map((it) => {
       const [c, label] = cls(it.loss);
-      return `<li><span class="n">${it.n}${it.dots}</span><span>${it.text}<span class="tag ${c}">${label}</span>${it.better ? `<span class="better">Лучше было: ${it.better}</span>` : ''}</span></li>`;
-    }).join('') || '<li><span class="n">—</span><span>Ходов пока нет.</span></li>';
+      return `<li><span class="n">${it.n}${it.dots}</span><span>${it.text}<span class="tag ${c}">${t(label)}</span>${it.better ? `<span class="better">${tf('Лучше было: {m}', { m: it.better })}</span>` : ''}</span></li>`;
+    }).join('') || `<li><span class="n">—</span><span>${t('Ходов пока нет.')}</span></li>`;
   }
   $('btn-analyse').addEventListener('click', analyse);
   $('btn-analysis-close').addEventListener('click', () => { $('m-analysis').hidden = true; });
@@ -1817,7 +1875,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (sel !== i) {
       sel = i; selMoves = moves.filter((m) => m.from === i);
       SFX.pick(armyOf(p.c)); paintSquares();
-      paintStatus(selMoves.length ? undefined : `${A(p.c)[p.t].n} сейчас не может ходить`);
+      paintStatus(selMoves.length ? undefined : tf('{p} сейчас не может ходить', { p: t(A(p.c)[p.t].n) }));
     }
   });
   squaresEl.addEventListener('pointermove', (e) => {
@@ -1866,7 +1924,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       selMoves = moves.filter((m) => m.from === i);
       SFX.pick(armyOf(p.c));
       paintSquares();
-      paintStatus(selMoves.length ? undefined : `${A(p.c)[p.t].n} сейчас не может ходить`);
+      paintStatus(selMoves.length ? undefined : tf('{p} сейчас не может ходить', { p: t(A(p.c)[p.t].n) }));
       return;
     }
     sel = -1; selMoves = [];
@@ -1876,14 +1934,14 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   function askPromo(c) {
     return new Promise((res) => {
-      $('promo-title').textContent = `${A(c).p.n} у края доски. Кем стать?`;
+      $('promo-title').textContent = tf('{p} у края доски. Кем стать?', { p: t(A(c).p.n) });
       const grid = $('promo-grid');
       grid.innerHTML = '';
-      for (const t of ['q', 'r', 'b', 'n']) {
+      for (const x of ['q', 'r', 'b', 'n']) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.innerHTML = `${art(armyOf(c), t)}${A(c)[t].n}`;
-        b.addEventListener('click', () => { $('m-promo').hidden = true; res(t); });
+        b.innerHTML = `${art(armyOf(c), x)}${t(A(c)[x].n)}`;
+        b.addEventListener('click', () => { $('m-promo').hidden = true; res(x); });
         grid.appendChild(b);
       }
       $('m-promo').hidden = false;
@@ -1911,29 +1969,31 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   // ---------------- home, menus, settings ----------------
   $('logo-crown').innerHTML = `<svg viewBox="-17 -19 34 26" aria-hidden="true">${crown(0, 0, 1.15)}</svg>`;
-  $('lineup').innerHTML = ARMY_IDS.map((id, i) => `<div class="tile"><div class="tile-sq" style="--g:${ARMIES[id].ground[0]};--d:${-i * 0.9}s">${art(id, 'k')}</div><span>${ARMIES[id].name}</span></div>`).join('');
-  $('legend-full').innerHTML = ARMY_IDS.map((id) => {
+  const paintLineup = () => { $('lineup').innerHTML = ARMY_IDS.slice(0, 5).map((id, i) => `<div class="tile"><div class="tile-sq" style="--g:${ARMIES[id].ground[0]};--d:${-i * 0.9}s">${art(id, 'k')}</div><span>${t(ARMIES[id].name)}</span></div>`).join(''); };
+  paintLineup();
+  const paintLegend = () => { $('legend-full').innerHTML = ARMY_IDS.map((id) => {
     const a = ARMIES[id];
-    return `<div><h3>${a.name}</h3><span class="kingdom">${a.kingdom}</span><ul>
-      ${ORDER.map((t) => `<li><span class="em">${art(id, t)}</span><span><b>${a[t].n}</b><small>${ROLE[t]}</small><span class="why">${a[t].why}</span></span></li>`).join('')}
+    return `<div><h3>${t(a.name)}</h3><span class="kingdom">${t(a.kingdom)}</span><ul>
+      ${ORDER.map((x) => `<li><span class="em">${art(id, x)}</span><span><b>${t(a[x].n)}</b><small>${t(ROLE[x])}</small><span class="why">${t(a[x].why)}</span></span></li>`).join('')}
       </ul></div>`;
-  }).join('');
+  }).join(''); };
+  paintLegend();
 
   function paintHome() {
     const can = G && !G.over && G.hist.length > 1;
     $('home-continue').hidden = !can;
-    $('stats').innerHTML = `<div><b>${stats.w}</b>побед</div><div><b>${stats.l}</b>поражений</div><div><b>${stats.d}</b>ничьих</div>`;
+    $('stats').innerHTML = `<div><b>${stats.w}</b>${t('побед')}</div><div><b>${stats.l}</b>${t('поражений')}</div><div><b>${stats.d}</b>${t('ничьих')}</div>`;
     const done = prog.dailyDone === today();
-    $('home-puzzle').innerHTML = `<span class="hb-e">${done ? '✅' : '🧩'}</span>Задача дня`;
-    const n = prog.streak, dn = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
-    $('streak').textContent = streakAlive() && n ? `🔥 ${n} ${dn} подряд${done ? '' : ' · решите задачу дня, чтобы не прервать серию'}` : 'Решайте задачу дня каждый день и копите серию 🔥';
+    $('home-puzzle').innerHTML = `<span class="hb-e">${done ? '✅' : '🧩'}</span>${t('Задача дня')}`;
+    const n = prog.streak;
+    $('streak').textContent = streakAlive() && n ? tf('🔥 {n} {d} подряд', { n, d: plural(n, 'день', 'дня', 'дней') }) + (done ? '' : t(' · решите задачу дня, чтобы не прервать серию')) : t('Решайте задачу дня каждый день и копите серию 🔥');
   }
   function showHome() { paintHome(); $('home').hidden = false; }
   function hideHome() { $('home').hidden = true; }
 
   function buildArmySeg(c) {
     const seg = $('seg-' + c);
-    seg.innerHTML = ARMY_IDS.map((id) => `<button type="button" data-v="${id}">${art(id, 'k')}<span>${ARMIES[id].name}</span></button>`).join('');
+    seg.innerHTML = ARMY_IDS.map((id) => `<button type="button" data-v="${id}">${art(id, 'k')}<span>${t(ARMIES[id].name)}</span></button>`).join('');
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       const v = b.dataset.v;
@@ -1960,10 +2020,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     pressed('seg-w', opts.w); pressed('seg-b', opts.b);
     pressed('seg-mode', opts.mode); pressed('seg-side', opts.side); pressed('seg-clock', opts.clock);
     $('set-level').value = opts.level;
-    $('level-out').textContent = `${opts.level} · ${LEVELS[opts.level - 1].n}`;
-    $('level-note').textContent = LEVELS[opts.level - 1].d;
-    $('seg-side').querySelector('[data-v="w"]').textContent = `Белыми · ${ARMIES[opts.w].name}`;
-    $('seg-side').querySelector('[data-v="b"]').textContent = `Чёрными · ${ARMIES[opts.b].name}`;
+    $('level-out').textContent = `${opts.level} · ${t(LEVELS[opts.level - 1].n)}`;
+    $('level-note').textContent = t(LEVELS[opts.level - 1].d);
+    $('seg-side').querySelector('[data-v="w"]').textContent = tf('Белыми · {a}', { a: t(ARMIES[opts.w].name) });
+    $('seg-side').querySelector('[data-v="b"]').textContent = tf('Чёрными · {a}', { a: t(ARMIES[opts.b].name) });
     $('f-side').hidden = opts.mode !== 'ai';
     $('f-level').hidden = opts.mode !== 'ai';
   }
@@ -1997,23 +2057,25 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     buzz([60, 40, 120]);
     $('end-title').textContent = G.over.title;
     $('end-text').textContent = G.over.text;
-    $('end-eyebrow').textContent = G.mode === 'lesson' ? 'Обучение' : G.mode === 'puzzle' ? (G.pz.daily ? 'Задача дня' : 'Задача') : G.mode === 'ai' && G.over.winner ? (G.over.winner === G.side ? 'Вы победили' : 'Компьютер победил') : 'Партия окончена';
+    $('end-eyebrow').textContent = t(G.mode === 'lesson' ? 'Обучение' : G.mode === 'puzzle' ? (G.pz.daily ? 'Задача дня' : 'Задача') : G.mode === 'ai' && G.over.winner ? (G.over.winner === G.side ? 'Вы победили' : 'Компьютер победил') : 'Партия окончена');
     $('btn-analyse').hidden = !(G.mv && G.mv.length) || G.mode === 'lesson' || G.mode === 'puzzle';
-    $('btn-again').textContent = G.mode === 'lesson' ? (G.ls.i + 1 < LESSONS.length ? 'Следующий урок' : 'К урокам') : G.mode === 'puzzle' ? 'Ещё задача' : 'Ещё партию';
+    $('btn-again').textContent = t(G.mode === 'lesson' ? (G.ls.i + 1 < LESSONS.length ? 'Следующий урок' : 'К урокам') : G.mode === 'puzzle' ? 'Ещё задача' : 'Ещё партию');
     $('m-end').hidden = false;
   }
 
   function paintSettings() {
     $('set-volume').value = settings.volume;
-    $('vol-out').textContent = settings.volume ? settings.volume + '%' : 'выкл.';
+    $('vol-out').textContent = settings.volume ? settings.volume + '%' : t('выкл.');
     $('btn-sound').classList.toggle('muted', !settings.volume);
     [['set-vibro', 'vibro'], ['set-notif', 'notif'], ['set-hints', 'hints']].forEach(([id, k]) => $(id).setAttribute('aria-checked', String(!!settings[k])));
     const st = notifState();
     $('notif-allow').hidden = !(settings.notif && st === 'default');
-    $('notif-note').textContent = !settings.notif ? 'Подсказки вроде «Шах!» не показываются.'
+    $('notif-note').textContent = t(!settings.notif ? 'Подсказки вроде «Шах!» не показываются.'
       : st === 'granted' ? 'Сообщения появляются в игре. Если игра свёрнута, придёт уведомление, когда соперник походил.'
       : st === 'default' ? 'Сообщения появляются в игре. Можно разрешить и уведомления телефона, когда игра свёрнута.'
-      : 'Сообщения появляются в игре. Уведомления телефона здесь недоступны.';
+      : 'Сообщения появляются в игре. Уведомления телефона здесь недоступны.');
+    $('seg-lang').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === lang)));
+    $('seg-theme').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.theme)));
   }
   function openSettings() { paintSettings(); $('m-settings').hidden = false; }
   $('set-volume').addEventListener('input', (e) => { settings.volume = +e.target.value; saveSettings(); paintSettings(); });
@@ -2024,7 +2086,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (k === 'hints' && G) paintSquares();
   }));
   $('notif-allow').addEventListener('click', askNotif);
-  $('stats-reset').addEventListener('click', () => { stats.w = stats.l = stats.d = 0; store.set('zoochess.stats', JSON.stringify(stats)); paintHome(); toast('Счёт сброшен'); });
+  $('stats-reset').addEventListener('click', () => { stats.w = stats.l = stats.d = 0; store.set('zoochess.stats', JSON.stringify(stats)); paintHome(); toast(t('Счёт сброшен')); });
+  $('seg-lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || b.dataset.v === lang) return; lang = b.dataset.v; store.set('zoochess.lang', lang); repaintAll(); });
+  $('seg-theme').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; settings.theme = b.dataset.v; saveSettings(); paintSettings(); if (G) buildSquares(); });
+  function repaintAll() { translateDom(); paintLineup(); paintLegend(); paintSettings(); paintHome(); paintMenu(); if (G) { buildSquares(); render(); } }
 
   const close = (id) => () => { $(id).hidden = true; };
   $('home-play').addEventListener('click', openMenu);
@@ -2032,7 +2097,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   $('home-armies').addEventListener('click', () => { $('m-legend').hidden = false; });
   $('home-rules').addEventListener('click', () => { $('m-rules').hidden = false; });
   $('home-settings').addEventListener('click', openSettings);
-  $('btn-home').addEventListener('click', () => { if (busy) return; if (G && !G.over && G.hist.length > 1 && (G.mode === 'ai' || G.mode === 'duo')) toast('Партия сохранена'); showHome(); });
+  $('btn-home').addEventListener('click', () => { if (busy) return; if (G && !G.over && G.hist.length > 1 && (G.mode === 'ai' || G.mode === 'duo')) toast(t('Партия сохранена')); showHome(); });
   $('btn-start').addEventListener('click', startGame);
   $('btn-menu-close').addEventListener('click', close('m-menu'));
   $('btn-new').addEventListener('click', () => { if (!busy) openMenu(); });
@@ -2091,11 +2156,11 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (prog.ach[id]) return;
     prog.ach[id] = Date.now(); saveProg();
     const a = ACH.find((x) => x.id === id);
-    setTimeout(() => { toast(`${a.e} Достижение: ${a.n}`); SFX.end(); }, 400);
+    setTimeout(() => { toast(tf('{e} Достижение: {n}', { e: a.e, n: t(a.n) })); SFX.end(); }, 400);
   }
   function paintAch() {
-    $('ach-grid').innerHTML = ACH.map((a) => `<div class="ach ${prog.ach[a.id] ? 'got' : ''}"><span class="ach-e">${a.e}</span><b>${a.n}</b><small>${a.d}</small></div>`).join('');
-    $('ach-count').textContent = `${Object.keys(prog.ach).length} из ${ACH.length}`;
+    $('ach-grid').innerHTML = ACH.map((a) => `<div class="ach ${prog.ach[a.id] ? 'got' : ''}"><span class="ach-e">${a.e}</span><b>${t(a.n)}</b><small>${t(a.d)}</small></div>`).join('');
+    $('ach-count').textContent = tf('{n} из {m}', { n: Object.keys(prog.ach).length, m: ACH.length });
   }
   function creditStreak() {
     const d = today();
@@ -2136,7 +2201,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     boot({ mode: 'puzzle', side: s.turn, level: 0, armies: { w: opts.w, b: opts.b }, hist: [s], log: [], mv: [], hints: 0, clock: null, over: null, lastMove: {}, pz: { idx, n: pz.n, left: pz.n, daily: !!daily, wrong: 0 } });
     hideHome(); $('m-menu').hidden = true;
     save();
-    toast(`${daily ? 'Задача дня' : 'Задача'}: мат в ${pz.n === 1 ? '1 ход' : pz.n + ' хода'}. Ходит ${A(s.turn).name}.`);
+    toast(`${t(daily ? 'Задача дня' : 'Задача')} · ${mateText(pz.n)} · ${tf('Ходит {a}', { a: t(A(s.turn).name) })}`);
   }
   function puzzleSolved() {
     prog.puzzles++; saveProg();
@@ -2190,15 +2255,15 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (done) {
       prog.lessons[G.ls.i] = true; saveProg();
       if (LESSONS.every((_, k) => prog.lessons[k])) unlock('lessons');
-      G.over = { title: `Урок пройден: ${L.n}!`, text: G.ls.i + 1 < LESSONS.length ? `Дальше: ${LESSONS[G.ls.i + 1].n}.` : 'Все уроки пройдены. Теперь попробуй задачу дня!', lesson: true };
+      G.over = { title: tf('Урок пройден: {n}!', { n: t(L.n) }), text: G.ls.i + 1 < LESSONS.length ? tf('Дальше: {n}.', { n: t(LESSONS[G.ls.i + 1].n) }) : t('Все уроки пройдены. Теперь попробуй задачу дня!'), lesson: true };
     } else if (wrong) {
-      toast('Не то. Попробуй ещё раз');
+      toast(t('Не то. Попробуй ещё раз'));
       buzz(30);
       setTimeout(() => startLesson(G.ls.i), 700);
     }
   }
   function paintLessons() {
-    $('lessons-list').innerHTML = LESSONS.map((L, i) => `<button type="button" class="lesson ${prog.lessons[i] ? 'done' : ''}" data-i="${i}"><span class="lesson-n">${i + 1}</span><span><b>${L.n}</b><small>${L.t ? ROLE[L.t] + ' · как ходит' : 'правило'}</small></span><span class="lesson-ok">${prog.lessons[i] ? '✓' : ''}</span></button>`).join('');
+    $('lessons-list').innerHTML = LESSONS.map((L, i) => `<button type="button" class="lesson ${prog.lessons[i] ? 'done' : ''}" data-i="${i}"><span class="lesson-n">${i + 1}</span><span><b>${t(L.n)}</b><small>${L.t ? t(ROLE[L.t]) + t(' · как ходит') : t('правило')}</small></span><span class="lesson-ok">${prog.lessons[i] ? '✓' : ''}</span></button>`).join('');
   }
   $('lessons-list').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) startLesson(+b.dataset.i); });
   $('btn-lessons-close').addEventListener('click', () => { $('m-lessons').hidden = true; });
@@ -2212,6 +2277,8 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   if (!ARMIES[opts.w] || !ARMIES[opts.b] || opts.w === opts.b) { opts.w = 'savanna'; opts.b = 'ocean'; }
   opts.level = Math.min(10, Math.max(1, +opts.level || 2));
   SF.load().catch(() => {});
+  translateDom();
+  paintLineup(); paintLegend();
   boot(loadSaved() || freshGame());
   paintSettings();
   showHome();

@@ -128,6 +128,20 @@ h1 .amp { color: var(--coral); }
 .sq.cap::after { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 4px solid rgba(226, 96, 63, 0.75); }
 .sq.check { background: radial-gradient(circle, rgba(226, 70, 50, 0.7), rgba(226, 70, 50, 0) 72%); }
 .sq.hint { box-shadow: inset 0 0 0 4px rgba(242, 194, 60, 0.95); }
+.sq.star::before { content: "★"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: calc(var(--cell, 40px) * 0.55); color: #f2c23c; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); animation: twinkle 1.4s ease-in-out infinite; pointer-events: none; }
+@keyframes twinkle { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2) rotate(10deg); } }
+.lessons { display: grid; gap: 6px; }
+.lesson { display: grid; grid-template-columns: 30px 1fr 24px; align-items: center; gap: 10px; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 12px; text-align: left; cursor: pointer; }
+.lesson-n { font-family: var(--display); font-weight: 700; color: var(--ink-dim); }
+.lesson small { display: block; color: var(--ink-dim); font-size: 11px; }
+.lesson-ok { color: #2e9e5b; font-weight: 800; font-size: 18px; }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ach { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; opacity: 0.45; }
+.ach.got { opacity: 1; background: rgba(242, 194, 60, 0.12); border-color: rgba(242, 194, 60, 0.5); }
+.ach-e { font-size: 22px; }
+.ach small { color: var(--ink-dim); font-size: 11px; }
+.streak { margin: -6px 0 0; text-align: center; font-weight: 800; color: var(--home-dim); font-size: 13px; }
+.row3 .hb-e { font-size: 22px; line-height: 1; }
 .pc.drag { z-index: 6; transition: none; }
 .pc.drag::before { opacity: 0.5; }
 .coord { position: absolute; font-size: 10px; font-weight: 800; color: rgba(15, 45, 50, 0.5); pointer-events: none; }
@@ -400,7 +414,13 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
         <button id="home-rules" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>Как играть</button>
         <button id="home-settings" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Настройки</button>
       </div>
+      <div class="row3">
+        <button id="home-puzzle" type="button"><span class="hb-e">🧩</span>Задача дня</button>
+        <button id="home-lessons" type="button"><span class="hb-e">🎓</span>Обучение</button>
+        <button id="home-ach" type="button"><span class="hb-e">🏆</span>Достижения</button>
+      </div>
     </div>
+    <p class="streak" id="streak"></p>
     <div class="stats" id="stats"></div>
   </div>
 </div>
@@ -491,6 +511,25 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       <button class="link-btn" id="stats-reset" type="button">Сбросить счёт побед</button>
     </div>
     <button class="btn primary" id="btn-settings-close" type="button">Готово</button>
+  </section>
+</div>
+
+<div class="modal" id="m-lessons" hidden>
+  <section class="card">
+    <span class="eyebrow">Обучение</span>
+    <h2>Как ходят фигуры</h2>
+    <p>Девять коротких уроков для тех, кто только начинает. Собирай звёзды и учись.</p>
+    <div class="lessons" id="lessons-list"></div>
+    <button class="btn primary" id="btn-lessons-close" type="button">Закрыть</button>
+  </section>
+</div>
+
+<div class="modal" id="m-ach" hidden>
+  <section class="card">
+    <span class="eyebrow">Достижения</span>
+    <h2 id="ach-count"></h2>
+    <div class="ach-grid" id="ach-grid"></div>
+    <button class="btn primary" id="btn-ach-close" type="button">Закрыть</button>
   </section>
 </div>
 
@@ -1176,7 +1215,8 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   const armyOf = (c) => (G ? G.armies[c] : opts[c]);
   const A = (c) => ARMIES[armyOf(c)];
   const isHumanTurn = () => G && !G.over && (G.mode === 'duo' || S.turn === G.side);
-  const bottomColor = () => (G && G.mode === 'ai' ? G.side : 'w');
+  const bottomColor = () => (G && G.mode !== 'duo' ? G.side : 'w');
+  const calcMoves = () => { const ms = legal(S); return G && G.mode === 'lesson' && G.ls.pid != null ? ms.filter((m) => S.b[m.from].id === G.ls.pid) : ms; };
   const flipped = () => bottomColor() === 'b';
 
   function save() { if (G) store.set(SAVE_KEY, JSON.stringify(G)); }
@@ -1215,7 +1255,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     boardEl.style.setProperty('--top2', top.ground[1]);
     boardEl.style.setProperty('--bot2', bot.ground[1]);
     boardEl.style.setProperty('--bot1', bot.ground[0]);
-    $('title').innerHTML = `${A('w').name} <span class="amp">и</span> ${A('b').name}`;
+    $('title').innerHTML = G.mode === 'lesson' ? `Урок ${G.ls.i + 1}: ${LESSONS[G.ls.i].n}` : G.mode === 'puzzle' ? `Задача: мат в ${G.pz.n}` : `${A('w').name} <span class="amp">и</span> ${A('b').name}`;
   }
   const sqEl = (i) => squaresEl.querySelector(`[data-sq="${i}"]`);
 
@@ -1252,10 +1292,11 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   }
 
   function paintSquares() {
-    squaresEl.querySelectorAll('.sq').forEach((d) => d.classList.remove('sel', 'dot', 'cap', 'last', 'check', 'hint'));
+    squaresEl.querySelectorAll('.sq').forEach((d) => d.classList.remove('sel', 'dot', 'cap', 'last', 'check', 'hint', 'star'));
     const lm = G.lastMove && G.lastMove[G.hist.length - 1];
     if (lm) { sqEl(lm[0]).classList.add('last'); sqEl(lm[1]).classList.add('last'); }
     els.forEach((el) => el.classList.remove('sel', 'check'));
+    if (G.mode === 'lesson') G.ls.stars.forEach((i) => sqEl(i).classList.add('star'));
     if (sel >= 0) {
       sqEl(sel).classList.add('sel');
       const p = S.b[sel]; if (p) els.get(p.id).classList.add('sel');
@@ -1282,17 +1323,17 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
 
   function paintBars() {
     const bot = bottomColor(), top = other(bot);
-    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : (c === G.side ? 'вы' : `компьютер · ${LEVELS[G.level - 1].n} (${G.level})`) + (c === 'w' ? ' · белые' : ' · чёрные'));
+    const who = (c) => (G.mode === 'duo' ? (c === 'w' ? 'белые · ходят первыми' : 'чёрные') : G.mode === 'puzzle' ? (c === G.side ? 'вы · найдите мат' : 'соперник') : G.mode === 'lesson' ? (c === 'w' ? 'вы' : 'учебный соперник') : (c === G.side ? 'вы' : `компьютер · ${LEVELS[G.level - 1].n} (${G.level})`) + (c === 'w' ? ' · белые' : ' · чёрные'));
     [['top', top], ['bot', bot]].forEach(([pos, c]) => {
       const crest = $('crest-' + pos);
       crest.innerHTML = art(armyOf(c), 'k');
       crest.style.setProperty('--crest', A(c).crest);
       $('name-' + pos).textContent = A(c).name;
       $('sub-' + pos).textContent = who(c);
-      $('tray-' + pos).innerHTML = capturedBy(c).map((h) => `<span>${h}</span>`).join('');
+      $('tray-' + pos).innerHTML = G.mode === 'ai' || G.mode === 'duo' ? capturedBy(c).map((h) => `<span>${h}</span>`).join('') : '';
       $('bar-' + pos).classList.toggle('turn', !G.over && S.turn === c);
     });
-    $('btn-undo').disabled = busy || G.hist.length < (G.mode === 'ai' && G.side === 'b' ? 4 : 2);
+    $('btn-undo').disabled = busy || G.mode === 'puzzle' || G.mode === 'lesson' || G.hist.length < (G.mode === 'ai' && G.side === 'b' ? 4 : 2);
     paintClocks();
     paintHint();
   }
@@ -1302,6 +1343,12 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     st.classList.remove('alert');
     if (text) { st.textContent = text; }
     else if (G.over) { st.textContent = G.over.title; st.classList.add('alert'); }
+    else if (G.mode === 'lesson') { st.textContent = `Урок ${G.ls.i + 1}: ${LESSONS[G.ls.i].n}`; $('lastmove').textContent = LESSONS[G.ls.i].text; return; }
+    else if (G.mode === 'puzzle') {
+      st.textContent = S.turn === G.side ? `Мат в ${G.pz.left === 1 ? '1 ход' : G.pz.left + ' хода'}` : 'Соперник отвечает…';
+      $('lastmove').textContent = G.log.length ? G.log[G.log.length - 1] : 'Найдите ход, после которого королю соперника не спастись';
+      return;
+    }
     else if (inCheck(S)) { st.textContent = `Шах! ${A(S.turn).k.n} под ударом`; st.classList.add('alert'); }
     else if (G.mode === 'ai') st.textContent = S.turn === G.side ? 'Ваш ход' : `${A(S.turn).name}: думают…`;
     else st.textContent = `Ход: ${A(S.turn).name}`;
@@ -1524,9 +1571,19 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   }
 
   async function doMove(m, instant) {
+    if (G.mode === 'puzzle' && S.turn === G.side && !G.over) {
+      if (!mateIn(S, G.pz.left).some((w) => sameMove(w, m))) {
+        G.pz.wrong++; sel = -1; selMoves = [];
+        render(); toast('Не то. Ищите мат!'); buzz(30);
+        boardEl.classList.remove('shake'); void boardEl.offsetWidth; boardEl.classList.add('shake');
+        return;
+      }
+      G.pz.left--;
+    }
     busy = true;
     sel = -1; selMoves = [];
     const before = S, after = make(S, m);
+    if (G.mode === 'lesson') { after.turn = 'w'; after.ep = -1; }
     const p = before.b[m.from];
     const army = armyOf(p.c);
     const sp = ARMIES[army][p.t];
@@ -1553,8 +1610,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     G.lastMove = G.lastMove || {};
     G.lastMove[G.hist.length - 1] = [m.from, m.to];
     S = after;
-    moves = legal(S);
-    checkEnd();
+    moves = calcMoves();
+    if (G.mode === 'lesson') lessonAfter(m); else checkEnd();
+    if ((G.mode === 'duo' || (G.mode === 'ai' && p.c === G.side)) && m.castle) unlock('castle');
+    if ((G.mode === 'duo' || (G.mode === 'ai' && p.c === G.side)) && m.promo) unlock('promo');
     if (m.promo) { if (!reduce) DEATH[ARMIES[army].die](disp(m.to)); toast(`${ARMIES[army].p.n} → ${ARMIES[army][m.promo].n}`); }
     render();
     if (!G.over && inCheck(S)) {
@@ -1570,6 +1629,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     if (G.over) { sysNotify('Партия окончена', G.over.title); setTimeout(showEnd, 650); return; }
     if (byAI) sysNotify('Ваш ход', G.log[G.log.length - 1]);
     maybeAI();
+    puzzleReply();
   }
 
   function checkEnd() {
@@ -1581,6 +1641,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     } else if (S.half >= 100) G.over = { title: 'Ничья', text: '50 ходов подряд никого не съели и пешки не двигались.' };
     else if (insufficient(S.b)) G.over = { title: 'Ничья', text: 'Осталось слишком мало фигур, чтобы поставить мат.' };
     else if (G.hist.filter((h) => posKey(h) === posKey(S)).length >= 3) G.over = { title: 'Ничья', text: 'Одна и та же позиция повторилась три раза.' };
+    if (G.mode === 'puzzle' && G.over) {
+      if (G.over.winner === G.side) { G.over = { title: 'Задача решена!', text: G.pz.wrong ? `Получилось с ${G.pz.wrong + 1}-й попытки.` : 'С первой попытки, без ошибок!', winner: G.side, puzzle: true }; puzzleSolved(); }
+      else G.over = { title: 'Задача не решена', text: 'Попробуйте ещё раз.', puzzle: true };
+    }
     countStats();
   }
   const posKey = (h) => h.b.map((p) => (p ? p.c + p.t : '-')).join('') + h.turn + (h.cr.wK ? 'K' : '') + (h.cr.wQ ? 'Q' : '') + (h.cr.bK ? 'k' : '') + (h.cr.bQ ? 'q' : '') + h.ep;
@@ -1589,6 +1653,15 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
       G.counted = true;
       if (!G.over.winner) stats.d++; else if (G.over.winner === G.side) stats.w++; else stats.l++;
       store.set('zoochess.stats', JSON.stringify(stats));
+      prog.games++; prog.armies[G.armies[G.side]] = true; saveProg();
+      unlock('first_game');
+      if (G.over.winner === G.side) {
+        unlock('first_win');
+        if (G.level >= 5) unlock('win5');
+        if (G.level >= 10) unlock('win10');
+        if (G.over.time) unlock('time');
+      }
+      if (Object.keys(prog.armies).length >= 5) unlock('armies5');
     }
   }
 
@@ -1615,7 +1688,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     paintClocks();
     if (G.clock[S.turn] <= 0 && !busy) {
       const win = other(S.turn);
-      G.over = { title: `Время вышло! Победа ${A(win).gen}`, text: `У ${A(S.turn).gen} кончилось время на часах.`, winner: win };
+      G.over = { title: `Время вышло! Победа ${A(win).gen}`, text: `У ${A(S.turn).gen} кончилось время на часах.`, winner: win, time: true };
       countStats(); save(); render(); SFX.check(armyOf(S.turn)); showEnd();
     }
   }
@@ -1624,16 +1697,26 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   // ---------------- hints ----------------
   function paintHint() {
     const b = $('btn-hint');
-    const ai = G.mode === 'ai';
-    b.hidden = !ai;
-    $('app').querySelector('.actions').classList.toggle('two', !ai);
+    const ai = G.mode === 'ai', pz = G.mode === 'puzzle';
+    b.hidden = !(ai || pz);
+    $('app').querySelector('.actions').classList.toggle('two', !(ai || pz));
+    if (pz) { b.textContent = '💡 Показать ход'; b.disabled = busy || !isHumanTurn(); return; }
     if (!ai) return;
     const left = G.hints == null ? 0 : G.hints;
     b.textContent = `💡 Подсказка · ${left}`;
     b.disabled = busy || !left || !isHumanTurn();
   }
   $('btn-hint').addEventListener('click', async () => {
-    if (busy || !G || G.mode !== 'ai' || !isHumanTurn() || !G.hints) return;
+    if (busy || !G || !isHumanTurn()) return;
+    if (G.mode === 'puzzle') {
+      const m = mateIn(S, G.pz.left)[0];
+      if (!m) return;
+      sel = m.from; selMoves = moves.filter((x) => x.from === m.from);
+      paintSquares(); sqEl(m.from).classList.add('hint'); sqEl(m.to).classList.add('hint');
+      paintStatus('Подсказка: ' + describe(S, m));
+      return;
+    }
+    if (G.mode !== 'ai' || !G.hints) return;
     busy = true; paintHint(); paintStatus('Думаю над подсказкой…');
     const g0 = G, n0 = G.hist.length;
     const m = await bestMove(S, Math.floor(G.hist.length / 2) + 1);
@@ -1820,7 +1903,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     for (let k = 0; k < n && G.hist.length > 1; k++) { G.hist.pop(); G.log.pop(); if (G.mv) G.mv.pop(); }
     G.over = null;
     S = G.hist[G.hist.length - 1];
-    moves = legal(S);
+    moves = calcMoves();
     sel = -1; selMoves = [];
     render();
     save();
@@ -1840,6 +1923,10 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     const can = G && !G.over && G.hist.length > 1;
     $('home-continue').hidden = !can;
     $('stats').innerHTML = `<div><b>${stats.w}</b>побед</div><div><b>${stats.l}</b>поражений</div><div><b>${stats.d}</b>ничьих</div>`;
+    const done = prog.dailyDone === today();
+    $('home-puzzle').innerHTML = `<span class="hb-e">${done ? '✅' : '🧩'}</span>Задача дня`;
+    const n = prog.streak, dn = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
+    $('streak').textContent = streakAlive() && n ? `🔥 ${n} ${dn} подряд${done ? '' : ' · решите задачу дня, чтобы не прервать серию'}` : 'Решайте задачу дня каждый день и копите серию 🔥';
   }
   function showHome() { paintHome(); $('home').hidden = false; }
   function hideHome() { $('home').hidden = true; }
@@ -1889,7 +1976,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     G = g;
     G.lastMove = G.lastMove || {};
     S = G.hist[G.hist.length - 1];
-    moves = legal(S);
+    moves = calcMoves();
     sel = -1; selMoves = [];
     els.forEach((el) => el.remove()); els.clear();
     buildSquares();
@@ -1910,8 +1997,9 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     buzz([60, 40, 120]);
     $('end-title').textContent = G.over.title;
     $('end-text').textContent = G.over.text;
-    $('end-eyebrow').textContent = G.mode === 'ai' && G.over.winner ? (G.over.winner === G.side ? 'Вы победили' : 'Компьютер победил') : 'Партия окончена';
-    $('btn-analyse').hidden = !(G.mv && G.mv.length);
+    $('end-eyebrow').textContent = G.mode === 'lesson' ? 'Обучение' : G.mode === 'puzzle' ? (G.pz.daily ? 'Задача дня' : 'Задача') : G.mode === 'ai' && G.over.winner ? (G.over.winner === G.side ? 'Вы победили' : 'Компьютер победил') : 'Партия окончена';
+    $('btn-analyse').hidden = !(G.mv && G.mv.length) || G.mode === 'lesson' || G.mode === 'puzzle';
+    $('btn-again').textContent = G.mode === 'lesson' ? (G.ls.i + 1 < LESSONS.length ? 'Следующий урок' : 'К урокам') : G.mode === 'puzzle' ? 'Ещё задача' : 'Ещё партию';
     $('m-end').hidden = false;
   }
 
@@ -1944,11 +2032,16 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   $('home-armies').addEventListener('click', () => { $('m-legend').hidden = false; });
   $('home-rules').addEventListener('click', () => { $('m-rules').hidden = false; });
   $('home-settings').addEventListener('click', openSettings);
-  $('btn-home').addEventListener('click', () => { if (busy) return; if (G && !G.over && G.hist.length > 1) toast('Партия сохранена'); showHome(); });
+  $('btn-home').addEventListener('click', () => { if (busy) return; if (G && !G.over && G.hist.length > 1 && (G.mode === 'ai' || G.mode === 'duo')) toast('Партия сохранена'); showHome(); });
   $('btn-start').addEventListener('click', startGame);
   $('btn-menu-close').addEventListener('click', close('m-menu'));
   $('btn-new').addEventListener('click', () => { if (!busy) openMenu(); });
-  $('btn-again').addEventListener('click', () => { $('m-end').hidden = true; openMenu(); });
+  $('btn-again').addEventListener('click', () => {
+    $('m-end').hidden = true;
+    if (G.mode === 'lesson') { if (G.ls.i + 1 < LESSONS.length) startLesson(G.ls.i + 1); else { paintLessons(); $('m-lessons').hidden = false; } }
+    else if (G.mode === 'puzzle') { let i; do { i = Math.floor(Math.random() * PUZZLES.length); } while (i === G.pz.idx); startPuzzle(i, false); }
+    else openMenu();
+  });
   $('btn-look').addEventListener('click', close('m-end'));
   $('btn-legend').addEventListener('click', () => { $('m-legend').hidden = false; });
   $('btn-legend-close').addEventListener('click', close('m-legend'));
@@ -1973,6 +2066,147 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     else if (army === 'plants') leaves(d, 1);
   }, 1800);
 
+
+  // ---------------- progress: streak, achievements, lessons ----------------
+  const prog = { streak: 0, lastDay: 0, dailyDone: 0, puzzles: 0, games: 0, lessons: {}, armies: {}, ach: {} };
+  try { Object.assign(prog, JSON.parse(store.get('zoochess.prog') || '{}')); } catch (e) {}
+  const saveProg = () => store.set('zoochess.prog', JSON.stringify(prog));
+  const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
+  const ACH = [
+    { id: 'first_game', e: '🎲', n: 'Первая партия', d: 'Доиграть партию до конца' },
+    { id: 'first_win', e: '🏆', n: 'Первая победа', d: 'Победить компьютер' },
+    { id: 'win5', e: '🥈', n: 'Сильнее Следопыта', d: 'Победить компьютер 5-го уровня или выше' },
+    { id: 'win10', e: '👑', n: 'Победа над Чемпионом', d: 'Победить компьютер 10-го уровня' },
+    { id: 'puzzle1', e: '🧩', n: 'Первая задача', d: 'Решить задачу дня' },
+    { id: 'puzzle10', e: '🧠', n: 'Десять задач', d: 'Решить 10 задач' },
+    { id: 'streak3', e: '🔥', n: 'Три дня подряд', d: 'Решать задачу дня 3 дня подряд' },
+    { id: 'streak7', e: '🌟', n: 'Неделя подряд', d: 'Решать задачу дня 7 дней подряд' },
+    { id: 'lessons', e: '🎓', n: 'Выпускник', d: 'Пройти все уроки' },
+    { id: 'armies5', e: '🌍', n: 'Пять царств', d: 'Сыграть каждой из пяти армий' },
+    { id: 'promo', e: '✨', n: 'Превращение', d: 'Довести пешку до края доски' },
+    { id: 'castle', e: '🏰', n: 'Крепость', d: 'Сделать рокировку' },
+    { id: 'time', e: '⏱', n: 'На флажке', d: 'Победить по времени' },
+  ];
+  function unlock(id) {
+    if (prog.ach[id]) return;
+    prog.ach[id] = Date.now(); saveProg();
+    const a = ACH.find((x) => x.id === id);
+    setTimeout(() => { toast(`${a.e} Достижение: ${a.n}`); SFX.end(); }, 400);
+  }
+  function paintAch() {
+    $('ach-grid').innerHTML = ACH.map((a) => `<div class="ach ${prog.ach[a.id] ? 'got' : ''}"><span class="ach-e">${a.e}</span><b>${a.n}</b><small>${a.d}</small></div>`).join('');
+    $('ach-count').textContent = `${Object.keys(prog.ach).length} из ${ACH.length}`;
+  }
+  function creditStreak() {
+    const d = today();
+    if (prog.dailyDone === d) return;
+    prog.streak = prog.lastDay === d - 1 ? prog.streak + 1 : 1;
+    prog.lastDay = d; prog.dailyDone = d; saveProg();
+    if (prog.streak >= 3) unlock('streak3');
+    if (prog.streak >= 7) unlock('streak7');
+  }
+  const streakAlive = () => prog.lastDay >= today() - 1;
+
+  // ---------------- puzzles (positions verified by the built-in solver at build time) ----------------
+  const PUZZLES = [{"f":"1rb2k1r/p6p/3p1q2/2p3N1/p1P1n1P1/N7/1P3P1P/R3KB1R b KQ g3 0 1","n":2},{"f":"3k4/8/3K4/8/8/p7/P1R5/8 w - - 0 1","n":2},{"f":"4k1n1/1P6/3qp3/6p1/8/5b2/5P2/5K2 b - - 0 1","n":1},{"f":"1k6/R3B3/4B3/1P5P/8/4PR2/8/5K2 w - - 0 1","n":2},{"f":"4k3/8/4pQ2/p1p5/p1P1p3/P5K1/1P6/RN4R1 w - - 0 1","n":2},{"f":"3k4/7p/7P/1B1p4/Q2P4/2P5/P1K2P2/4R3 w - - 0 1","n":2},{"f":"Q1bk1b1r/4n1p1/7p/pB1pp1P1/8/4P3/2K2P1P/RN4R1 w - - 0 1","n":1},{"f":"5k2/8/1Q6/1p1ppN1P/3n1p2/3P4/4P2P/3K3R w - - 0 1","n":2},{"f":"4r1k1/5p2/n5pR/2p1B3/2P3p1/1P3N2/4PP2/1R2KB2 w - - 0 1","n":1},{"f":"7r/2p2k1p/7b/3p4/P1PP2p1/8/4K3/7q b - - 0 1","n":2},{"f":"1RN1k3/8/8/P7/1P3P2/8/3R4/5K2 w - - 0 1","n":2},{"f":"5r2/p7/p1k5/P1P1p1rp/2P5/8/8/4K3 b - c3 0 1","n":2},{"f":"7r/7p/5n1b/p7/P1r3k1/8/8/K7 b - - 0 1","n":2},{"f":"4k3/8/5K2/3p4/1p4BR/1p1P4/4P3/8 w - - 0 1","n":1},{"f":"5k2/8/8/p2p3p/P2P1P1P/1R3N2/1P4P1/4R1K1 w - - 0 1","n":2},{"f":"r2k4/pp2p3/4b3/8/8/8/1q6/4K3 b - - 0 1","n":2},{"f":"4k3/1R3p2/8/1Pp4p/2N3p1/3PB1P1/4NK2/3Q1B2 w - - 0 1","n":2},{"f":"2b2k1r/8/np5n/p2p1p2/P2P3P/1PP5/7q/R2K4 b - - 0 1","n":2},{"f":"rnb2k1r/2q4p/6p1/pp3P2/8/5N2/PP2PP1P/RN2KB1R b KQ - 0 1","n":1},{"f":"1n2k3/3pp3/5pp1/2P2P2/6p1/r4R2/Pq4P1/4K3 b - - 0 1","n":2},{"f":"1k1r4/7p/5p1P/3p4/p7/5p2/7K/r7 b - - 0 1","n":2},{"f":"1nb1k1qr/8/2p5/4B3/Pp3p1p/5P2/4P3/R4K2 b - - 0 1","n":2},{"f":"rn2k2r/3b1p1p/4pp1b/2P5/1PP1N3/6PP/4PP2/4KBNq b kq - 0 1","n":1},{"f":"r1bqk2r/1p6/p7/4pppP/P3n3/2P5/1P2N1P1/R3KB1R b KQkq - 0 1","n":1},{"f":"6Q1/3k4/8/8/2K5/p6p/7P/1R6 w - - 0 1","n":2},{"f":"1r3k2/8/p3p3/b5p1/8/K3pp2/8/7r b - - 0 1","n":1},{"f":"8/6b1/8/8/2k1p3/8/6r1/1K6 b - - 0 1","n":2},{"f":"rn6/b7/pp2r3/4k3/PP2P2p/B1PQ3P/7N/2K5 w - - 0 1","n":2},{"f":"1q2k3/2p3B1/8/8/8/5PpP/Q2K4/5BNR w - - 0 1","n":2},{"f":"1k6/7R/6p1/6p1/pP4P1/P7/R1r5/6K1 w - - 0 1","n":2},{"f":"1nkq2nr/2p1p3/r6p/1b2b3/4P2P/8/1PPB1PP1/4K2R b K - 0 1","n":2},{"f":"rnb2k2/p4pp1/2p1p3/5nP1/P7/2P5/1P2P3/RNBQK1b1 w Q - 0 1","n":1},{"f":"2b5/p7/3p3k/1P6/1P1pp3/2r3p1/8/6K1 b - - 0 1","n":2},{"f":"8/8/2P5/8/1P1p1k2/4p3/r7/7K b - - 0 1","n":2},{"f":"6r1/1p2k1q1/8/2p5/2P2P2/8/8/3K4 b - - 0 1","n":2},{"f":"4k3/4pp2/5n2/3p4/3b1q2/5P2/8/1K6 b - - 0 1","n":2},{"f":"1nb1k3/rpp2p2/8/pK6/2P1n2P/N3P3/P7/4RB2 b - - 0 1","n":1},{"f":"rn2k3/8/p2P4/1p2B2p/3pP2Q/P7/2P3P1/RN2K3 w Qq - 0 1","n":1},{"f":"8/8/3r4/8/5p1p/1P3k2/8/7K b - - 0 1","n":2},{"f":"2b5/3p3p/8/8/p2k4/5pRP/P4K2/4QB2 w - - 0 1","n":2},{"f":"8/2Q5/B2P4/7k/3P4/N4P2/8/3K4 w - - 0 1","n":2},{"f":"1n2k1nr/1p2pp1p/8/5bp1/Pp1q4/5P2/1b4PP/4KBNR b k - 0 1","n":2},{"f":"1n4k1/8/r2b4/2p5/2P3P1/8/3K4/7q b - c3 0 1","n":2},{"f":"3kr3/P7/6p1/2p5/1r2p2n/2K5/8/6q1 b - - 0 1","n":1},{"f":"1rb4r/1p1p2p1/3b4/p3k1Pp/4P3/2P5/3P1Q1P/2R1K1NR w - - 0 1","n":1},{"f":"4kbnr/p3p1p1/2p5/3P3P/5q2/1P5b/P2P3P/R1B1K3 b Q - 0 1","n":1},{"f":"2Q5/4k3/1p1p3B/8/1P1KP3/p7/6P1/R5N1 w - - 0 1","n":2},{"f":"r3k3/pp2ppb1/5n2/7p/P4q1P/1PPp4/8/3K3R b q - 0 1","n":2},{"f":"8/8/p6k/B3N3/7P/P7/R7/3RK3 w - - 0 1","n":2},{"f":"5kn1/5r2/pp5p/1P4p1/P6P/N2p4/3R4/3K2NR b - - 0 1","n":1},{"f":"k7/4p2R/8/4P3/p6P/P4R2/6K1/8 w - - 0 1","n":2},{"f":"8/2B5/8/3P3p/p3P2k/P7/5N1K/8 w - - 0 1","n":1},{"f":"3k4/4p3/1p6/p3P1P1/r7/8/7p/4K3 b - - 0 1","n":2},{"f":"r5n1/p2ppkb1/8/3N2P1/5n2/7P/2q3P1/6K1 b - - 0 1","n":1},{"f":"r3k2r/4p2p/6p1/p3N3/3N3P/1P6/P2Q1PP1/R3K2R w KQkq a6 0 1","n":2},{"f":"5Q2/8/2N5/8/P3k1P1/6K1/8/8 w - - 0 1","n":1},{"f":"2Q5/8/1k6/4p1p1/2BPp3/P6P/N1P2PP1/R1B1K2R w Q - 0 1","n":2},{"f":"1k2r2r/3pn1pp/Q7/2p3P1/8/N7/P2B1P1P/4K3 w - - 0 1","n":2},{"f":"1n5r/rp1k1p1p/8/3Bp3/1P4Pp/2P1b1PN/4P3/4K3 b - - 0 1","n":1},{"f":"rn2k2B/p4p2/2p4p/2P1N3/1p5P/4p3/3R3P/1N1QKB1R w Kq - 0 1","n":2},{"f":"1n2k1r1/3p4/b1p1p2p/P3q1p1/8/b7/5P2/3K4 b - - 0 1","n":1},{"f":"r5n1/p1k3b1/6P1/2P5/2P1p2r/8/4b3/2n1K3 b - - 0 1","n":2},{"f":"6k1/8/p6Q/p7/3p3P/8/6P1/4KBNR w - - 0 1","n":1},{"f":"5br1/B5p1/8/PB2pR2/7k/3p3P/8/4K2R w K - 0 1","n":1},{"f":"2Q5/8/5k2/5pNK/5P2/3P4/8/8 w - - 0 1","n":1},{"f":"8/8/8/k5B1/8/1P3PP1/P1Q4P/RN2K2R w KQ - 0 1","n":2},{"f":"rn4k1/1p6/p6p/P1pP4/2P5/P2b1QP1/7P/B3K2R w - - 0 1","n":2},{"f":"r7/4kp2/7R/2P1B2p/4n3/2P3P1/3NPP1P/4K1NR b K - 0 1","n":2},{"f":"7B/k1p5/8/pR6/2B3p1/2P5/P3K3/6R1 w - - 0 1","n":2},{"f":"2q1kr2/p2p1ppp/8/8/8/pP3Pn1/1R3P1P/4K2R b K - 0 1","n":1},{"f":"4k3/8/3p4/3K2N1/8/5nP1/QPb5/8 w - - 0 1","n":2},{"f":"rn3b1Q/pb5p/1pp5/2k1P2q/P7/3BPP2/7R/R1B1K1N1 w Q - 0 1","n":2}];
+  function parseFen(f) {
+    const [bd, turn, cr, ep] = f.split(' ');
+    const b = new Array(64).fill(null); let i = 0, id = 0;
+    for (const ch of bd) { if (ch === '/') continue; if (ch >= '1' && ch <= '8') { i += +ch; continue; } b[i++] = { t: ch.toLowerCase(), c: ch === ch.toUpperCase() ? 'w' : 'b', id: id++ }; }
+    return { b, turn, cr: { wK: cr.includes('K'), wQ: cr.includes('Q'), bK: cr.includes('k'), bQ: cr.includes('q') }, ep: ep === '-' ? -1 : sqIdx(ep), half: 0 };
+  }
+  function mateIn(s, n) {
+    const wins = [];
+    for (const m of legal(s)) {
+      const t = make(s, m), rs = legal(t);
+      if (!rs.length) { if (inCheck(t)) wins.push(m); continue; }
+      if (n === 1) continue;
+      let all = true;
+      for (const r of rs) if (!mateIn(make(t, r), n - 1).length) { all = false; break; }
+      if (all) wins.push(m);
+    }
+    return wins;
+  }
+  const sameMove = (a, b) => a.from === b.from && a.to === b.to && (a.promo || '') === (b.promo || '');
+  const dailyIndex = () => (today() * 31) % PUZZLES.length;
+  function startPuzzle(idx, daily) {
+    ac();
+    const pz = PUZZLES[idx];
+    const s = parseFen(pz.f);
+    boot({ mode: 'puzzle', side: s.turn, level: 0, armies: { w: opts.w, b: opts.b }, hist: [s], log: [], mv: [], hints: 0, clock: null, over: null, lastMove: {}, pz: { idx, n: pz.n, left: pz.n, daily: !!daily, wrong: 0 } });
+    hideHome(); $('m-menu').hidden = true;
+    save();
+    toast(`${daily ? 'Задача дня' : 'Задача'}: мат в ${pz.n === 1 ? '1 ход' : pz.n + ' хода'}. Ходит ${A(s.turn).name}.`);
+  }
+  function puzzleSolved() {
+    prog.puzzles++; saveProg();
+    if (G.pz.daily) creditStreak();
+    unlock('puzzle1');
+    if (prog.puzzles >= 10) unlock('puzzle10');
+  }
+  function puzzleReply() {
+    if (G.over || G.mode !== 'puzzle' || S.turn === G.side) return;
+    busy = true; paintBars();
+    const g0 = G;
+    wait(420).then(() => { if (G !== g0) return; busy = false; const m = pickMove(S, 3); if (m) doMove(m); });
+  }
+
+  // ---------------- lessons for beginners ----------------
+  const P = (sq, c, t) => [sqIdx(sq), c, t];
+  const LESSONS = [
+    { n: 'Ладья', t: 'r', goal: 'stars', text: 'Ладья ходит прямо: вверх, вниз, влево и вправо, на сколько угодно клеток. Собери все звёзды.', at: 'd4', pieces: [P('d4', 'w', 'r'), P('h1', 'w', 'k'), P('h8', 'b', 'k')], stars: ['d7', 'a4', 'g4', 'd2'] },
+    { n: 'Слон', t: 'b', goal: 'stars', text: 'Слон ходит наискосок и всегда остаётся на клетках своего цвета. Собери все звёзды.', at: 'd4', pieces: [P('d4', 'w', 'b'), P('h1', 'w', 'k'), P('h8', 'b', 'k')], stars: ['a7', 'g7', 'f2', 'b2'] },
+    { n: 'Ферзь', t: 'q', goal: 'stars', text: 'Ферзь — самая сильная фигура: ходит и прямо, и наискосок. Собери все звёзды.', at: 'd4', pieces: [P('d4', 'w', 'q'), P('h1', 'w', 'k'), P('h8', 'b', 'k')], stars: ['d7', 'a4', 'g7', 'a1', 'h4'] },
+    { n: 'Конь', t: 'n', goal: 'stars', text: 'Конь ходит буквой «Г»: две клетки прямо и одна вбок. Он единственный умеет перепрыгивать через фигуры. Собери все звёзды.', at: 'd4', pieces: [P('d4', 'w', 'n'), P('h1', 'w', 'k'), P('h8', 'b', 'k'), P('d5', 'b', 'p'), P('c4', 'b', 'p'), P('e4', 'b', 'p'), P('d3', 'b', 'p')], stars: ['b5', 'f3', 'e6', 'c2'] },
+    { n: 'Король', t: 'k', goal: 'stars', text: 'Король ходит на одну клетку в любую сторону. Он самый важный: его нельзя потерять. Собери все звёзды.', at: 'd4', pieces: [P('d4', 'w', 'k'), P('h8', 'b', 'k')], stars: ['c5', 'e5', 'd3', 'd7'] },
+    { n: 'Пешка', t: 'p', goal: 'stars', text: 'Пешка идёт вперёд на одну клетку (с первого места можно на две), а бьёт наискосок. Дойди до края — и пешка превратится в сильную фигуру!', at: 'e2', pieces: [P('e2', 'w', 'p'), P('h1', 'w', 'k'), P('h8', 'b', 'k'), P('d5', 'b', 'n')], stars: ['e4', 'd5', 'd8'] },
+    { n: 'Шах', t: null, goal: 'check', text: 'Шах — это нападение на короля. Поставь шах чёрному королю: сходи так, чтобы одна из твоих фигур напала на него.', pieces: [P('e1', 'w', 'k'), P('d1', 'w', 'q'), P('a1', 'w', 'r'), P('e8', 'b', 'k'), P('d7', 'b', 'p'), P('f7', 'b', 'p')], stars: [] },
+    { n: 'Мат', t: null, goal: 'mate', text: 'Мат — это шах, от которого нельзя спастись. Чёрный король прижат к краю. Поставь мат одним ходом ладьёй.', pieces: [P('g1', 'w', 'k'), P('a7', 'w', 'r'), P('b1', 'w', 'r'), P('h8', 'b', 'k')], stars: [] },
+    { n: 'Рокировка', t: null, goal: 'castle', text: 'Рокировка прячет короля: король идёт на две клетки к ладье, а ладья перепрыгивает через него. Сделай рокировку: сходи королём на две клетки вправо.', pieces: [P('e1', 'w', 'k'), P('h1', 'w', 'r'), P('a1', 'w', 'r'), P('e8', 'b', 'k'), P('a7', 'b', 'p'), P('h7', 'b', 'p')], stars: [], cr: { wK: true, wQ: true } },
+  ];
+  function lessonState(L) {
+    const b = new Array(64).fill(null);
+    L.pieces.forEach(([i, c, t], k) => { b[i] = { t, c, id: k }; });
+    return { b, turn: 'w', cr: { wK: false, wQ: false, bK: false, bQ: false, ...(L.cr || {}) }, ep: -1, half: 0 };
+  }
+  function startLesson(i) {
+    ac();
+    const L = LESSONS[i];
+    const s = lessonState(L);
+    const pid = L.at ? s.b[sqIdx(L.at)].id : null;
+    boot({ mode: 'lesson', side: 'w', level: 0, armies: { w: opts.w, b: opts.b }, hist: [s], log: [], mv: [], hints: 0, clock: null, over: null, lastMove: {}, ls: { i, pid, stars: L.stars.map(sqIdx) } });
+    hideHome(); $('m-lessons').hidden = true;
+    paintStatus();
+  }
+  function lessonAfter(m) {
+    const L = LESSONS[G.ls.i];
+    let done = false, wrong = false;
+    if (L.goal === 'stars') {
+      G.ls.stars = G.ls.stars.filter((x) => x !== m.to);
+      done = !G.ls.stars.length;
+    } else if (L.goal === 'check') { done = attacked(S.b, kingSq(S.b, 'b'), 'w'); wrong = !done; }
+    else if (L.goal === 'mate') { const t = { ...S, turn: 'b' }; done = inCheck(t) && !legal(t).length; wrong = !done; }
+    else if (L.goal === 'castle') { done = !!m.castle; wrong = !done; }
+    if (done) {
+      prog.lessons[G.ls.i] = true; saveProg();
+      if (LESSONS.every((_, k) => prog.lessons[k])) unlock('lessons');
+      G.over = { title: `Урок пройден: ${L.n}!`, text: G.ls.i + 1 < LESSONS.length ? `Дальше: ${LESSONS[G.ls.i + 1].n}.` : 'Все уроки пройдены. Теперь попробуй задачу дня!', lesson: true };
+    } else if (wrong) {
+      toast('Не то. Попробуй ещё раз');
+      buzz(30);
+      setTimeout(() => startLesson(G.ls.i), 700);
+    }
+  }
+  function paintLessons() {
+    $('lessons-list').innerHTML = LESSONS.map((L, i) => `<button type="button" class="lesson ${prog.lessons[i] ? 'done' : ''}" data-i="${i}"><span class="lesson-n">${i + 1}</span><span><b>${L.n}</b><small>${L.t ? ROLE[L.t] + ' · как ходит' : 'правило'}</small></span><span class="lesson-ok">${prog.lessons[i] ? '✓' : ''}</span></button>`).join('');
+  }
+  $('lessons-list').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) startLesson(+b.dataset.i); });
+  $('btn-lessons-close').addEventListener('click', () => { $('m-lessons').hidden = true; });
+  $('btn-ach-close').addEventListener('click', () => { $('m-ach').hidden = true; });
+  $('home-puzzle').addEventListener('click', () => startPuzzle(dailyIndex(), true));
+  $('home-lessons').addEventListener('click', () => { paintLessons(); $('m-lessons').hidden = false; });
+  $('home-ach').addEventListener('click', () => { paintAch(); $('m-ach').hidden = false; });
+
   // ---------------- start ----------------
   try { const o = JSON.parse(store.get('zoochess.opts') || 'null'); if (o) Object.assign(opts, o); } catch (e) {}
   if (!ARMIES[opts.w] || !ARMIES[opts.b] || opts.w === opts.b) { opts.w = 'savanna'; opts.b = 'ocean'; }
@@ -1982,6 +2216,6 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
   paintSettings();
   showHome();
 
-  window.__zoo = { legal, make, initState, inCheck, pickMove, fen, SF, dbg: () => ({ G, S }), perft: function perft(s, d) { if (!d) return 1; let n = 0; for (const m of legal(s)) n += perft(make(s, m), d - 1); return n; } };
+  window.__zoo = { legal, make, initState, inCheck, pickMove, fen, SF, mateIn, parseFen, PUZZLES, LESSONS, startPuzzle, startLesson, dbg: () => ({ G, S }), perft: function perft(s, d) { if (!d) return 1; let n = 0; for (const m of legal(s)) n += perft(make(s, m), d - 1); return n; } };
 })();
 </script>

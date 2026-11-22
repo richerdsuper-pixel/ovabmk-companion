@@ -2,7 +2,7 @@
 
 Запуск:  python3 -m venv bl && bl/bin/pip install bpy==5.3.0
          bl/bin/python tools/blender_army.py docs/chess/units
-Получаются PNG с прозрачным фоном: general, tank, fortress, helicopter, para, soldier.
+Получаются PNG с прозрачным фоном: general (король), jet (ферзь), tank (ладья), helicopter (слон), apc (конь), spetsnaz (пешка).
 Фигурки — как пластмассовые игрушечные солдатики, смотрят влево (как остальные армии).
 """
 import math
@@ -191,7 +191,68 @@ def para():
         a = i * 2 * math.pi / 8
         sph((0.62 * math.cos(a), 0.62 * math.sin(a), 2.47), 0.05, 'olive2', scale=(1, 1, 0.4))
 
-PIECES = {'soldier': soldier, 'general': general, 'tank': tank, 'fortress': fortress, 'helicopter': helicopter, 'para': para}
+
+def jet():
+    sph((0, 0, 0.7), 0.5, 'olive', scale=(2.2, 0.32, 0.32))             # fuselage
+    cyl((-1.18, 0, 0.7), 0.16, 0.36, 'olive2', rot=(0, -math.pi / 2, 0), r2=0.0)   # nose cone
+    sph((-0.45, 0, 0.84), 0.2, 'glass', scale=(1.6, 0.7, 0.6))          # canopy
+    bpy.ops.mesh.primitive_cube_add(location=(0.1, 0, 0.66))
+    w = bpy.context.object
+    w.scale = (0.5, 1.2, 0.03); bpy.ops.object.transform_apply(scale=True)
+    for v in w.data.vertices:
+        if v.co.x < 0: v.co.y *= 0.25
+    put(w, 'olive')
+    bpy.ops.mesh.primitive_cube_add(location=(0.95, 0, 0.7))
+    t = bpy.context.object
+    t.scale = (0.25, 0.5, 0.025); bpy.ops.object.transform_apply(scale=True)
+    for v in t.data.vertices:
+        if v.co.x < 0: v.co.y *= 0.3
+    put(t, 'olive')
+    cube((0.95, 0, 0.95), (0.22, 0.02, 0.24), 'olive', rot=(0, 0.35, 0), bevel=0.02)  # fin
+    cyl((1.12, 0, 0.7), 0.14, 0.14, 'dark', rot=(0, math.pi / 2, 0))   # nozzle
+    sph((1.19, 0, 0.7), 0.1, 'red', scale=(0.4, 1, 1))                   # afterburner glow
+    for y in (-0.45, 0.45):
+        between((0.0, y, 0.6), (0.4, y, 0.6), 0.05, 'white')            # wing pods
+    cube((0.95, 0, 1.2), (0.01, 0.03, 0.04), 'gold', bevel=0.005)      # star on fin
+    for y in (-0.2, 0.2):
+        between((-0.6, y * 0.5, 0.45), (-0.6, y * 0.5, 0.28), 0.02, 'dark')
+        between((0.3, y, 0.45), (0.3, y, 0.28), 0.02, 'dark')
+        cyl((-0.6, y * 0.5, 0.26), 0.05, 0.03, 'dark', rot=(math.pi / 2, 0, 0))
+        cyl((0.3, y, 0.26), 0.06, 0.04, 'dark', rot=(math.pi / 2, 0, 0))
+
+def apc():
+    bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0.55))
+    h = bpy.context.object
+    h.scale = (0.95, 0.42, 0.22); bpy.ops.object.transform_apply(scale=True)
+    for v in h.data.vertices:
+        if v.co.x < -0.5 and v.co.z > 0.55: v.co.x += 0.25        # sloped nose
+        if v.co.z > 0.6: v.co.y *= 0.82
+    mod = h.modifiers.new('b', 'BEVEL'); mod.width = 0.04; mod.segments = 3
+    put(h, 'olive')
+    for x in (-0.62, -0.2, 0.22, 0.64):
+        for y in (-0.44, 0.44):
+            cyl((x, y, 0.26), 0.2, 0.14, 'dark', rot=(math.pi / 2, 0, 0))
+            cyl((x, y * 1.1, 0.26), 0.09, 0.03, 'olive2', rot=(math.pi / 2, 0, 0))
+    cyl((0.05, 0, 0.86), 0.18, 0.14, 'olive2')                           # turret
+    between((-0.08, 0, 0.88), (-0.72, 0, 0.92), 0.025, 'dark')          # gun
+    for x in (-0.3, 0.1, 0.5):
+        cube((x, -0.43, 0.6), (0.06, 0.01, 0.06), 'glass', bevel=0.01)   # vision blocks
+    cube((-0.66, 0, 0.72), (0.03, 0.18, 0.05), 'glass', bevel=0.01)
+
+def spetsnaz():
+    person(coat='olive2', helmet=False)
+    sph((0, 0, 1.5), 0.165, 'dark', scale=(1, 1, 1.05))                  # balaclava
+    cube((-0.14, 0, 1.5), (0.025, 0.11, 0.035), 'skin', bevel=0.01)      # eye slit
+    sph((-0.165, -0.05, 1.5), 0.018, 'dark'); sph((-0.165, 0.05, 1.5), 0.018, 'dark')
+    cyl((0, 0, 1.62), 0.17, 0.06, 'red')                                  # beret
+    sph((-0.03, 0.06, 1.66), 0.13, 'red', scale=(1.1, 1, 0.45))
+    cube((-0.05, 0, 1.0), (0.22, 0.28, 0.22), 'khaki', bevel=0.04)       # vest
+    for y in (-0.15, 0, 0.15):
+        cube((-0.23, y, 0.95), (0.03, 0.05, 0.07), 'olive', bevel=0.01)  # pouches
+    cube((0.2, 0, 1.0), (0.08, 0.2, 0.22), 'olive', bevel=0.04)          # backpack
+    between((0.1, -0.2, 0.9), (0.18, 0.12, 1.42), 0.03, 'dark')          # sling
+
+PIECES = {'general': general, 'jet': jet, 'tank': tank, 'helicopter': helicopter, 'apc': apc, 'spetsnaz': spetsnaz}
 
 # ---------- scene ----------
 def reset():

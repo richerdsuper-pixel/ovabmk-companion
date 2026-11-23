@@ -86,5 +86,62 @@ def main():
     print('families', len(new_families.FAMS), 'encyclopedia pieces', len(json.loads(enc_js().split('const ENC = ')[1].split(';\n')[0])['p']))
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and len(sys.argv) == 1:
     main()
+
+
+def translations():
+    """ru → (en, uz) pairs for every encyclopedia text; chips are matched one by one."""
+    import enc_en
+    import enc_uz
+    pairs, warn = {}, []
+
+    def add(ru, en, uz):
+        if ru and en and uz:
+            pairs[ru] = (en, uz)
+
+    def chips(ru, en, uz, where):
+        a, b, c = ru.split('|'), en.split('|'), uz.split('|')
+        if len(a) == len(b) == len(c):
+            for x, y, z in zip(a, b, c):
+                add(x, y, z)
+        else:
+            warn.append(where)
+
+    for k in enc_ru.KINGDOMS:
+        add(enc_ru.KINGDOMS[k], enc_en.KINGDOMS[k], enc_uz.KINGDOMS[k])
+    for f in enc_ru.FAMILIES:
+        add(enc_ru.FAMILIES[f], enc_en.FAMILIES[f], enc_uz.FAMILIES[f])
+    for f, roles in enc_ru.P.items():
+        for r, v in roles.items():
+            e, u = enc_en.P[f][r], enc_uz.P[f][r]
+            for i in (0, 2, 3):
+                add(v[i], e[i], u[i])
+            chips(v[1], e[1], u[1], f + '-' + r)
+    for f, F in new_families.FAMS.items():
+        add(F['desc'], enc_en.NEW_DESC[f], enc_uz.NEW_DESC[f])
+        for r in 'kqrbnp':
+            v = F['p'][r]
+            e, u = enc_en.NEW[f][r], enc_uz.NEW[f][r]
+            # v: (art, name, mv, why, fact, about, chips, f2, f3); e/u: (why, fact, about, chips, f2, f3)
+            for vi, ei in ((3, 0), (4, 1), (5, 2), (7, 4), (8, 5)):
+                add(v[vi], e[ei], u[ei])
+            chips(v[6], e[3], u[3], f + '-' + r)
+    return pairs, warn
+
+
+def merge_i18n():
+    html = open(GAME, encoding='utf-8').read()
+    m = re.search(r'const I18N = (\{.*?\});\n', html, re.S)
+    I = json.loads(m.group(1))
+    pairs, warn = translations()
+    for ru, (en, uz) in pairs.items():
+        I['en'][ru] = en
+        I['uz'][ru] = uz
+    html = html[:m.start(1)] + json.dumps(I, ensure_ascii=False) + html[m.end(1):]
+    open(GAME, 'w', encoding='utf-8').write(html)
+    print('translated strings', len(pairs), 'chip mismatches', warn)
+
+
+if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'i18n':
+    merge_i18n()

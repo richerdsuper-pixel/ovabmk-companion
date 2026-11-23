@@ -642,7 +642,7 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     <div class="sp-bar"><i id="sp-fill"></i></div>
     <p class="sp-msg" id="sp-msg">Загружаем армии…</p>
     <span class="beta" id="sp-beta">БЕТА</span>
-    <p class="sp-letter" id="sp-letter">Если вы скачали взломанную версию — я не против. Эту игру я сделал, чтобы все наслаждались и учились шахматам.<br>Спасибо тем, кто покупает фигурки за деньги — вы помогаете мне развивать игру. Спасибо тем, кто играет бесплатно — вы помогаете мне исправлять ошибки.<br><b>Приятной игры!</b></p>
+    <p class="sp-letter" id="sp-letter">Пожалуйста, не скачивайте взломанные версии: они ломают игровую механику и отнимают желание развивать игру дальше. Эту игру я сделал, чтобы все наслаждались и учились шахматам.<br>Спасибо тем, кто покупает фигурки за деньги — вы помогаете мне развивать игру. Спасибо тем, кто играет бесплатно — вы помогаете мне исправлять ошибки.<br><b>Приятной игры!</b></p>
     <span class="sp-skip" id="sp-skip"></span>
   </div>
 </div>
@@ -654,8 +654,8 @@ input[type="range"] { width: 100%; accent-color: var(--coral); height: 28px; }
     uz: ['Qo‘shinlar yuklanmoqda…', 'Hayvonlar uyg‘otilmoqda…', 'O‘simliklar sug‘orilmoqda…', 'Bakteriyalar o‘stirilmoqda…', 'Donalar terilmoqda…', 'Taxta tayyorlanmoqda…', 'Stockfish uyg‘otilmoqda…'] };
   var T = { en: ['Chess of', 'Kingdoms', 'BETA'], uz: ['Saltanatlar', 'shaxmati', 'BETA'] };
   var LETTER = {
-    en: 'If you downloaded a cracked version, I don’t mind. I made this game so that everyone can enjoy it and learn chess.<br>Thank you to those who buy pieces for real money — you help me develop the game. Thank you to those who play for free — you help me fix its bugs.<br><b>Enjoy the game!</b>',
-    uz: 'Agar o‘yinning buzilgan versiyasini yuklab olgan bo‘lsangiz — men qarshi emasman. Bu o‘yinni hamma zavqlansin va shaxmatni o‘rgansin deb yaratdim.<br>Donalarni pulga sotib olayotganlarga rahmat — o‘yinni rivojlantirishga yordam beryapsiz. Bepul o‘ynayotganlarga rahmat — xatolarni tuzatishga yordam beryapsiz.<br><b>Yoqimli o‘yin!</b>' };
+    en: 'Please don’t download cracked versions: they break the game’s mechanics and take away the motivation to keep developing it. I made this game so that everyone can enjoy it and learn chess.<br>Thank you to those who buy pieces for real money — you help me develop the game. Thank you to those who play for free — you help me fix its bugs.<br><b>Enjoy the game!</b>',
+    uz: 'Iltimos, o‘yinning buzilgan versiyalarini yuklab olmang: ular o‘yin mexanikasini buzadi va o‘yinni rivojlantirish ishtiyoqini so‘ndiradi. Bu o‘yinni hamma zavqlansin va shaxmatni o‘rgansin deb yaratdim.<br>Donalarni pulga sotib olayotganlarga rahmat — o‘yinni rivojlantirishga yordam beryapsiz. Bepul o‘ynayotganlarga rahmat — xatolarni tuzatishga yordam beryapsiz.<br><b>Yoqimli o‘yin!</b>' };
   var lang = 'ru';
   try { lang = localStorage.getItem('zoochess.lang') || ((navigator.language || 'ru').slice(0, 2) === 'uz' ? 'uz' : (navigator.language || 'ru').slice(0, 2) === 'en' ? 'en' : 'ru'); } catch (e) {}
   var msgs = L[lang] || L.ru, i = 0, p = 3;

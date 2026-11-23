@@ -37,6 +37,21 @@ def materials():
     M['glass'] = mat('glass', (0.25, 0.5, 0.75), 0.08)
     M['stone'] = mat('stone', (0.42, 0.42, 0.38), 0.7)
     M['white'] = mat('white', (0.85, 0.85, 0.8), 0.5)
+    M['fur'] = mat('fur', (0.32, 0.19, 0.08), 0.8)
+    M['fur2'] = mat('fur2', (0.5, 0.33, 0.15), 0.8)
+    M['wood'] = mat('wood', (0.36, 0.2, 0.08), 0.6)
+    M['iron'] = mat('iron', (0.5, 0.52, 0.56), 0.3, 0.85)
+    M['brass'] = mat('brass', (0.85, 0.55, 0.18), 0.3, 1.0)
+    M['redc'] = mat('redc', (0.55, 0.06, 0.05), 0.5)
+    M['bluec'] = mat('bluec', (0.08, 0.16, 0.42), 0.5)
+    M['bone'] = mat('bone', (0.92, 0.88, 0.76), 0.5)
+    M['steel'] = mat('steel', (0.2, 0.21, 0.24), 0.35, 0.7)
+    M['plast'] = mat('plast', (0.9, 0.92, 0.95), 0.25)
+    g = mat('glow', (0.2, 0.9, 1.0), 0.2)
+    b = g.node_tree.nodes['Principled BSDF']
+    b.inputs['Emission Color'].default_value = (0.2, 0.95, 1.0, 1)
+    b.inputs['Emission Strength'].default_value = 4.0
+    M['glow'] = g
 
 def put(obj, m):
     obj.data.materials.clear()
@@ -44,13 +59,19 @@ def put(obj, m):
     bpy.ops.object.shade_smooth()
     return obj
 
+def smooth(o, bevel, subsurf=True):
+    if bevel:
+        mod = o.modifiers.new('b', 'BEVEL'); mod.width = bevel; mod.segments = 4; mod.limit_method = 'ANGLE'
+    if subsurf:
+        sub = o.modifiers.new('s', 'SUBSURF'); sub.levels = 1; sub.render_levels = 2
+    return o
+
 def cube(loc, scale, m, rot=(0, 0, 0), bevel=0.04):
     bpy.ops.mesh.primitive_cube_add(location=loc, rotation=rot)
     o = bpy.context.object
     o.scale = scale
     bpy.ops.object.transform_apply(scale=True)
-    if bevel:
-        mod = o.modifiers.new('b', 'BEVEL'); mod.width = bevel; mod.segments = 3
+    smooth(o, max(bevel, min(scale) * 0.35) if bevel else 0, subsurf=bool(bevel))
     return put(o, m)
 
 def cyl(loc, r, h, m, rot=(0, 0, 0), v=32, r2=None):
@@ -58,7 +79,10 @@ def cyl(loc, r, h, m, rot=(0, 0, 0), v=32, r2=None):
         bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=h, location=loc, rotation=rot, vertices=v)
     else:
         bpy.ops.mesh.primitive_cone_add(radius1=r, radius2=r2, depth=h, location=loc, rotation=rot, vertices=v)
-    return put(bpy.context.object, m)
+    o = bpy.context.object
+    if r2 is None or r2 > 0:
+        smooth(o, min(r, h) * 0.3, subsurf=False)
+    return put(o, m)
 
 def sph(loc, r, m, scale=(1, 1, 1)):
     bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=loc, segments=32, ring_count=16)
@@ -82,12 +106,14 @@ def crown(z, s=1.0):
     sph((0, 0, z + 0.16 * s), 0.04 * s, 'red')
 
 # ---------- figures (front = -X, so they look left in the picture) ----------
-def person(coat='olive', helmet=True, arms='rifle'):
+def person(coat='olive', helmet=True, arms='rifle', legs='olive2', skin='skin'):
     for y in (-0.11, 0.11):
-        cyl((0, y, 0.36), 0.085, 0.72, 'olive2')
+        cyl((0, y, 0.36), 0.085, 0.72, legs)
         cube((-0.05, y, 0.03), (0.15, 0.08, 0.05), 'dark')
-    cube((0, 0, 0.98), (0.2, 0.26, 0.32), coat)
-    cube((0, 0, 0.7), (0.2, 0.27, 0.05), 'dark', bevel=0.02)           # belt
+    t = cyl((0, 0, 0.98), 0.24, 0.66, coat, v=48)
+    t.scale = (0.85, 1.12, 1)
+    sph((0, 0, 1.28), 0.22, coat, scale=(0.85, 1.25, 0.55))           # shoulders
+    cyl((0, 0, 0.72), 0.215, 0.07, 'dark', v=48).scale = (0.87, 1.14, 1)  # belt
     cyl((0, 0, 1.33), 0.07, 0.1, 'skin')
     sph((0, 0, 1.47), 0.15, 'skin')
     sph((-0.13, -0.05, 1.5), 0.02, 'dark'); sph((-0.13, 0.05, 1.5), 0.02, 'dark')
@@ -99,6 +125,10 @@ def person(coat='olive', helmet=True, arms='rifle'):
         between((0, 0.3, 1.22), (-0.24, 0.22, 0.98), 0.07, coat)
         between((-0.3, -0.26, 0.85), (-0.12, -0.2, 1.7), 0.035, 'dark')  # rifle
         sph((-0.24, -0.3, 0.93), 0.06, 'skin'); sph((-0.25, 0.2, 1.0), 0.06, 'skin')
+    elif arms == 'hold':
+        between((0, -0.3, 1.22), (-0.2, -0.34, 0.92), 0.07, coat)
+        between((0, 0.3, 1.22), (-0.2, 0.34, 0.92), 0.07, coat)
+        sph((-0.22, -0.34, 0.88), 0.06, 'skin'); sph((-0.22, 0.34, 0.88), 0.06, 'skin')
     elif arms == 'up':
         between((0, -0.3, 1.22), (-0.05, -0.36, 1.75), 0.07, coat)
         between((0, 0.3, 1.22), (-0.05, 0.36, 1.75), 0.07, coat)
@@ -252,7 +282,285 @@ def spetsnaz():
     cube((0.2, 0, 1.0), (0.08, 0.2, 0.22), 'olive', bevel=0.04)          # backpack
     between((0.1, -0.2, 0.9), (0.18, 0.12, 1.42), 0.03, 'dark')          # sling
 
-PIECES = {'general': general, 'jet': jet, 'tank': tank, 'helicopter': helicopter, 'apc': apc, 'spetsnaz': spetsnaz}
+
+# ---------- helpers for the eras ----------
+def horse(x=0.0, z=0.0, s=1.0, coat='fur2'):
+    sph((x, 0, z + 0.72 * s), 0.5 * s, coat, scale=(1.5, 0.62, 0.62))
+    between((x - 0.55 * s, 0, z + 0.85 * s), (x - 0.85 * s, 0, z + 1.25 * s), 0.16 * s, coat)
+    sph((x - 0.98 * s, 0, z + 1.28 * s), 0.16 * s, coat, scale=(1.6, 0.8, 0.9))
+    cube((x - 0.78 * s, 0, z + 1.32 * s), (0.2 * s, 0.03 * s, 0.12 * s), 'dark', rot=(0, -0.7, 0), bevel=0.02)  # mane
+    for dx in (-0.45, 0.45):
+        for y in (-0.16, 0.16):
+            between((x + dx * s, y * s, z + 0.6 * s), (x + dx * s, y * s, z + 0.05 * s), 0.07 * s, coat)
+            cyl((x + dx * s, y * s, z + 0.04 * s), 0.08 * s, 0.06 * s, 'dark')
+    between((x + 0.7 * s, 0, z + 0.8 * s), (x + 0.9 * s, 0, z + 0.35 * s), 0.05 * s, 'dark')  # tail
+
+def wheel(x, y, z, r, m='wood', spokes=6):
+    cyl((x, y, z), r, 0.05, 'dark', rot=(math.pi / 2, 0, 0), v=40)
+    cyl((x, y, z), r * 0.82, 0.06, m, rot=(math.pi / 2, 0, 0), v=40)
+    for i in range(spokes):
+        a = i * math.pi / spokes
+        between((x + r * 0.8 * math.cos(a), y, z + r * 0.8 * math.sin(a)), (x - r * 0.8 * math.cos(a), y, z - r * 0.8 * math.sin(a)), 0.02, 'dark')
+    cyl((x, y, z), r * 0.15, 0.09, 'dark', rot=(math.pi / 2, 0, 0))
+
+def gold_crown_on(z):
+    crown(z, 1.0)
+
+def shift_all(dx=0, dz=0, s=None):
+    for o in bpy.context.scene.objects:
+        if o.type == 'MESH':
+            o.location.x += dx; o.location.z += dz
+            if s: o.scale = (o.scale[0] * s, o.scale[1] * s, o.scale[2] * s); o.location *= s
+
+# ---------- Stone age ----------
+def stone_chief():
+    person(coat='fur', helmet=False, arms='salute', legs='fur')
+    cyl((0.05, 0, 1.05), 0.32, 0.7, 'fur2', r2=0.2)                     # fur cape
+    for i in range(7):
+        a = i * 2 * math.pi / 7
+        cyl((0.14 * math.cos(a), 0.14 * math.sin(a), 1.68), 0.03, 0.18, 'bone', r2=0.0, v=10)
+    crown(1.78, 0.9)
+    between((-0.28, 0.3, 0.2), (-0.32, 0.36, 1.6), 0.035, 'wood')       # staff
+    sph((-0.32, 0.36, 1.66), 0.08, 'stone')
+
+def stone_shaman():
+    person(coat='fur2', helmet=False, arms='up', legs='fur')
+    cyl((0, 0, 0.55), 0.3, 0.55, 'fur2', r2=0.22)
+    for i, c in enumerate(['redc', 'bone', 'redc', 'bone', 'redc']):
+        a = -0.8 + i * 0.4
+        between((0, 0, 1.6), (0.05, 0.32 * math.sin(a), 1.6 + 0.36 * math.cos(a)), 0.03, c)
+    for i in range(5):
+        sph((-0.17, -0.12 + i * 0.06, 1.25), 0.03, 'bone')                # necklace
+
+def stone_mammoth():
+    sph((0.15, 0, 0.95), 0.62, 'fur', scale=(1.25, 0.9, 0.9))
+    sph((-0.55, 0, 1.15), 0.38, 'fur')
+    sph((-0.45, 0, 1.45), 0.25, 'fur2')                                   # head dome
+    for i, (a, b) in enumerate([((-0.85, 0, 1.0), (-0.95, 0, 0.6)), ((-0.95, 0, 0.6), (-0.85, 0, 0.3)), ((-0.85, 0, 0.3), (-0.7, 0, 0.25))]):
+        between(a, b, 0.09 - i * 0.015, 'fur')                           # trunk
+    for y in (-0.16, 0.16):
+        between((-0.78, y, 0.92), (-1.12, y * 1.6, 0.55), 0.05, 'bone')  # tusks
+        between((-1.12, y * 1.6, 0.55), (-1.2, y * 1.8, 0.78), 0.04, 'bone')
+        sph((-0.6, y * 2.3, 1.12), 0.07, 'dark')
+        sph((-0.68, y * 1.2, 1.24), 0.04, 'dark')                        # eyes
+    for x in (-0.25, 0.55):
+        for y in (-0.3, 0.3):
+            between((x, y, 0.55), (x, y, 0.06), 0.14, 'fur')
+
+def stone_hunter():
+    person(coat='fur', helmet=False, arms='hold', legs='fur')
+    sph((0, 0, 1.58), 0.15, 'fur2', scale=(1.1, 1.1, 0.5))              # hair
+    between((-0.55, -0.34, 1.75), (0.35, -0.34, 0.2), 0.03, 'wood')     # spear
+    cyl((-0.6, -0.34, 1.82), 0.06, 0.16, 'stone', r2=0.0, rot=(0, -0.55, 0))
+
+def stone_slinger():
+    person(coat='fur2', helmet=False, arms='up', legs='fur')
+    sph((0, 0, 1.58), 0.15, 'fur', scale=(1.1, 1.1, 0.5))
+    between((-0.05, 0.36, 1.78), (0.15, 0.6, 2.05), 0.012, 'wood')
+    sph((0.17, 0.62, 2.08), 0.06, 'stone')
+
+def stone_gatherer():
+    person(coat='fur2', helmet=False, arms='hold', legs='fur')
+    cyl((-0.3, 0, 0.82), 0.17, 0.2, 'wood', r2=0.2)                     # basket
+    for i in range(5):
+        sph((-0.3 + (i % 3 - 1) * 0.07, (i // 3 - 0.5) * 0.08, 0.95), 0.05, 'redc')
+
+# ---------- Iron age ----------
+def iron_king():
+    person(coat='redc', helmet=False, arms='salute', legs='bluec')
+    cyl((0.06, 0, 0.9), 0.34, 0.9, 'redc', r2=0.18)                     # cloak
+    sph((0, 0, 1.58), 0.16, 'fur2', scale=(1.05, 1.05, 0.45))
+    crown(1.66, 1.0)
+    between((-0.28, 0.3, 0.2), (-0.3, 0.36, 1.5), 0.03, 'brass')       # sceptre
+    sph((-0.3, 0.36, 1.55), 0.07, 'gold')
+
+def iron_chariot():
+    horse(-0.7, 0.0, 0.75)
+    cube((0.45, 0, 0.55), (0.38, 0.34, 0.06), 'wood')
+    cube((0.2, 0, 0.75), (0.06, 0.34, 0.22), 'wood')
+    for y in (-0.42, 0.42):
+        wheel(0.5, y, 0.4, 0.4, 'wood')
+        cyl((0.5, y * 1.12, 0.4), 0.1, 0.3, 'iron', rot=(math.pi / 2, 0, 0), r2=0.0)  # scythe hub
+    between((0.2, 0, 0.6), (-0.4, 0, 0.75), 0.03, 'wood')
+    o = [x for x in bpy.context.scene.objects]
+    person(coat='bluec', helmet=True, arms='hold', legs='bluec')
+    for x in bpy.context.scene.objects:
+        if x not in o and x.type == 'MESH':
+            x.location.x += 0.5; x.location.z += 0.58
+
+def iron_tower():
+    fortress()
+
+def iron_archer():
+    person(coat='bluec', helmet=True, arms='hold', legs='fur')
+    pts = [(-0.35, -0.42, 0.55 + i * 0.25 + 0.0) for i in range(5)]
+    for i in range(4):
+        a = (-0.35 - 0.14 * math.sin(math.pi * i / 4), -0.42, 0.55 + i * 0.22)
+        b = (-0.35 - 0.14 * math.sin(math.pi * (i + 1) / 4), -0.42, 0.55 + (i + 1) * 0.22)
+        between(a, b, 0.025, 'wood')
+    between((-0.35, -0.42, 0.55), (-0.35, -0.42, 1.43), 0.006, 'white')
+    cyl((0.2, 0.08, 1.15), 0.08, 0.5, 'fur2', rot=(0.25, 0, 0))         # quiver
+
+def iron_rider():
+    horse(0, 0, 0.95)
+    o = [x for x in bpy.context.scene.objects]
+    person(coat='redc', helmet=True, arms='hold', legs='bluec')
+    for x in bpy.context.scene.objects:
+        if x not in o and x.type == 'MESH':
+            x.scale *= 0.8; x.location *= 0.8; x.location.z += 0.62
+    between((-0.9, -0.3, 1.5), (0.2, -0.3, 0.9), 0.025, 'wood')         # lance
+    cyl((-0.95, -0.3, 1.53), 0.05, 0.14, 'iron', r2=0.0, rot=(0, -1.0, 0))
+
+def iron_legion():
+    person(coat='redc', helmet=False, arms='hold', legs='fur')
+    sph((0, 0, 1.53), 0.18, 'iron', scale=(1.06, 1.06, 0.85))
+    cube((0, 0, 1.72), (0.12, 0.02, 0.06), 'redc', bevel=0.02)          # crest
+    cyl((-0.3, -0.05, 0.98), 0.3, 0.05, 'redc', rot=(0, math.pi / 2, 0), v=48)   # shield
+    cyl((-0.33, -0.05, 0.98), 0.07, 0.04, 'brass', rot=(0, math.pi / 2, 0))
+    between((-0.2, 0.34, 0.3), (-0.25, 0.34, 1.75), 0.022, 'wood')
+    cyl((-0.25, 0.34, 1.82), 0.04, 0.12, 'iron', r2=0.0)
+
+# ---------- Industrial age ----------
+def ind_emperor():
+    person(coat='bluec', helmet=False, arms='salute', legs='white')
+    for y in (-0.27, 0.27):
+        cube((0, y, 1.28), (0.12, 0.07, 0.03), 'brass', bevel=0.02)
+    cube((0, 0, 1.68), (0.12, 0.32, 0.1), 'dark', bevel=0.06)           # bicorne
+    crown(1.8, 0.85)
+    for i in range(3):
+        sph((-0.2, -0.08 + i * 0.08, 1.05), 0.025, 'brass')
+
+def ind_train():
+    cube((0.1, 0, 0.62), (0.85, 0.36, 0.3), 'steel')
+    cyl((-0.75, 0, 0.75), 0.3, 0.5, 'steel', rot=(0, math.pi / 2, 0), v=40)   # boiler
+    cyl((-0.85, 0, 1.12), 0.09, 0.4, 'dark')                            # chimney
+    cyl((-0.85, 0, 1.33), 0.14, 0.06, 'dark')
+    sph((-1.02, 0, 0.75), 0.1, 'brass')                                   # headlamp
+    cube((0.35, 0, 1.0), (0.3, 0.3, 0.12), 'steel')                       # turret
+    between((0.2, 0, 1.02), (-0.4, 0, 1.08), 0.04, 'dark')
+    for x in (-0.7, -0.35, 0.05, 0.45, 0.8):
+        for y in (-0.38, 0.38):
+            wheel(x, y, 0.22, 0.2, 'steel', 4)
+    for x in (-0.3, 0.2, 0.7):
+        cube((x, -0.37, 0.68), (0.08, 0.01, 0.05), 'dark', bevel=0.01)  # loopholes
+
+def ind_armored():
+    bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0.55))
+    h = bpy.context.object
+    h.scale = (0.85, 0.4, 0.38); bpy.ops.object.transform_apply(scale=True)
+    for v in h.data.vertices:
+        if v.co.z < 0.3: v.co.x *= 0.85
+        if v.co.x < -0.5 and v.co.z > 0.6: v.co.x += 0.2
+    smooth(h, 0.05, False); put(h, 'iron')
+    for y in (-0.42, 0.42):
+        cube((0, y, 0.38), (0.9, 0.1, 0.32), 'dark', bevel=0.14)
+    cyl((0.4, 0, 1.05), 0.08, 0.35, 'dark')                              # smokestack
+    sph((0.4, 0, 1.3), 0.1, 'white', scale=(1.4, 1.4, 0.8))             # steam puff
+    sph((0.55, 0.05, 1.42), 0.08, 'white')
+    between((-0.6, 0, 0.75), (-1.1, 0, 0.78), 0.05, 'dark')
+    for x in (-0.4, 0, 0.4):
+        sph((x, -0.41, 0.8), 0.03, 'brass')
+
+def ind_airship():
+    sph((0, 0, 1.35), 0.5, 'white', scale=(1.9, 0.7, 0.7))
+    for i in range(5):
+        cyl((-0.6 + i * 0.3, 0, 1.35), 0.35, 0.02, 'iron', rot=(0, math.pi / 2, 0), v=40).scale = (1, 1, 1)
+    for a in (0, math.pi / 2, math.pi, 3 * math.pi / 2):
+        cube((0.9, 0.2 * math.cos(a), 1.35 + 0.2 * math.sin(a)), (0.15, 0.02, 0.12), 'redc', rot=(a, 0, 0), bevel=0.01)
+    cube((0, 0, 0.75), (0.32, 0.12, 0.08), 'wood')                        # gondola
+    for x in (-0.25, 0.25):
+        between((x, 0, 0.82), (x * 1.5, 0, 1.0), 0.01, 'dark')
+    cyl((0.38, 0, 0.75), 0.1, 0.02, 'dark', rot=(0, math.pi / 2, 0))     # propeller
+
+def ind_cavalry():
+    horse(0, 0, 0.95, 'fur')
+    o = [x for x in bpy.context.scene.objects]
+    person(coat='bluec', helmet=False, arms='hold', legs='white')
+    for x in bpy.context.scene.objects:
+        if x not in o and x.type == 'MESH':
+            x.scale *= 0.8; x.location *= 0.8; x.location.z += 0.62
+    cyl((0, 0, 1.92), 0.13, 0.18, 'bluec', r2=0.11)                     # shako
+    sph((-0.1, 0, 2.03), 0.04, 'redc')
+    between((-0.5, -0.25, 1.4), (0.0, -0.25, 1.0), 0.015, 'iron')       # sabre
+
+def ind_rifleman():
+    person(coat='bluec', helmet=False, arms='rifle', legs='redc')
+    cyl((0, 0, 1.62), 0.17, 0.12, 'bluec')
+    cube((-0.15, 0, 1.57), (0.07, 0.13, 0.012), 'dark', bevel=0.01)
+
+# ---------- Technology age ----------
+def tech_ai():
+    cyl((0, 0, 0.18), 0.35, 0.36, 'steel', r2=0.28, v=48)
+    cyl((0, 0, 0.4), 0.22, 0.1, 'glow', v=48)
+    sph((0, 0, 1.05), 0.42, 'glass')
+    sph((0, 0, 1.05), 0.25, 'glow')
+    for i in range(3):
+        bpy.ops.mesh.primitive_torus_add(location=(0, 0, 1.05), major_radius=0.55 + i * 0.08, minor_radius=0.015, rotation=(0.4 + i * 0.6, i * 0.7, 0))
+        put(bpy.context.object, 'glow')
+    crown(1.55, 1.0)
+
+def tech_mech():
+    for y in (-0.28, 0.28):
+        between((0.05, y, 0.9), (-0.08, y, 0.48), 0.12, 'plast')
+        between((-0.08, y, 0.48), (0.05, y, 0.08), 0.11, 'steel')
+        cube((0.0, y, 0.06), (0.22, 0.12, 0.06), 'steel')
+    cube((0, 0, 1.15), (0.36, 0.42, 0.3), 'plast')
+    cube((-0.3, 0, 1.25), (0.08, 0.3, 0.06), 'glow', bevel=0.02)         # visor strip
+    sph((0, 0, 1.55), 0.16, 'steel', scale=(1.2, 1, 0.8))
+    cube((-0.15, 0, 1.56), (0.04, 0.1, 0.03), 'glow', bevel=0.01)
+    for y in (-0.55, 0.55):
+        cube((0, y, 1.15), (0.2, 0.12, 0.22), 'steel')
+        between((-0.05, y, 1.0), (-0.65, y, 1.0), 0.07, 'steel')
+        cyl((-0.68, y, 1.0), 0.05, 0.05, 'glow', rot=(0, math.pi / 2, 0))
+
+def tech_laser():
+    cyl((0, 0, 0.3), 0.5, 0.6, 'steel', r2=0.38, v=48)
+    sph((0, 0, 0.62), 0.38, 'plast', scale=(1, 1, 0.75))
+    between((-0.1, 0, 0.75), (-0.95, 0, 0.8), 0.06, 'steel')
+    cyl((-0.98, 0, 0.8), 0.07, 0.06, 'glow', rot=(0, math.pi / 2, 0))
+    for i in range(6):
+        a = i * math.pi / 3
+        cube((0.42 * math.cos(a), 0.42 * math.sin(a), 0.4), (0.05, 0.05, 0.02), 'glow', bevel=0.01)
+
+def tech_drone():
+    sph((0, 0, 0.9), 0.28, 'plast', scale=(1.2, 1.2, 0.5))
+    sph((-0.18, 0, 0.82), 0.1, 'glow')
+    for a in (0.785, 2.356, 3.927, 5.498):
+        x, y = 0.6 * math.cos(a), 0.6 * math.sin(a)
+        between((0, 0, 0.9), (x, y, 0.95), 0.04, 'steel')
+        cyl((x, y, 1.0), 0.24, 0.015, 'glass', v=40)
+        cyl((x, y, 0.98), 0.04, 0.08, 'steel')
+    for y in (-0.15, 0.15):
+        between((0.1, y, 0.75), (0.1, y, 0.45), 0.02, 'steel')
+
+def tech_exo():
+    person(coat='steel', helmet=True, arms='hold', legs='steel')
+    cube((-0.17, 0, 1.5), (0.03, 0.12, 0.04), 'glow', bevel=0.01)        # visor
+    for y in (-0.13, 0.13):
+        cyl((0.22, y, 1.0), 0.08, 0.36, 'plast')                          # jet packs
+        cyl((0.22, y, 0.78), 0.06, 0.12, 'glow', r2=0.0)
+    for y in (-0.11, 0.11):
+        cube((-0.02, y, 0.42), (0.1, 0.08, 0.2), 'plast', bevel=0.03)
+
+def tech_robot():
+    for y in (-0.12, 0.12):
+        cyl((0, y, 0.34), 0.08, 0.6, 'steel')
+        cube((-0.04, y, 0.03), (0.14, 0.08, 0.04), 'steel')
+    cube((0, 0, 0.92), (0.22, 0.28, 0.3), 'plast')
+    cube((-0.22, 0, 0.98), (0.02, 0.12, 0.08), 'glow', bevel=0.01)       # chest light
+    for y in (-0.36, 0.36):
+        between((0, y, 1.12), (-0.1, y, 0.72), 0.06, 'steel')
+    cube((0, 0, 1.4), (0.18, 0.2, 0.16), 'plast')
+    cube((-0.18, 0, 1.42), (0.02, 0.15, 0.04), 'glow', bevel=0.01)       # visor
+    between((0, 0, 1.56), (0.02, 0, 1.75), 0.012, 'steel')
+    sph((0.02, 0, 1.77), 0.03, 'glow')
+
+PIECES = {'general': general, 'jet': jet, 'tank': tank, 'helicopter': helicopter, 'apc': apc, 'spetsnaz': spetsnaz,
+          'stone_chief': stone_chief, 'stone_shaman': stone_shaman, 'stone_mammoth': stone_mammoth, 'stone_hunter': stone_hunter, 'stone_slinger': stone_slinger, 'stone_gatherer': stone_gatherer,
+          'iron_king': iron_king, 'iron_chariot': iron_chariot, 'iron_tower': iron_tower, 'iron_archer': iron_archer, 'iron_rider': iron_rider, 'iron_legion': iron_legion,
+          'ind_emperor': ind_emperor, 'ind_train': ind_train, 'ind_armored': ind_armored, 'ind_airship': ind_airship, 'ind_cavalry': ind_cavalry, 'ind_rifleman': ind_rifleman,
+          'tech_ai': tech_ai, 'tech_mech': tech_mech, 'tech_laser': tech_laser, 'tech_drone': tech_drone, 'tech_exo': tech_exo, 'tech_robot': tech_robot}
+ONLY = [a for a in sys.argv[1:] if not a.startswith('/') and not a.endswith('.py') and a in PIECES] if False else None
 
 # ---------- scene ----------
 def reset():
@@ -261,7 +569,7 @@ def reset():
     sc = bpy.context.scene
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'CPU'
-    sc.cycles.samples = 48
+    sc.cycles.samples = 96
     sc.cycles.use_denoising = True
     sc.render.film_transparent = True
     sc.render.resolution_x = sc.render.resolution_y = 512
@@ -295,7 +603,10 @@ def frame_camera():
     cam.rotation_quaternion = (-d).to_track_quat('-Z', 'Y')
     bpy.context.scene.camera = cam
 
+SEL = os.environ.get('ONLY')
 for name, build in PIECES.items():
+    if SEL and name not in SEL.split(','):
+        continue
     reset()
     build()
     bpy.context.view_layer.update()

@@ -20,13 +20,13 @@
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/manifest.webmanifest",
   "fallbackType": "customtabs",
-  "features": {},
+  "features": { "playBilling": { "enabled": true } },
   "alphaDependencies": { "enabled": false },
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "fullScopeUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/",
-  "minSdkVersion": 21,
+  "minSdkVersion": 23,
   "orientation": "portrait",
   "fingerprints": []
 }

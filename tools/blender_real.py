@@ -918,7 +918,10 @@ def frame_camera(margin=1.04):
 
 ANIMATED = {'stone_chief', 'stone_shaman', 'stone_hunter', 'stone_slinger', 'stone_gatherer', 'stone_mammoth', 'iron_king', 'iron_archer',
             'iron_legion', 'iron_rider', 'iron_chariot', 'ind_emperor', 'ind_rifleman', 'ind_cavalry', 'general', 'spetsnaz',
-            'tech_exo', 'tech_robot', 'tech_mech'}
+            'tech_exo', 'tech_robot', 'tech_mech',
+            'an_lion', 'an_tiger', 'an_jaguar', 'an_lynx', 'an_cheetah', 'an_kitten', 'an_leopard', 'an_rhino', 'an_elephant', 'an_zebra',
+            'an_vervet', 'an_gorilla', 'an_orangutan', 'an_baboon', 'an_lemur', 'an_gibbon', 'an_capuchin', 'an_penguin', 'an_flamingo',
+            'an_chick', 'an_turtle', 'an_crab'}
 
 
 def render(name, build):
@@ -957,7 +960,7 @@ if __name__ == '__main__':
     import importlib.util
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, here)
-    for extra in ('blender_real_humans.py', 'blender_real_nature.py'):
+    for extra in ('blender_real_humans.py', 'blender_real_nature.py', 'blender_real_animals.py'):
         p = os.path.join(here, extra)
         if os.path.exists(p):
             spec = importlib.util.spec_from_file_location(extra[:-3], p)

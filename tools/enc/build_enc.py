@@ -79,9 +79,6 @@ def main():
           "'capfungi', 'oddfungi', 'poisonfungi', 'farmfungi', 'treefungi', 'cocci', 'rods', 'cyano', 'spiro', 'actino', 'phages', 'virions', " \
           "'giantvir', 'plantvir', 'archvir', 'stone', 'iron', 'industrial', 'human', 'tech']"
     html = re.sub(r"const ARMY_IDS = \[[^\]]*\];", 'const ARMY_IDS = ' + ids + ';', html)
-    prices = "cereals: 300, carnivorous: 350, succulents: 300, poisonfungi: 350, farmfungi: 300, treefungi: 350, cyano: 250, spiro: 250, actino: 250, giantvir: 250, plantvir: 200, archvir: 250, "
-    if 'cereals: 300' not in html:
-        html = html.replace("const ARMY_PRICE = { classic: 0,", "const ARMY_PRICE = { " + prices + "classic: 0,")
     open(GAME, 'w', encoding='utf-8').write(html)
     print('families', len(new_families.FAMS), 'encyclopedia pieces', len(json.loads(enc_js().split('const ENC = ')[1].split(';\n')[0])['p']))
 

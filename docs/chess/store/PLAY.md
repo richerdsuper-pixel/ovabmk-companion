@@ -47,3 +47,57 @@ https://richerdsuper-pixel.github.io/ovabmk-companion/.well-known/assetlinks.jso
 Сайт обновляется сам при каждом пуше в основную ветку — приложение подтянет новую версию.
 AAB нужно пересобирать только если меняется значок, название или настройки в `twa-manifest.json`:
 увеличить `appVersionCode` и `appVersionName`, `bubblewrap update && bubblewrap build`.
+
+## 6. Покупки за деньги (Google Play Billing)
+
+В `twa-manifest.json` уже включено `"playBilling": { "enabled": true }` (нужен minSdk 23). После `bubblewrap build`
+в Play Console → «Монетизация → Товары → Встроенные товары» создайте **одноразовые (non-consumable)** товары
+с такими идентификаторами — игра сама подтянет из Google Play их цены и восстановит покупки на новом телефоне.
+Покупка подтверждается библиотекой TWA после `complete('success')`.
+
+| ID товара | Что открывает | Рекомендуемая цена |
+|---|---|---|
+| `fam_ocean` | семейство «ocean» | 0,99 $ |
+| `fam_cats` | семейство «cats» | 0,99 $ |
+| `fam_primates` | семейство «primates» | 0,99 $ |
+| `fam_birds` | семейство «birds» | 0,99 $ |
+| `fam_whales` | семейство «whales» | 0,99 $ |
+| `fam_sharks` | семейство «sharks» | 0,99 $ |
+| `fam_flowers` | семейство «flowers» | 0,99 $ |
+| `fam_trees` | семейство «trees» | 0,99 $ |
+| `fam_cereals` | семейство «cereals» | 0,99 $ |
+| `fam_carnivorous` | семейство «carnivorous» | 0,99 $ |
+| `fam_succulents` | семейство «succulents» | 0,99 $ |
+| `fam_capfungi` | семейство «capfungi» | 0,99 $ |
+| `fam_oddfungi` | семейство «oddfungi» | 0,99 $ |
+| `fam_poisonfungi` | семейство «poisonfungi» | 0,99 $ |
+| `fam_farmfungi` | семейство «farmfungi» | 0,99 $ |
+| `fam_treefungi` | семейство «treefungi» | 0,99 $ |
+| `fam_cocci` | семейство «cocci» | 0,99 $ |
+| `fam_rods` | семейство «rods» | 0,99 $ |
+| `fam_cyano` | семейство «cyano» | 0,99 $ |
+| `fam_spiro` | семейство «spiro» | 0,99 $ |
+| `fam_actino` | семейство «actino» | 0,99 $ |
+| `fam_phages` | семейство «phages» | 0,99 $ |
+| `fam_virions` | семейство «virions» | 0,99 $ |
+| `fam_giantvir` | семейство «giantvir» | 0,99 $ |
+| `fam_plantvir` | семейство «plantvir» | 0,99 $ |
+| `fam_archvir` | семейство «archvir» | 0,99 $ |
+| `fam_stone` | семейство «stone» | 1,99 $ |
+| `fam_iron` | семейство «iron» | 1,99 $ |
+| `fam_industrial` | семейство «industrial» | 1,99 $ |
+| `fam_human` | семейство «human» | 1,99 $ |
+| `fam_tech` | семейство «tech» | 1,99 $ |
+| `kingdom_animals` | всё царство «Животные» | 2,99 $ |
+| `kingdom_plants` | всё царство «Растения» | 2,99 $ |
+| `kingdom_fungi` | всё царство «Грибы» | 2,99 $ |
+| `kingdom_bacteria` | всё царство «Бактерии» | 2,99 $ |
+| `kingdom_viruses` | всё царство «Вирусы» | 2,99 $ |
+| `kingdom_humans` | всё царство «Люди» | 6,99 $ |
+
+Без Google Play (в браузере) кнопки 💳 показывают подсказку, а за монеты всё работает как обычно.
+
+Экономика монет: задача дня 30 🪙 + ежедневный подарок 20 🪙 (месяц ≈ 1 500 🪙 = одно семейство), звезда в кампании 10 🪙,
+босс главы 100 🪙 (вся кампания ≈ 3 500 🪙 = 2–3 семейства), победа над компьютером 3 🪙 × уровень. Семейство — 1 500 🪙
+(животные — 1 800 🪙), отдельная фигура — 150–450 🪙, царство — сумма его семейств, эпоха людей — 99 999 🪙 и открывается
+за монеты только после покупки всех семейств природы. Онлайн-арена (когда появится): 150 🪙 за победу — 10 побед ≈ семейство.

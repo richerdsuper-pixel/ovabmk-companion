@@ -5,6 +5,7 @@
 
 * люди пяти эпох: <имя>.png → ART['hu_<имя>'];
 * новые семейства природы: nt_* / nf_* / nb_* / nv_* → ART['<имя>'];
+* реалистичные животные: an_* → ART['<имя>'] (кому они достаются — REAL_ART в игре);
 * если рядом лежат кадры шага <имя>_a.png и <имя>_b.png, они встраиваются тоже
   (все три обрезаются по общей рамке, чтобы фигура не «прыгала»).
 Картинки пишутся в docs/chess/units/ (WebP) и data-URI в docs/chess/zoo-chess.html.
@@ -57,7 +58,7 @@ def encode(ims, box):
 
 def main(dirs):
     os.makedirs(UNITS, exist_ok=True)
-    nature = sorted({os.path.basename(p)[:-4] for d in dirs for p in glob.glob(os.path.join(d, 'n[tfbv]_*.png')) if not re.search(r'_[ab]\.png$', p)})
+    nature = sorted({os.path.basename(p)[:-4] for d in dirs for p in glob.glob(os.path.join(d, 'n[tfbv]_*.png')) + glob.glob(os.path.join(d, 'an_*.png')) if not re.search(r'_[ab]\.png$', p)})
     data = {}
     total = 0
     for name in HUMANS + nature:

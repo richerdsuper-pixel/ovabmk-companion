@@ -1,8 +1,15 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "uz.ovabmk.kingdomschess",
-    "sha256_cert_fingerprints": ["ЗАМЕНИТЕ_НА_SHA256_ОТПЕЧАТОК_КЛЮЧА_ПОДПИСИ"]
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uz.kingdomschess.game",
+      "sha256_cert_fingerprints": [
+        "1C:0E:8F:5E:15:A2:CF:41:6C:C5:2E:DA:9F:2E:28:78:FD:80:D0:13:C6:B2:BD:56:65:A0:8A:46:14:7E:58:B6",
+        "ВСТАВЬТЕ_SHA256_КЛЮЧА_ПОДПИСИ_ПРИЛОЖЕНИЙ_ИЗ_PLAY_CONSOLE"
+      ]
+    }
   }
-}]
+]

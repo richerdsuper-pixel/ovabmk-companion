@@ -1,5 +1,5 @@
 {
-  "packageId": "uz.ovabmk.kingdomschess",
+  "packageId": "uz.kingdomschess.game",
   "host": "richerdsuper-pixel.github.io",
   "name": "Шахматы царств",
   "launcherName": "Царства",
@@ -9,24 +9,32 @@
   "navigationColor": "#081C22",
   "backgroundColor": "#081C22",
   "enableNotifications": true,
-  "startUrl": "/ovabmk-companion/chess/",
-  "iconUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/icon-512.png",
-  "maskableIconUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/icon-maskable-512.png",
+  "startUrl": "/kingdoms-chess/",
+  "iconUrl": "https://richerdsuper-pixel.github.io/kingdoms-chess/icon-512.png",
+  "maskableIconUrl": "https://richerdsuper-pixel.github.io/kingdoms-chess/icon-maskable-512.png",
   "splashScreenFadeOutDuration": 300,
-  "signingKey": { "path": "./android.keystore", "alias": "kingdomschess" },
+  "signingKey": {
+    "path": "./kingdomschess-upload.jks",
+    "alias": "kingdomschess"
+  },
   "appVersionName": "1.0.0",
   "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/manifest.webmanifest",
+  "webManifestUrl": "https://richerdsuper-pixel.github.io/kingdoms-chess/manifest.webmanifest",
   "fallbackType": "customtabs",
-  "features": { "playBilling": { "enabled": true } },
-  "alphaDependencies": { "enabled": false },
+  "features": {
+    "playBilling": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://richerdsuper-pixel.github.io/ovabmk-companion/chess/",
-  "minSdkVersion": 23,
-  "orientation": "portrait",
+  "fullScopeUrl": "https://richerdsuper-pixel.github.io/kingdoms-chess/",
+  "minSdkVersion": 24,
   "fingerprints": []
 }

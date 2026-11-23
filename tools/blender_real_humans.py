@@ -1,6 +1,28 @@
 """Люди пяти эпох для «Шахмат царств» (подключается из blender_real.py)."""
 import math
-from mathutils import Vector
+import os
+from mathutils import Matrix, Vector
+
+# walk-cycle frame: '0' = standing (idle), 'a' / 'b' = the two opposite strides
+PHASE = os.environ.get('FRAME', '0')
+STRIDE = {'0': 0.0, 'a': 1.0, 'b': -1.0}[PHASE]
+
+
+def swing_pts(pts, pivot, ang):
+    """Rotate points about a pivot in the XZ plane (legs swinging forward/back)."""
+    px, pz = pivot[0], pivot[2]
+    c, s_ = math.cos(ang), math.sin(ang)
+    out = []
+    for p in pts:
+        x, z = p[0] - px, p[2] - pz
+        out.append((px + x * c + z * s_, p[1], pz - x * s_ + z * c))
+    return out
+
+
+def swing_objs(objs, pivot, ang):
+    R = Matrix.Translation(Vector(pivot)) @ Matrix.Rotation(-ang, 4, 'Y') @ Matrix.Translation(-Vector(pivot))
+    for o in objs:
+        o.matrix_world = R @ o.matrix_world
 from blender_real import (piece, human, crown, rifle_ak, spear, sword, box, hull, cyl, sph, rod, tube, torus, loft,
                           plate, skin_body, meta_body, hair, since, snapshot, move, put, MATS)
 
@@ -80,9 +102,11 @@ def tech_robot():
     skin_body([((0, 0, 0.9), (0.09, 0.14)), ((0, 0, 1.12), (0.08, 0.12)), ((0, 0, 1.3), (0.1, 0.16)), ((0, 0, 1.44), (0.1, 0.18)), ((0, 0, 1.53), 0.04)],
               [(0, 1), (1, 2), (2, 3), (3, 4)], 'white_plastic')
     for s in (1, -1):
+        before = snapshot()
         skin_body([((0, 0.1 * s, 0.9), 0.07), ((-0.03, 0.1 * s, 0.5), 0.05), ((0.0, 0.1 * s, 0.1), 0.04)], [(0, 1), (1, 2)], 'white_plastic', subsurf=2)
         sph((-0.03, 0.1 * s, 0.5), 0.055, 'carbon')
         box((-0.06, 0.1 * s, 0.04), (0.22, 0.09, 0.07), 'carbon', bev=0.02)
+        swing_objs(since(before), (0, 0, 0.9), 0.32 * STRIDE * s)
         skin_body([((0.0, 0.2 * s, 1.45), 0.055), ((0.02, 0.26 * s, 1.18), 0.04), ((-0.15, 0.24 * s, 1.0), 0.035)], [(0, 1), (1, 2)], 'white_plastic')
         sph((0.02, 0.26 * s, 1.18), 0.045, 'carbon')
         sph((0.0, 0.2 * s, 1.45), 0.065, 'carbon')
@@ -199,13 +223,22 @@ def pose_person(h, pose):
         h.arm('L', shL + V(-0.3, 0.08, -0.35), shL + V(0.05, -0.3, -0.3))
         h.arm('R', shR + V(-0.3, -0.08, -0.35), shR + V(0.05, 0.3, -0.3))
         fist(h, 'L', 40); fist(h, 'R', 40)
+    if pose in ('relaxed', 'carry') and STRIDE:
+        k = STRIDE
+        h.arm('L', shL + V(-0.03 + 0.2 * k, -0.1, -0.55), shL + V(0.25, -0.1, -0.3))
+        h.arm('R', shR + V(-0.03 - 0.2 * k, 0.1, -0.55), shR + V(0.25, 0.1, -0.3))
     if pose != 'ride':
-        # natural stance: legs almost straight, one foot slightly forward
-        for s, dx, dy in (('L', -0.09, -0.03), ('R', 0.05, 0.03)):
+        # natural stance (or one walking stride): legs almost straight, the back knee bends in a stride
+        k = STRIDE
+        for s, dx, dy, sg in (('L', -0.09, -0.03, 1), ('R', 0.05, 0.03, -1)):
             hp = h.head('upperleg01.' + s)
             Lg = (h.head('lowerleg01.' + s) - hp).length + (h.tail('lowerleg02.' + s) - h.head('lowerleg01.' + s)).length
+            fwd = sg * k            # +1: this leg steps forward, -1: it trails behind
+            if k:
+                dx = -0.34 * fwd
             d = V(dx, dy, -1.0).normalized()
-            h.leg(s, hp + d * Lg * 0.99, hp + V(-0.5, 0, -0.45))
+            reach = 0.99 if fwd >= 0 else 0.9
+            h.leg(s, hp + d * Lg * reach + (V(0, 0, 0.06) if fwd < 0 else V(0, 0, 0)), hp + V(-0.5, 0, -0.45))
     return h
 
 
@@ -416,15 +449,23 @@ def horse(loc=(0, 0, 0), s=1.0, coat='fur_horse', mane='fur_horse2', saddle=True
           ((0.3, 0, 1.42), (-0.1, 0, 1.38), (0.28, 0.33), (0.3, 0.37)), ((-0.1, 0, 1.38), (-0.5, 0, 1.45), (0.3, 0.37), (0.26, 0.33)),
           ((-0.5, 0, 1.45), (-0.72, 0, 1.6), (0.24, 0.3), (0.16, 0.24)), ((-0.72, 0, 1.6), (-0.95, 0, 1.95), (0.15, 0.22), (0.1, 0.14)),
           ((-0.95, 0, 1.95), (-1.05, 0, 2.05), (0.1, 0.13), (0.1, 0.11)), ((-1.05, 0, 2.03), (-1.42, 0, 1.72), (0.1, 0.11), (0.065, 0.075))]
+    hooves = []
     for y in (0.16, -0.16):
-        sp += [((-0.5, y, 1.35), (-0.5, y, 0.98), 0.14, 0.1), ((-0.5, y, 0.98), (-0.52, y, 0.56), 0.085, 0.055), ((-0.52, y, 0.56), (-0.53, y, 0.18), 0.045, 0.04),
-               ((-0.53, y, 0.18), (-0.56, y, 0.08), 0.045, 0.05),
-               ((0.66, y, 1.35), (0.56, y, 1.0), 0.2, 0.14), ((0.56, y, 1.0), (0.84, y, 0.62), 0.11, 0.06), ((0.84, y, 0.62), (0.79, y, 0.18), 0.05, 0.04),
-               ((0.79, y, 0.18), (0.76, y, 0.08), 0.045, 0.05)]
+        # trot: diagonal pairs swing together
+        af = 0.32 * STRIDE * (1 if y > 0 else -1)
+        front = [((-0.5, y, 1.35), (-0.5, y, 0.98), 0.14, 0.1), ((-0.5, y, 0.98), (-0.52, y, 0.56), 0.085, 0.055), ((-0.52, y, 0.56), (-0.53, y, 0.18), 0.045, 0.04),
+                 ((-0.53, y, 0.18), (-0.56, y, 0.08), 0.045, 0.05)]
+        hind = [((0.66, y, 1.35), (0.56, y, 1.0), 0.2, 0.14), ((0.56, y, 1.0), (0.84, y, 0.62), 0.11, 0.06), ((0.84, y, 0.62), (0.79, y, 0.18), 0.05, 0.04),
+                ((0.79, y, 0.18), (0.76, y, 0.08), 0.045, 0.05)]
+        for seg, piv, ang, hx in ((front, (-0.5, y, 1.35), af, -0.57), (hind, (0.66, y, 1.35), -af, 0.75)):
+            for a_, b_, ra, rb in seg:
+                a2, b2 = swing_pts([a_, b_], piv, ang)
+                sp.append((a2, b2, ra, rb))
+            hooves.append(swing_pts([(hx, y, 0.04)], piv, ang)[0] + (ang,))
     body = meta_body(sp, hm, res=0.022, name='horse')
+    for hx, hy, hz, ang in hooves:
+        cyl((hx, hy, hz), 0.06, 0.08, 'boot', r2=0.052, v=24, rot=(0, -ang, 0))
     for y in (0.16, -0.16):
-        for x in (-0.57, 0.75):
-            cyl((x, y, 0.04), 0.06, 0.08, 'boot', r2=0.052, v=24)
         sph((-1.2, y * 0.62, 1.95), 0.026, 'iris')
         sph((-1.4, y * 0.3, 1.7), 0.02, 'boot')
         cyl((-1.0, y * 0.45, 2.15), 0.035, 0.15, hm, r2=0.006, rot=(0.3 * (1 if y > 0 else -1), -0.15, 0), v=12)
@@ -511,7 +552,10 @@ def stone_mammoth():
           ((-0.85, 0, 2.35), (-1.35, 0, 2.15), (0.38, 0.42), (0.26, 0.3))]                  # face
     for y in (0.44, -0.44):
         for x in (-0.6, 0.62):
-            sp += [((x, y, 1.75), (x, y, 1.0), 0.3, 0.24), ((x, y, 1.0), (x - 0.03, y, 0.1), 0.24, 0.26)]
+            ang = 0.2 * STRIDE * (1 if y > 0 else -1) * (1 if x < 0 else -1)
+            for a_, b_, ra, rb in (((x, y, 1.75), (x, y, 1.0), 0.3, 0.24), ((x, y, 1.0), (x - 0.03, y, 0.1), 0.24, 0.26)):
+                a2, b2 = swing_pts([a_, b_], (x, y, 1.75), ang)
+                sp.append((a2, b2, ra, rb))
     body = meta_body(sp, 'hide', res=0.04, name='mammoth')
     legs = []
     trunk = tube([(-1.45, 0, 2.15), (-1.72, 0, 1.65), (-1.78, 0, 1.0), (-1.7, 0, 0.55), (-1.55, 0, 0.42)], 0.15, 'hide', r_end=0.05)
@@ -981,6 +1025,7 @@ def tech_drone():
 @piece
 def tech_mech():
     for y in (-0.32, 0.32):
+        before = snapshot()
         hull([(x, y + dy, z) for x in (-0.12, 0.12) for dy in (-0.09, 0.09) for z in (0.95, 1.4)], 'grey_paint', bev=0.02)
         rod((0.0, y, 1.0), (0.22, y, 0.55), 0.08, 'gunmetal', v=16)
         sph((0.22, y, 0.55), 0.1, 'gunmetal')
@@ -989,6 +1034,7 @@ def tech_mech():
         hull([(-0.35, y - 0.12, 0.0), (-0.35, y + 0.12, 0.0), (0.2, y - 0.12, 0.0), (0.2, y + 0.12, 0.0), (-0.25, y - 0.1, 0.12), (-0.25, y + 0.1, 0.12),
               (0.15, y - 0.1, 0.15), (0.15, y + 0.1, 0.15)], 'dark_paint', bev=0.015)
         rod((0.0, y * 0.5, 1.45), (0.25, y * 0.5, 1.15), 0.04, 'steel', v=12)
+        swing_objs(since(before), (0, y, 1.2), 0.25 * STRIDE * (1 if y > 0 else -1))
     hull([(-0.45, -0.42, 1.45), (-0.45, 0.42, 1.45), (0.4, -0.45, 1.4), (0.4, 0.45, 1.4), (-0.55, -0.35, 1.9), (-0.55, 0.35, 1.9),
           (0.35, -0.42, 2.0), (0.35, 0.42, 2.0), (-0.2, -0.3, 2.15), (-0.2, 0.3, 2.15), (0.2, -0.35, 2.15), (0.2, 0.35, 2.15)], 'grey_paint', bev=0.03)
     box((-0.52, 0, 1.85), (0.06, 0.5, 0.1), 'tinted', rot=(0, 0.35, 0), bev=0.01)

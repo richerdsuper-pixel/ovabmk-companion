@@ -916,12 +916,31 @@ def frame_camera(margin=1.04):
     cam.data.clip_end = dist * 4
 
 
+ANIMATED = {'stone_chief', 'stone_shaman', 'stone_hunter', 'stone_slinger', 'stone_gatherer', 'stone_mammoth', 'iron_king', 'iron_archer',
+            'iron_legion', 'iron_rider', 'iron_chariot', 'ind_emperor', 'ind_rifleman', 'ind_cavalry', 'general', 'spetsnaz',
+            'tech_exo', 'tech_robot', 'tech_mech'}
+
+
 def render(name, build):
+    import json
     reset()
     build()
     bpy.context.view_layer.update()
-    frame_camera()
-    bpy.context.scene.render.filepath = os.path.join(OUT, name + '.png')
+    fr = os.environ.get('FRAME', '0')
+    cam_file = os.path.join(OUT, name + '.cam.json')
+    if fr != '0' and os.path.exists(cam_file):
+        c = json.load(open(cam_file))
+        bpy.ops.object.camera_add()
+        cam = bpy.context.object
+        cam.data.lens = c['lens']; cam.data.clip_end = c['clip']
+        cam.location = c['loc']; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = c['rot']
+        bpy.context.scene.camera = cam
+    else:
+        frame_camera(margin=1.04 if name not in ANIMATED else 1.22)
+        cam = bpy.context.scene.camera
+        json.dump({'lens': cam.data.lens, 'clip': cam.data.clip_end, 'loc': list(cam.location), 'rot': list(cam.rotation_quaternion)}, open(cam_file, 'w'))
+    fr = os.environ.get('FRAME', '0')
+    bpy.context.scene.render.filepath = os.path.join(OUT, name + ('' if fr == '0' else '_' + fr) + '.png')
     bpy.ops.render.render(write_still=True)
     print('rendered', name, flush=True)
 
@@ -938,7 +957,7 @@ if __name__ == '__main__':
     import importlib.util
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, here)
-    for extra in ('blender_real_humans.py',):
+    for extra in ('blender_real_humans.py', 'blender_real_nature.py'):
         p = os.path.join(here, extra)
         if os.path.exists(p):
             spec = importlib.util.spec_from_file_location(extra[:-3], p)

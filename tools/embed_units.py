@@ -58,7 +58,7 @@ def encode(ims, box):
 
 def main(dirs):
     os.makedirs(UNITS, exist_ok=True)
-    nature = sorted({os.path.basename(p)[:-4] for d in dirs for p in glob.glob(os.path.join(d, 'n[tfbv]_*.png')) + glob.glob(os.path.join(d, 'an_*.png')) if not re.search(r'_[ab]\.png$', p)})
+    nature = sorted({os.path.basename(p)[:-4] for d in dirs for p in glob.glob(os.path.join(d, 'n[tfbv]_*.png')) + glob.glob(os.path.join(d, 'an_*.png')) + glob.glob(os.path.join(d, 'ol_*.png')) if not re.search(r'_[ab]\.png$', p)})
     data = {}
     total = 0
     for name in HUMANS + nature:

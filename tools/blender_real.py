@@ -960,7 +960,7 @@ if __name__ == '__main__':
     import importlib.util
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, here)
-    for extra in ('blender_real_humans.py', 'blender_real_nature.py', 'blender_real_animals.py'):
+    for extra in ('blender_real_humans.py', 'blender_real_nature.py', 'blender_real_animals.py', 'blender_real_old.py'):
         p = os.path.join(here, extra)
         if os.path.exists(p):
             spec = importlib.util.spec_from_file_location(extra[:-3], p)
